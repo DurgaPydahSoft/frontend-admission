@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { auth } from '@/lib/auth';
@@ -8,8 +8,7 @@ import { leadAPI } from '@/lib/api';
 import { User } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Skeleton, CardSkeleton } from '@/components/ui/Skeleton';
-import { ThemeToggle } from '@/components/ThemeToggle';
+import { CardSkeleton } from '@/components/ui/Skeleton';
 import { useTheme } from '@/app/providers';
 import {
   ResponsiveContainer,
@@ -23,6 +22,7 @@ import {
   CartesianGrid,
   Cell,
 } from 'recharts';
+import { useDashboardHeader } from '@/components/layout/DashboardShell';
 
 interface Analytics {
   totalLeads: number;
@@ -34,10 +34,21 @@ interface Analytics {
   };
 }
 
+const summaryCardStyles = [
+  'from-blue-500/10 via-blue-500/15 to-transparent text-blue-700 dark:text-blue-200',
+  'from-emerald-500/10 via-emerald-500/15 to-transparent text-emerald-700 dark:text-emerald-200',
+  'from-violet-500/10 via-violet-500/15 to-transparent text-violet-700 dark:text-violet-200',
+  'from-amber-500/10 via-amber-500/15 to-transparent text-amber-700 dark:text-amber-200',
+];
+
+const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
+
 export default function UserDashboard() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const { setHeaderContent, clearHeaderContent } = useDashboardHeader();
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthorising, setIsAuthorising] = useState(true);
 
   useEffect(() => {
     const currentUser = auth.getUser();
@@ -45,36 +56,54 @@ export default function UserDashboard() {
       router.push('/auth/login');
       return;
     }
-
-    // Check if user is super admin - redirect to super admin dashboard
     if (currentUser.roleName === 'Super Admin') {
       router.push('/superadmin/dashboard');
       return;
     }
-
     setUser(currentUser);
-    setIsLoading(false);
+    setIsAuthorising(false);
   }, [router]);
 
-  // Fetch analytics
-  const { data: analyticsData, isLoading: isLoadingAnalytics } = useQuery({
-    queryKey: ['userAnalytics', user?._id],
+  const handleGoToLeads = useCallback(() => {
+    router.push('/user/leads');
+  }, [router]);
+
+  useEffect(() => {
+    setHeaderContent(
+      <div className="flex flex-col items-end gap-2 text-right">
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">My Dashboard</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Snapshot of your assigned leads{user?.name ? ` · ${user.name}` : ''}
+        </p>
+        <div className="flex gap-2">
+          <Button size="sm" variant="primary" onClick={handleGoToLeads}>
+            View My Leads
+          </Button>
+        </div>
+      </div>
+    );
+
+    return () => clearHeaderContent();
+  }, [setHeaderContent, clearHeaderContent, handleGoToLeads, user?.name]);
+
+  const {
+    data: analyticsData,
+    isLoading: isLoadingAnalytics,
+  } = useQuery({
+    queryKey: ['user-analytics-summary', user?._id],
     queryFn: async () => {
       if (!user?._id) return null;
       const response = await leadAPI.getAnalytics(user._id);
       return response.data || response;
     },
     enabled: !!user?._id,
-    staleTime: 30000,
+    staleTime: 60_000,
   });
 
   const analytics = (analyticsData?.data || analyticsData) as Analytics | null;
-  const { theme } = useTheme();
 
-  const chartColors = useMemo(
-    () => ['#3b82f6', '#22c55e', '#f97316', '#a855f7', '#ef4444', '#14b8a6'],
-    []
-  );
+  const chartGridColor = theme === 'dark' ? 'rgba(148, 163, 184, 0.2)' : '#e2e8f0';
+  const chartTextColor = theme === 'dark' ? '#cbd5f5' : '#475569';
 
   const tooltipStyle = useMemo(
     () => ({
@@ -87,381 +116,288 @@ export default function UserDashboard() {
           : '1px solid rgba(148, 163, 184, 0.2)',
       boxShadow:
         theme === 'dark'
-          ? '0 10px 30px rgba(15, 23, 42, 0.45)'
-          : '0 10px 30px rgba(15, 23, 42, 0.15)',
+          ? '0 12px 36px rgba(15, 23, 42, 0.45)'
+          : '0 12px 36px rgba(15, 23, 42, 0.12)',
       padding: '12px',
     }),
     [theme]
   );
 
-  const chartGridColor = theme === 'dark' ? 'rgba(148, 163, 184, 0.25)' : '#e2e8f0';
-  const chartTextColor = theme === 'dark' ? '#cbd5f5' : '#475569';
+  const summaryCards = useMemo(
+    () => [
+      {
+        label: 'Assigned Leads',
+        value: analytics?.totalLeads ?? 0,
+        helper: 'Allotted to you',
+      },
+      {
+        label: 'Touched (7 days)',
+        value: analytics?.recentActivity?.leadsUpdatedLast7Days ?? 0,
+        helper: 'Updated recently',
+      },
+      {
+        label: 'New Leads',
+        value: analytics?.statusBreakdown?.New ?? 0,
+        helper: 'Need first contact',
+      },
+      {
+        label: 'Interested',
+        value: analytics?.statusBreakdown?.Interested ?? analytics?.statusBreakdown?.interested ?? 0,
+        helper: 'High intent prospects',
+      },
+    ],
+    [analytics]
+  );
+
+  const chartColors = useMemo(
+    () => ['#3b82f6', '#22c55e', '#f97316', '#a855f7', '#ef4444', '#14b8a6'],
+    []
+  );
 
   const statusChartData = useMemo(() => {
     if (!analytics?.statusBreakdown) return [] as Array<{ name: string; value: number }>;
-    return Object.entries(analytics.statusBreakdown).map(([status, count]) => ({
-      name: status,
-      value: typeof count === 'number' ? count : Number(count) || 0,
-    }));
+    return Object.entries(analytics.statusBreakdown)
+      .map(([status, count]) => ({
+        name: status,
+        value: typeof count === 'number' ? count : Number(count) || 0,
+      }))
+      .filter((entry) => entry.value > 0)
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
   }, [analytics]);
 
   const mandalChartData = useMemo(() => {
     if (!analytics?.mandalBreakdown) return [] as Array<{ name: string; value: number }>;
-    return analytics.mandalBreakdown.map((item) => ({
-      name: item.mandal,
-      value: item.count,
-    }));
+    return analytics.mandalBreakdown
+      .map((item) => ({ name: item.mandal, value: item.count }))
+      .filter((item) => item.value > 0)
+      .slice(0, 6);
   }, [analytics]);
 
   const stateChartData = useMemo(() => {
     if (!analytics?.stateBreakdown) return [] as Array<{ name: string; value: number }>;
-    return analytics.stateBreakdown.map((item) => ({
-      name: item.state,
-      value: item.count,
-    }));
+    return analytics.stateBreakdown
+      .map((item) => ({ name: item.state, value: item.count }))
+      .filter((item) => item.value > 0)
+      .slice(0, 8);
   }, [analytics]);
 
-  const handleLogout = () => {
-    auth.logout();
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'interested':
-        return 'bg-green-100 text-green-800 dark:bg-emerald-900/60 dark:text-emerald-200';
-      case 'contacted':
-        return 'bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-200';
-      case 'qualified':
-        return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200';
-      case 'converted':
-        return 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-200';
-      case 'confirmed':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-200';
-      case 'admitted':
-      case 'joined':
-        return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200';
-      case 'not interested':
-        return 'bg-red-100 text-red-800 dark:bg-rose-900/60 dark:text-rose-200';
-      case 'partial':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-amber-900/60 dark:text-amber-200';
-      case 'lost':
-        return 'bg-gray-100 text-gray-800 dark:bg-slate-800/60 dark:text-slate-200';
-      case 'new':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-slate-800/60 dark:text-slate-200';
-    }
-  };
-
-  if (isLoading) {
+  if (isAuthorising || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <CardSkeleton />
-        </div>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <CardSkeleton />
+      </div>
+    );
+  }
+
+  if (isLoadingAnalytics) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <CardSkeleton />
+      </div>
+    );
+  }
+
+  if (!analytics) {
+    return (
+      <div className="mx-auto w-full max-w-5xl">
+        <Card className="p-10 text-center">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">No analytics available yet</h2>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            Once you start working on leads, your performance insights will appear here automatically.
+          </p>
+          <div className="mt-6 flex justify-center">
+            <Button variant="primary" onClick={handleGoToLeads}>
+              Go to My Leads
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen relative">
-      {/* Background gradient effects */}
-      <div className="fixed inset-0 bg-gradient-to-br from-blue-50/30 via-purple-50/20 to-pink-50/30 pointer-events-none dark:bg-gradient-to-br dark:from-slate-950/80 dark:via-slate-900/70 dark:to-slate-900/80"></div>
-      <div className="fixed inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none dark:bg-[linear-gradient(to_right,rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.12)_1px,transparent_1px)]"></div>
-      
-      <div className="relative z-10">
-        {/* Header */}
-        <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200/50 sticky top-0 z-20 dark:bg-slate-900/70 dark:border-slate-700/70">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">My Dashboard</h1>
-                <p className="text-sm text-gray-600 dark:text-slate-300">
-                  Welcome, {user?.name} ({user?.roleName || 'User'})
-                </p>
-              </div>
-              <div className="flex gap-2 items-center">
-                <ThemeToggle />
-                <Button
-                  variant="primary"
-                  onClick={() => router.push('/user/leads')}
-                  className="group"
-                >
-                  <span className="group-hover:scale-105 transition-transform inline-block">View My Leads</span>
-                </Button>
-                <Button variant="outline" onClick={handleLogout}>
-                  Logout
-                </Button>
-              </div>
+    <div className="mx-auto w-full max-w-7xl space-y-10">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {summaryCards.map((card, index) => (
+          <Card
+            key={card.label}
+            className={`overflow-hidden border border-white/60 bg-gradient-to-br ${summaryCardStyles[index % summaryCardStyles.length]} p-6 shadow-lg shadow-blue-100/40 dark:border-slate-800/60 dark:shadow-none`}
+          >
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500/80 dark:text-slate-400/80">
+              {card.label}
+            </p>
+            <p className="mt-3 text-3xl font-semibold text-slate-900 dark:text-slate-100">
+              {formatNumber(card.value)}
+            </p>
+            <p className="mt-2 text-xs text-slate-500/90 dark:text-slate-400/90">{card.helper}</p>
+          </Card>
+        ))}
+      </div>
+
+      {statusChartData.length > 0 && (
+        <Card className="space-y-6 p-6 shadow-lg shadow-blue-100/30 dark:shadow-none">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Lead Status Mix</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Distribution of your assigned leads by status
+              </p>
             </div>
           </div>
-        </header>
-
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Analytics Overview */}
-          {isLoadingAnalytics ? (
-            <Card>
-              <div className="p-6">
-                <CardSkeleton />
-              </div>
-            </Card>
-          ) : analytics ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-              {/* Total Leads Card */}
-              <Card>
-                <div className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600 dark:text-slate-300">Total Leads</p>
-                      <p className="text-3xl font-bold text-gray-900 dark:text-slate-100 mt-2">
-                        {analytics.totalLeads || 0}
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 rounded-full flex items-center justify-center">
-                      <svg className="w-6 h-6 text-blue-600 dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Updated Leads Card */}
-              <Card>
-                <div className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600 dark:text-slate-300">Updated (7 days)</p>
-                      <p className="text-3xl font-bold text-gray-900 dark:text-slate-100 mt-2">
-                        {analytics.recentActivity?.leadsUpdatedLast7Days || 0}
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 bg-green-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center">
-                      <svg className="w-6 h-6 text-green-600 dark:text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* New Leads Card */}
-              <Card>
-                <div className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600 dark:text-slate-300">New Leads</p>
-                      <p className="text-3xl font-bold text-gray-900 dark:text-slate-100 mt-2">
-                        {analytics.statusBreakdown?.New || 0}
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/40 rounded-full flex items-center justify-center">
-                      <svg className="w-6 h-6 text-purple-600 dark:text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Interested Leads Card */}
-              <Card>
-                <div className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600 dark:text-slate-300">Interested</p>
-                      <p className="text-3xl font-bold text-gray-900 dark:text-slate-100 mt-2">
-                        {analytics.statusBreakdown?.Interested || analytics.statusBreakdown?.interested || 0}
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 bg-yellow-100 dark:bg-amber-900/40 rounded-full flex items-center justify-center">
-                      <svg className="w-6 h-6 text-yellow-600 dark:text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              </Card>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="h-72">
+              <ResponsiveContainer>
+                <BarChart data={statusChartData}>
+                  <CartesianGrid stroke={chartGridColor} strokeDasharray="6 4" />
+                  <XAxis
+                    dataKey="name"
+                    stroke={chartTextColor}
+                    tickLine={false}
+                    axisLine={{ stroke: chartGridColor }}
+                    tick={{ fill: chartTextColor, fontSize: 12 }}
+                  />
+                  <YAxis
+                    stroke={chartTextColor}
+                    allowDecimals={false}
+                    tickLine={false}
+                    axisLine={{ stroke: chartGridColor }}
+                    tick={{ fill: chartTextColor, fontSize: 12 }}
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    cursor={{ fill: theme === 'dark' ? 'rgba(148, 163, 184, 0.12)' : 'rgba(59, 130, 246, 0.08)' }}
+                  />
+                  <Bar dataKey="value" radius={[10, 10, 0, 0]}>
+                    {statusChartData.map((entry, idx) => (
+                      <Cell key={`status-${entry.name}`} fill={chartColors[idx % chartColors.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-          ) : null}
-
-          {statusChartData.length > 0 && (
-            <Card>
-              <h2 className="text-xl font-semibold mb-4 dark:text-slate-100">Leads by Status</h2>
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={statusChartData}>
-                      <CartesianGrid stroke={chartGridColor} strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="name"
-                        stroke={chartTextColor}
-                        tickLine={false}
-                        axisLine={{ stroke: chartGridColor }}
-                        tick={{ fill: chartTextColor, fontSize: 12 }}
-                      />
-                      <YAxis
-                        stroke={chartTextColor}
-                        allowDecimals={false}
-                        tickLine={false}
-                        axisLine={{ stroke: chartGridColor }}
-                        tick={{ fill: chartTextColor, fontSize: 12 }}
-                      />
-                      <Tooltip
-                        contentStyle={tooltipStyle}
-                        cursor={{ fill: theme === 'dark' ? 'rgba(148, 163, 184, 0.12)' : 'rgba(59, 130, 246, 0.08)' }}
-                      />
-                      <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                        {statusChartData.map((entry, index) => (
-                          <Cell
-                            key={`status-${entry.name}`}
-                            fill={chartColors[index % chartColors.length]}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+            <div className="space-y-3">
+              {statusChartData.map((item) => (
+                <div
+                  key={item.name}
+                  className="flex items-center justify-between rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 dark:border-slate-800/70 dark:bg-slate-900/60"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{item.name}</p>
+                    <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{formatNumber(item.value)}</p>
+                  </div>
+                  <span className="text-xs uppercase tracking-[0.25em] text-slate-400 dark:text-slate-500">Leads</span>
                 </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      )}
 
-                <div className="space-y-3">
-                  {statusChartData.map((item) => (
-                    <div
-                      key={item.name}
-                      className="p-4 rounded-lg border border-gray-200/60 dark:border-slate-700/60 bg-gray-50/60 dark:bg-slate-900/50 flex items-center justify-between"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-gray-600 dark:text-slate-300">{item.name}</p>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{item.value}</p>
-                      </div>
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(item.name)}`}>
-                        {item.value} leads
-                      </span>
-                    </div>
-                  ))}
-                </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        {mandalChartData.length > 0 && (
+          <Card className="space-y-6 p-6 shadow-lg shadow-blue-100/30 dark:shadow-none">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Top Mandals</h2>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="h-72">
+                <ResponsiveContainer>
+                  <BarChart data={mandalChartData} layout="vertical" margin={{ top: 10, right: 20, bottom: 10, left: 10 }}>
+                    <CartesianGrid stroke={chartGridColor} strokeDasharray="6 4" />
+                    <XAxis
+                      type="number"
+                      stroke={chartTextColor}
+                      tickLine={false}
+                      axisLine={{ stroke: chartGridColor }}
+                      tick={{ fill: chartTextColor, fontSize: 12 }}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      stroke={chartTextColor}
+                      tickLine={false}
+                      axisLine={{ stroke: chartGridColor }}
+                      tick={{ fill: chartTextColor, fontSize: 12 }}
+                      width={110}
+                    />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      cursor={{ fill: theme === 'dark' ? 'rgba(148, 163, 184, 0.12)' : 'rgba(59, 130, 246, 0.08)' }}
+                    />
+                    <Bar dataKey="value" radius={[0, 12, 12, 0]}>
+                      {mandalChartData.map((entry, idx) => (
+                        <Cell key={`mandal-${entry.name}`} fill={chartColors[idx % chartColors.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            </Card>
-          )}
-
-          {/* Top Mandals */}
-          {mandalChartData.length > 0 && (
-            <Card>
-              <h2 className="text-xl font-semibold mb-4 dark:text-slate-100">Top Mandals</h2>
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={mandalChartData.slice(0, 6)}
-                      layout="vertical"
-                      margin={{ top: 5, right: 20, bottom: 5, left: 5 }}
-                    >
-                      <CartesianGrid stroke={chartGridColor} strokeDasharray="3 3" />
-                      <XAxis
-                        type="number"
-                        stroke={chartTextColor}
-                        tickLine={false}
-                        axisLine={{ stroke: chartGridColor }}
-                        tick={{ fill: chartTextColor, fontSize: 12 }}
+              <div className="space-y-3">
+                {mandalChartData.map((item, idx) => (
+                  <div
+                    key={item.name}
+                    className="flex items-center justify-between rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 dark:border-slate-800/70 dark:bg-slate-900/60"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: chartColors[idx % chartColors.length] }}
                       />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        stroke={chartTextColor}
-                        tickLine={false}
-                        axisLine={{ stroke: chartGridColor }}
-                        tick={{ fill: chartTextColor, fontSize: 12 }}
-                        width={120}
-                      />
-                      <Tooltip
-                        contentStyle={tooltipStyle}
-                        cursor={{ fill: theme === 'dark' ? 'rgba(148, 163, 184, 0.12)' : 'rgba(59, 130, 246, 0.08)' }}
-                      />
-                      <Bar dataKey="value" radius={[0, 8, 8, 0]}>
-                        {mandalChartData.slice(0, 6).map((entry, index) => (
-                          <Cell
-                            key={`mandal-${entry.name}`}
-                            fill={chartColors[index % chartColors.length]}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="space-y-3">
-                  {mandalChartData.slice(0, 6).map((item, index) => (
-                    <div
-                      key={item.name}
-                      className="flex justify-between items-center p-3 rounded-lg border border-gray-200/60 dark:border-slate-700/60 bg-gray-50/60 dark:bg-slate-900/50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full"
-                          style={{ backgroundColor: chartColors[index % chartColors.length] }}
-                        />
-                        <span className="font-medium text-gray-700 dark:text-slate-200">{item.name}</span>
-                      </div>
-                      <span className="text-lg font-semibold text-blue-600 dark:text-blue-300">{item.value}</span>
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{item.name}</span>
                     </div>
-                  ))}
-                </div>
+                    <span className="text-base font-semibold text-blue-600 dark:text-blue-300">{formatNumber(item.value)}</span>
+                  </div>
+                ))}
               </div>
-            </Card>
-          )}
+            </div>
+          </Card>
+        )}
 
-          {/* Leads by State */}
-          {stateChartData.length > 0 && (
-            <Card>
-              <h2 className="text-xl font-semibold mb-4 dark:text-slate-100">Leads by State</h2>
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Tooltip
-                        contentStyle={tooltipStyle}
-                        cursor={{ fill: theme === 'dark' ? 'rgba(148, 163, 184, 0.12)' : 'rgba(59, 130, 246, 0.08)' }}
-                      />
-                      <Pie
-                        data={stateChartData.slice(0, 8)}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={60}
-                        outerRadius={90}
-                        paddingAngle={4}
-                        blendStroke
-                      >
-                        {stateChartData.slice(0, 8).map((entry, index) => (
-                          <Cell
-                            key={`state-${entry.name}`}
-                            fill={chartColors[index % chartColors.length]}
-                          />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="space-y-3">
-                  {stateChartData.slice(0, 8).map((item, index) => (
-                    <div
-                      key={item.name}
-                      className="flex justify-between items-center p-3 rounded-lg border border-gray-200/60 dark:border-slate-700/60 bg-gray-50/60 dark:bg-slate-900/50"
+        {stateChartData.length > 0 && (
+          <Card className="space-y-6 p-6 shadow-lg shadow-blue-100/30 dark:shadow-none">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Leads by State</h2>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="h-72">
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      cursor={{ fill: theme === 'dark' ? 'rgba(148, 163, 184, 0.12)' : 'rgba(59, 130, 246, 0.08)' }}
+                    />
+                    <Pie
+                      data={stateChartData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={60}
+                      outerRadius={95}
+                      paddingAngle={4}
                     >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full"
-                          style={{ backgroundColor: chartColors[index % chartColors.length] }}
-                        />
-                        <span className="font-medium text-gray-700 dark:text-slate-200">{item.name}</span>
-                      </div>
-                      <span className="text-lg font-semibold text-blue-600 dark:text-blue-300">{item.value}</span>
-                    </div>
-                  ))}
-                </div>
+                      {stateChartData.map((entry, idx) => (
+                        <Cell key={`state-${entry.name}`} fill={chartColors[idx % chartColors.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-            </Card>
-          )}
-        </main>
+              <div className="space-y-3">
+                {stateChartData.map((item, idx) => (
+                  <div
+                    key={item.name}
+                    className="flex items-center justify-between rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 dark:border-slate-800/70 dark:bg-slate-900/60"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: chartColors[idx % chartColors.length] }}
+                      />
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{item.name}</span>
+                    </div>
+                    <span className="text-base font-semibold text-blue-600 dark:text-blue-300">{formatNumber(item.value)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   );

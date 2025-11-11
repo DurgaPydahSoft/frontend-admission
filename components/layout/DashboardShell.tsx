@@ -1,0 +1,393 @@
+'use client';
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  createContext,
+  useContext,
+  ReactNode,
+} from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
+import { Button } from '../ui/Button';
+import { auth } from '@/lib/auth';
+
+type IconProps = React.SVGProps<SVGSVGElement>;
+type IconComponent = (props: IconProps) => JSX.Element;
+
+const createIcon = (path: string) => {
+  const Icon: IconComponent = ({ className, ...props }) => (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn('h-5 w-5', className)}
+      {...props}
+    >
+      <path d={path} />
+    </svg>
+  );
+  Icon.displayName = 'DashboardIcon';
+  return Icon;
+};
+
+export const HomeIcon = createIcon('M3 11.25l9-8.25 9 8.25V20a1 1 0 0 1-1 1h-5.5v-5.5h-5V21H4a1 1 0 0 1-1-1z');
+export const ListIcon = createIcon('M4 6h16M4 12h16M4 18h10');
+export const UploadIcon = createIcon('M12 4v12m0 0 4-4m-4 4-4-4M4 20h16');
+export const PhoneIcon = createIcon('M5 4h3l2 5-2 1a11.05 11.05 0 0 0 7 7l1-2 5 2v3a1 1 0 0 1-1 1A17 17 0 0 1 4 5a1 1 0 0 1 1-1z');
+export const AcademicIcon = createIcon('M3 6.75 12 3l9 3.75-9 3.75L3 6.75zm18 6L12 17.5 3 12.75m18 0v4.5M3 12.75v4.5');
+export const TemplateIcon = createIcon('M6 4h8l4 4v12H6zM14 4v4h4');
+export const UserIcon = createIcon('M5.5 20a6.5 6.5 0 0 1 13 0m-6.5-8a4 4 0 1 1 0-8 4 4 0 0 1 0 8z');
+export const MenuIcon = createIcon('M4 7h16M4 12h16M4 17h16');
+export const CollapseIcon = createIcon('M9 18l-3-3 3-3M15 6l3 3-3 3');
+export const ChevronDownIcon = createIcon('M6 9l6 6 6-6');
+export const CurrencyIcon = createIcon('M7 5h10M7 9h7a3 3 0 1 1-3 3m3 7-5-5');
+export const SettingsIcon = createIcon(
+  'M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0-5.5v2m0 15v2m8-9h-2m-15 0H3m14.07-7.07-1.41 1.41M7.34 16.66l-1.41 1.41m0-12.73 1.41 1.41m9.32 9.32 1.41 1.41'
+);
+
+type DashboardHeaderContextValue = {
+  setHeaderContent: (content: ReactNode) => void;
+  clearHeaderContent: () => void;
+};
+
+const DashboardHeaderContext = createContext<DashboardHeaderContextValue | null>(null);
+
+export const useDashboardHeader = () => {
+  const ctx = useContext(DashboardHeaderContext);
+  if (!ctx) {
+    throw new Error('useDashboardHeader must be used within DashboardShell');
+  }
+  return ctx;
+};
+
+export type DashboardNavItem = {
+  href: string;
+  label: string;
+  icon?: IconComponent;
+  badge?: string;
+  children?: DashboardNavItem[];
+};
+
+interface DashboardShellProps {
+  children: React.ReactNode;
+  navItems: DashboardNavItem[];
+  title?: string;
+  description?: string;
+  role?: string;
+  userName?: string;
+}
+
+export const DashboardShell: React.FC<DashboardShellProps> = ({
+  children,
+  navItems,
+  title = 'Workspace',
+  description = 'Manage records and track outcomes with confidence.',
+  role,
+  userName,
+}) => {
+  const pathname = usePathname() || '';
+  const router = useRouter();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [headerContent, setHeaderContent] = useState<ReactNode>(null);
+
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? window.localStorage.getItem('sidebar-collapsed') : null;
+    if (saved === 'true') {
+      setIsCollapsed(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('sidebar-collapsed', isCollapsed ? 'true' : 'false');
+    }
+  }, [isCollapsed]);
+
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [pathname]);
+
+  const setHeader = useCallback((content: ReactNode) => {
+    setHeaderContent(content);
+  }, []);
+
+  const clearHeader = useCallback(() => {
+    setHeaderContent(null);
+  }, []);
+
+  const headerContextValue = useMemo(
+    () => ({
+      setHeaderContent: setHeader,
+      clearHeaderContent: clearHeader,
+    }),
+    [setHeader, clearHeader]
+  );
+
+  const findActiveParents = useCallback((items: DashboardNavItem[], currentPath: string, acc: Set<string>) => {
+    items.forEach((item) => {
+      if (item.children && item.children.length > 0) {
+        if (currentPath.startsWith(item.href)) {
+          acc.add(item.href);
+          findActiveParents(item.children, currentPath, acc);
+        } else {
+          findActiveParents(item.children, currentPath, acc);
+        }
+      }
+    });
+    return acc;
+  }, []);
+
+  const activeParents = useMemo(() => Array.from(findActiveParents(navItems, pathname, new Set<string>())), [findActiveParents, navItems, pathname]);
+
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(activeParents));
+
+  useEffect(() => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      activeParents.forEach((href) => next.add(href));
+      return next;
+    });
+  }, [activeParents]);
+
+  const toggleGroup = useCallback((href: string) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(href)) {
+        next.delete(href);
+      } else {
+        next.add(href);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleLogout = () => {
+    auth.logout();
+    router.push('/auth/login');
+  };
+
+  const renderNavItems = useCallback(
+    (items: DashboardNavItem[], level = 0): ReactNode =>
+      items.map((item) => {
+        const hasChildren = !!(item.children && item.children.length > 0);
+        const Icon = item.icon;
+        const isActive = pathname.startsWith(item.href);
+        const isGroupOpen = openGroups.has(item.href);
+        const paddingLeft = isCollapsed ? undefined : 12 + level * 14;
+
+        return (
+          <div key={item.href} className="space-y-1">
+            <div
+              className={cn(
+                'group flex items-center rounded-2xl py-2 pr-2 text-sm font-medium transition-all',
+                isCollapsed ? 'justify-center px-2' : 'px-0',
+                isActive
+                  ? 'bg-gradient-to-r from-blue-500/10 via-blue-500/15 to-transparent text-blue-600 dark:text-blue-300'
+                  : 'text-slate-500 hover:bg-blue-50/70 hover:text-blue-600 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100'
+              )}
+              style={paddingLeft ? { paddingLeft } : undefined}
+            >
+              <Link
+                href={item.href}
+                className={cn('flex flex-1 items-center gap-3 rounded-xl px-3 py-2 transition', isCollapsed && 'justify-center')}
+                title={isCollapsed ? item.label : undefined}
+              >
+                <span
+                  className={cn(
+                    'flex h-8 w-8 items-center justify-center rounded-xl border border-transparent bg-white shadow-sm transition-all',
+                    isActive
+                      ? 'border-blue-100 bg-white text-blue-600 shadow-blue-100/80 dark:border-blue-500/40 dark:bg-slate-900 dark:text-blue-300'
+                      : 'border-slate-200 bg-white/70 text-slate-400 shadow-slate-100/70 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-400'
+                  )}
+                >
+                  {Icon ? <Icon className="h-4 w-4" /> : null}
+                </span>
+                <div
+                  className={cn(
+                    'flex min-w-0 flex-1 items-center gap-3',
+                    isCollapsed ? 'justify-center' : 'pl-1'
+                  )}
+                >
+                  {isCollapsed ? (
+                    hasChildren ? (
+                      <ChevronDownIcon
+                        className={cn(
+                          'h-3 w-3 text-slate-400 transition-transform',
+                          isGroupOpen ? 'rotate-180' : 'rotate-0'
+                        )}
+                      />
+                    ) : null
+                  ) : null}
+                  {!isCollapsed && (
+                  <>
+                    <span>{item.label}</span>
+                    {item.badge && (
+                      <span className="ml-auto inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-600 dark:bg-blue-900/60 dark:text-blue-200">
+                        {item.badge}
+                      </span>
+                    )}
+                  </>
+                  )}
+                </div>
+              </Link>
+              {hasChildren && !isCollapsed && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    toggleGroup(item.href);
+                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-xl border border-transparent text-slate-400 transition hover:border-blue-200 hover:text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:text-slate-300 dark:hover:text-slate-100"
+                >
+                  <ChevronDownIcon className={cn('h-4 w-4 transition-transform', isGroupOpen ? 'rotate-180' : 'rotate-0')} />
+                </button>
+              )}
+            </div>
+            {hasChildren && isGroupOpen && (
+              <div className={cn('space-y-1', isCollapsed ? 'pl-0' : 'pl-4')}>
+                {renderNavItems(item.children!, level + 1)}
+              </div>
+            )}
+          </div>
+        );
+      }),
+    [isCollapsed, openGroups, pathname, toggleGroup]
+  );
+
+  const renderSidebar = (variant: 'desktop' | 'mobile' = 'desktop') => (
+    <aside
+      className={cn(
+        'relative flex flex-col overflow-hidden border border-slate-200 bg-white shadow-lg shadow-blue-100/40 transition-[width] duration-300',
+        'dark:border-slate-800 dark:bg-slate-950 dark:shadow-none',
+        isCollapsed ? 'w-20' : 'w-64',
+        variant === 'desktop'
+          ? 'my-4 h-[calc(100vh-2rem)] rounded-tr-[28px] rounded-br-[28px] lg:sticky lg:top-4'
+          : 'h-full rounded-3xl'
+      )}
+    >
+      <div className="flex items-center gap-3 px-4 py-4">
+        <Link href="/" className="flex items-center gap-3">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-500 via-violet-500 to-pink-500 text-white shadow-lg shadow-blue-200/40">
+            A
+          </span>
+          {!isCollapsed && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">Admission</p>
+              <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">Command Center</p>
+            </div>
+          )}
+        </Link>
+      </div>
+
+      <nav
+        className={cn(
+          'flex-1 space-y-1 px-2.5',
+          variant === 'desktop' ? 'overflow-y-auto pb-6 pr-3' : 'pb-6'
+        )}
+      >
+        {renderNavItems(navItems)}
+      </nav>
+
+      <button
+        type="button"
+              className="absolute top-1/2 -right-4 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-lg transition hover:border-blue-200 hover:text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-500 lg:flex z-10"
+        onClick={() => setIsCollapsed((prev) => !prev)}
+        aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        <CollapseIcon className={cn('h-4 w-4 transition-transform', isCollapsed ? 'rotate-180' : 'rotate-0')} />
+      </button>
+    </aside>
+  );
+
+  return (
+    <DashboardHeaderContext.Provider value={headerContextValue}>
+      <div className="relative min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+        <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(to_right,#e2e8f01f_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f01f_1px,transparent_1px)] bg-[size:28px_28px] dark:bg-[linear-gradient(to_right,rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.12)_1px,transparent_1px)]" />
+        <div className="pointer-events-none fixed inset-0 bg-gradient-to-br from-blue-50/40 via-indigo-50/35 to-transparent dark:from-slate-900/60 dark:via-slate-900/65 dark:to-slate-900/80" />
+
+        <div className="relative flex min-h-screen">
+          <div className="hidden lg:flex">{renderSidebar('desktop')}</div>
+
+          <div
+            className={cn(
+              'fixed inset-0 z-40 flex lg:hidden',
+              isMobileOpen ? 'pointer-events-auto' : 'pointer-events-none'
+            )}
+          >
+            <div
+              className={cn('fixed inset-0 bg-slate-900/60 transition-opacity', isMobileOpen ? 'opacity-100' : 'opacity-0')}
+              onClick={() => setIsMobileOpen(false)}
+            />
+            <div
+              className={cn(
+                'relative z-50 w-72 max-w-full px-3 py-4 transition-transform duration-300',
+                isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+              )}
+            >
+              {renderSidebar('mobile')}
+            </div>
+          </div>
+
+          <div className="flex flex-1 flex-col">
+            <header className="px-4 pt-4 sm:px-6 lg:px-10">
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white/95 px-4 py-3 shadow-[0_8px_26px_rgba(30,64,175,0.08)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-none sm:px-5 lg:px-6">
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    className="inline-flex rounded-xl border border-slate-200 bg-white p-2 text-slate-500 shadow-sm transition hover:border-blue-200 hover:text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 lg:hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-500"
+                    onClick={() => setIsMobileOpen(true)}
+                    aria-label="Toggle navigation menu"
+                  >
+                    <MenuIcon className="h-5 w-5" />
+                  </button>
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.35em] text-blue-500 dark:text-blue-300">
+                      {role ? `${role} Space` : 'Workspace'}
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 text-xs font-semibold uppercase text-white">
+                        {(userName || 'SA').slice(0, 2)}
+                      </span>
+                      <Button variant="outline" size="sm" onClick={handleLogout}>
+                        Logout
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-1 justify-end">
+                  <div className="flex flex-col items-end gap-2 text-right">
+                    {headerContent ? (
+                      headerContent
+                    ) : (
+                      <>
+                        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h1>
+                        {description && (
+                          <p className="text-sm text-slate-500 dark:text-slate-400">{description}</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </header>
+
+            <main className="relative z-10 flex-1 overflow-y-auto">
+              <div className="w-full px-4 py-8 sm:px-6 lg:px-8">{children}</div>
+            </main>
+          </div>
+        </div>
+      </div>
+    </DashboardHeaderContext.Provider>
+  );
+};
+
+

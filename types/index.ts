@@ -33,6 +33,109 @@ export interface UpdateUserData {
   isActive?: boolean;
 }
 
+// Course & Branch Types
+export interface Course {
+  _id: string;
+  name: string;
+  code?: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Branch {
+  _id: string;
+  courseId: string;
+  name: string;
+  code?: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentConfigEntry {
+  _id: string;
+  courseId: string;
+  branchId?: string;
+  amount: number;
+  currency: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PaymentSummaryStatus = 'not_started' | 'partial' | 'paid';
+
+export interface PaymentSummary {
+  totalFee: number;
+  totalPaid: number;
+  balance: number;
+  currency: string;
+  status: PaymentSummaryStatus;
+  lastPaymentAt?: string;
+}
+
+export type PaymentMode = 'cash' | 'online' | 'upi_qr';
+
+export type PaymentStatus = 'pending' | 'success' | 'failed';
+
+export interface PaymentTransaction {
+  _id: string;
+  admissionId?: string;
+  joiningId?: string;
+  leadId: string;
+  courseId?: string;
+  branchId?: string;
+  amount: number;
+  currency: string;
+  mode: PaymentMode;
+  status: PaymentStatus;
+  collectedBy?: User | string;
+  cashfreeOrderId?: string;
+  cashfreePaymentSessionId?: string;
+  referenceId?: string;
+  notes?: string;
+  meta?: Record<string, any>;
+  processedAt?: string;
+  verifiedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CashfreeConfigPreview {
+  provider: 'cashfree';
+  displayName: string;
+  environment: 'sandbox' | 'production';
+  isActive: boolean;
+  updatedAt?: string;
+  clientIdPreview: string;
+  clientSecretPreview: string;
+}
+
+export interface CoursePaymentSettings {
+  course: Course;
+  branches: Branch[];
+  payment: {
+    defaultFee?: PaymentConfigEntry | null;
+    branchFees: Array<
+      PaymentConfigEntry & {
+        branch: Branch | null;
+      }
+    >;
+  };
+}
+
+export interface CourseFeePayload {
+  course: Course;
+  fees: Array<{
+    branch: Branch;
+    feeConfig: PaymentConfigEntry | null;
+  }>;
+  defaultFee: PaymentConfigEntry | null;
+}
+
 // Lead Types
 export interface Lead {
   _id: string;
@@ -157,6 +260,8 @@ export type JoiningStatus = 'draft' | 'pending_approval' | 'approved';
 export type JoiningDocumentStatus = 'pending' | 'received';
 
 export interface JoiningCourseInfo {
+  courseId?: string;
+  branchId?: string;
   course?: string;
   branch?: string;
   quota?: string;
@@ -265,17 +370,58 @@ export interface Joining {
   submittedBy?: User | string;
   approvedAt?: string;
   approvedBy?: User | string;
+  paymentSummary?: PaymentSummary;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface JoiningListResponse {
-  joinings: Array<Joining & { lead: Lead }>;
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
+  data: {
+    joinings: JoiningListItem[];
+    pagination: Pagination;
+  };
+}
+
+export interface OverviewAnalyticsTotals {
+  leads: number;
+  confirmedLeads: number;
+  admittedLeads: number;
+  joinings: {
+    draft: number;
+    pendingApproval: number;
+    approved: number;
+  };
+  admissions: number;
+}
+
+export interface OverviewAnalyticsDailyCount {
+  date: string;
+  count: number;
+}
+
+export interface OverviewAnalyticsDailyStatus {
+  date: string;
+  total: number;
+  statuses: Record<string, number>;
+}
+
+export interface OverviewAnalyticsDailyJoining {
+  date: string;
+  draft: number;
+  pending_approval: number;
+  approved: number;
+}
+
+export interface OverviewAnalyticsResponse {
+  totals: OverviewAnalyticsTotals;
+  leadStatusBreakdown: Record<string, number>;
+  joiningStatusBreakdown: Record<string, number>;
+  admissionStatusBreakdown: Record<string, number>;
+  daily: {
+    leadsCreated: OverviewAnalyticsDailyCount[];
+    statusChanges: OverviewAnalyticsDailyStatus[];
+    joiningProgress: OverviewAnalyticsDailyJoining[];
+    admissions: OverviewAnalyticsDailyCount[];
   };
 }
 
@@ -301,6 +447,7 @@ export interface Admission {
   educationHistory: JoiningEducationHistory[];
   siblings: JoiningSibling[];
   documents: JoiningDocuments;
+  paymentSummary?: PaymentSummary;
   createdAt: string;
   updatedAt: string;
   createdBy?: User | string;
@@ -393,6 +540,47 @@ export interface FilterOptions {
   quotas: string[];
   leadStatuses: string[];
   applicationStatuses: string[];
+}
+
+export interface OverviewSeriesPoint {
+  date: string;
+  count: number;
+}
+
+export interface OverviewStatusSeriesPoint {
+  date: string;
+  total: number;
+  statuses: Record<string, number>;
+}
+
+export interface OverviewJoiningProgressPoint {
+  date: string;
+  draft: number;
+  pending_approval: number;
+  approved: number;
+}
+
+export interface OverviewAnalytics {
+  totals: {
+    leads: number;
+    confirmedLeads: number;
+    admittedLeads: number;
+    joinings: {
+      draft: number;
+      pendingApproval: number;
+      approved: number;
+    };
+    admissions: number;
+  };
+  leadStatusBreakdown: Record<string, number>;
+  joiningStatusBreakdown: Record<string, number>;
+  admissionStatusBreakdown: Record<string, number>;
+  daily: {
+    leadsCreated: OverviewSeriesPoint[];
+    statusChanges: OverviewStatusSeriesPoint[];
+    joiningProgress: OverviewJoiningProgressPoint[];
+    admissions: OverviewSeriesPoint[];
+  };
 }
 
 export interface ActivityLog {

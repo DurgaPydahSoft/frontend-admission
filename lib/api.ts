@@ -1,5 +1,12 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
+import type {
+  JoiningStatus,
+  CoursePaymentSettings,
+  CourseFeePayload,
+  CashfreeConfigPreview,
+  PaymentTransaction,
+} from '@/types';
 
 // API Base URL - Update this with your backend URL
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -265,6 +272,18 @@ export const leadAPI = {
     const response = await api.get(`/leads/analytics/${userId}`);
     return response.data;
   },
+  getOverviewAnalytics: async (params?: { days?: number; tz?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.days) {
+      query.append('days', String(params.days));
+    }
+    if (params?.tz) {
+      query.append('tz', params.tz);
+    }
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    const response = await api.get(`/leads/analytics/overview${suffix}`);
+    return response.data;
+  },
   // Public lead submission (no auth required)
   submitPublicLead: async (data: {
     hallTicketNumber?: string;
@@ -307,6 +326,114 @@ export const leadAPI = {
       },
     });
     const response = await publicApi.get('/leads/filters/options/public');
+    return response.data;
+  },
+};
+
+// Course & Branch API
+export const courseAPI = {
+  list: async (params?: { includeBranches?: boolean; showInactive?: boolean }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.includeBranches) queryParams.append('includeBranches', 'true');
+    if (params?.showInactive) queryParams.append('showInactive', 'true');
+    const query = queryParams.toString();
+    const response = await api.get(`/courses${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+  get: async (
+    courseId: string,
+    params?: { includeBranches?: boolean; showInactive?: boolean }
+  ) => {
+    const queryParams = new URLSearchParams();
+    if (params?.includeBranches) queryParams.append('includeBranches', 'true');
+    if (params?.showInactive) queryParams.append('showInactive', 'true');
+    const query = queryParams.toString();
+    const response = await api.get(`/courses/${courseId}${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+  create: async (data: { name: string; code?: string; description?: string }) => {
+    const response = await api.post('/courses', data);
+    return response.data;
+  },
+  update: async (
+    courseId: string,
+    data: { name?: string; code?: string; description?: string; isActive?: boolean }
+  ) => {
+    const response = await api.put(`/courses/${courseId}`, data);
+    return response.data;
+  },
+  delete: async (courseId: string) => {
+    const response = await api.delete(`/courses/${courseId}`);
+    return response.data;
+  },
+  listBranches: async (params?: { courseId?: string; showInactive?: boolean }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.courseId) queryParams.append('courseId', params.courseId);
+    if (params?.showInactive) queryParams.append('showInactive', 'true');
+    const query = queryParams.toString();
+    const response = await api.get(`/courses/branches${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+  createBranch: async (
+    courseId: string,
+    data: { name: string; code?: string; description?: string }
+  ) => {
+    const response = await api.post(`/courses/${courseId}/branches`, data);
+    return response.data;
+  },
+  updateBranch: async (
+    courseId: string,
+    branchId: string,
+    data: { name?: string; code?: string; description?: string; isActive?: boolean }
+  ) => {
+    const response = await api.put(`/courses/${courseId}/branches/${branchId}`, data);
+    return response.data;
+  },
+  deleteBranch: async (courseId: string, branchId: string) => {
+    const response = await api.delete(`/courses/${courseId}/branches/${branchId}`);
+    return response.data;
+  },
+};
+
+// Payment Settings API
+export const paymentSettingsAPI = {
+  listCourseSettings: async (params?: { showInactive?: boolean }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.showInactive) queryParams.append('showInactive', 'true');
+    const query = queryParams.toString();
+    const response = await api.get(`/payments/settings${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+  getCourseFees: async (courseId: string) => {
+    const response = await api.get(`/payments/settings/courses/${courseId}/fees`);
+    return response.data;
+  },
+  upsertCourseFees: async (
+    courseId: string,
+    data: {
+      fees?: Array<{ branchId: string; amount: number }>;
+      defaultFee?: number | null;
+      currency?: string;
+    }
+  ) => {
+    const response = await api.put(`/payments/settings/courses/${courseId}/fees`, data);
+    return response.data;
+  },
+  deleteFeeConfig: async (courseId: string, configId: string) => {
+    const response = await api.delete(`/payments/settings/courses/${courseId}/fees/${configId}`);
+    return response.data;
+  },
+  getCashfreeConfig: async () => {
+    const response = await api.get(`/payments/settings/cashfree`);
+    return response.data;
+  },
+  updateCashfreeConfig: async (data: {
+    clientId: string;
+    clientSecret: string;
+    environment?: 'sandbox' | 'production';
+    confirmChange?: boolean;
+  }) => {
+    const response = await api.put(`/payments/settings/cashfree`, data);
     return response.data;
   },
 };
@@ -406,7 +533,7 @@ export const communicationAPI = {
 // Joining API
 export const joiningAPI = {
   list: async (params?: {
-    status?: 'draft' | 'pending_approval' | 'approved';
+    status?: JoiningStatus | JoiningStatus[];
     page?: number;
     limit?: number;
     search?: string;
@@ -415,7 +542,14 @@ export const joiningAPI = {
     const queryParams = new URLSearchParams();
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
+        if (value === undefined || value === null) return;
+        if (Array.isArray(value)) {
+          if (value.length > 0) {
+            queryParams.append(key, value.join(','));
+          }
+          return;
+        }
+        if (value !== '') {
           queryParams.append(key, String(value));
         }
       });
@@ -462,6 +596,59 @@ export const admissionAPI = {
   },
   updateByLeadId: async (leadId: string, data: any) => {
     const response = await api.put(`/admissions/${leadId}`, data);
+    return response.data;
+  },
+};
+
+export const paymentAPI = {
+  listTransactions: async (params?: {
+    leadId?: string;
+    admissionId?: string;
+    joiningId?: string;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.leadId) queryParams.append('leadId', params.leadId);
+    if (params?.admissionId) queryParams.append('admissionId', params.admissionId);
+    if (params?.joiningId) queryParams.append('joiningId', params.joiningId);
+    const query = queryParams.toString();
+    const response = await api.get(`/payments/transactions${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+  recordCashPayment: async (data: {
+    leadId: string;
+    joiningId?: string;
+    admissionId?: string;
+    courseId?: string;
+    branchId?: string;
+    amount: number;
+    currency?: string;
+    notes?: string;
+  }) => {
+    const response = await api.post(`/payments/cash`, data);
+    return response.data;
+  },
+  createCashfreeOrder: async (data: {
+    leadId: string;
+    joiningId?: string;
+    admissionId?: string;
+    courseId?: string;
+    branchId?: string;
+    amount: number;
+    currency?: string;
+    customer?: {
+      customerId?: string;
+      name?: string;
+      email?: string;
+      phone?: string;
+      notifyUrl?: string;
+    };
+    notes?: Record<string, any>;
+  }) => {
+    const response = await api.post(`/payments/cashfree/order`, data);
+    return response.data;
+  },
+  verifyCashfreePayment: async (data: { orderId: string }) => {
+    const response = await api.post(`/payments/cashfree/verify`, data);
     return response.data;
   },
 };

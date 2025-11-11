@@ -20,11 +20,13 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { showToast } from '@/lib/toast';
+import { useDashboardHeader } from '@/components/layout/DashboardShell';
 
 export default function LeadDetailPage() {
   const router = useRouter();
   const params = useParams();
   const queryClient = useQueryClient();
+  const { setHeaderContent, clearHeaderContent } = useDashboardHeader();
   const leadId = params?.id as string;
   const [user, setUser] = useState<User | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -114,6 +116,40 @@ export default function LeadDetailPage() {
     normalizedLeadStatus === 'admitted' || normalizedLeadStatus === 'joined'
       ? 'View Joining Form'
       : 'Join Lead';
+  useEffect(() => {
+    if (!lead) {
+      return () => clearHeaderContent();
+    }
+
+    setHeaderContent(
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            Lead Details
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {lead.name}
+            {lead.enquiryNumber ? ` · Enquiry #${lead.enquiryNumber}` : ''}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => router.push('/superadmin/leads')}>
+            Back to Leads
+          </Button>
+          {canAccessJoiningForm && (
+            <Button
+              variant="secondary"
+              onClick={() => router.push(`/superadmin/joining/${lead._id}`)}
+            >
+              {joiningButtonLabel}
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+
+    return () => clearHeaderContent();
+  }, [lead, canAccessJoiningForm, joiningButtonLabel, router, setHeaderContent, clearHeaderContent]);
 
   const contactOptions = useMemo(() => {
     if (!lead) return [];
@@ -804,71 +840,78 @@ export default function LeadDetailPage() {
   }
 
   return (
-    <div className="min-h-screen relative">
-      {/* Background gradient effects */}
-      <div className="fixed inset-0 bg-gradient-to-br from-blue-50/30 via-purple-50/20 to-pink-50/30 pointer-events-none"></div>
-      <div className="fixed inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
-      
-      <div className="relative z-10">
-        {/* Header */}
-        <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200/50 sticky top-0 z-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Lead Details</h1>
-                <p className="text-sm text-gray-600">
-                  {lead.enquiryNumber || 'No Enquiry Number'}
-                </p>
+    <div className="mx-auto max-w-7xl space-y-8 px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+      <div className="rounded-3xl border border-white/60 bg-white/95 p-6 shadow-lg shadow-blue-100/20 backdrop-blur dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-3">
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                {lead.name}
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => router.push('/superadmin/leads')}
-                >
-                  Back to Leads
-                </Button>
-                {!isEditing && (
-                  <>
-                    {canAccessJoiningForm && (
-                      <Button
-                        variant="primary"
-                        onClick={() => router.push(`/superadmin/joining/${lead._id}`)}
-                      >
-                        {joiningButtonLabel}
-                      </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setShowStatusUpdate(true);
-                    setNewStatus(lead?.leadStatus || '');
-                    setNewQuota(lead?.quota || 'Not Applicable');
-                        setComment('');
-                      }}
-                    >
-                      Update Status
-                    </Button>
-                    <Button
-                      variant="primary"
-                      onClick={() => setIsEditing(true)}
-                    >
-                      Edit Lead
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handleDelete}
-                      className="bg-red-50 hover:bg-red-100 text-red-600 border-red-300 hover:border-red-400"
-                    >
-                      Delete Lead
-                    </Button>
-                  </>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {lead.enquiryNumber && <span>Enquiry #{lead.enquiryNumber}</span>}
+                {lead.leadStatus && (
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-3 py-1 font-semibold ${getStatusColor(
+                      lead.leadStatus
+                    )}`}
+                  >
+                    {lead.leadStatus}
+                  </span>
                 )}
+                {lead.quota && <span>· {lead.quota}</span>}
               </div>
             </div>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+              {lead.phone && <span>📞 {lead.phone}</span>}
+              {lead.email && <span>✉️ {lead.email}</span>}
+              {lead.village && <span>{lead.village}</span>}
+              {lead.district && <span>{lead.district}</span>}
+            </div>
           </div>
-        </header>
+          <div className="flex flex-wrap gap-2">
+            {isEditing ? (
+              <Button variant="secondary" onClick={() => setIsEditing(false)}>
+                Exit Editing
+              </Button>
+            ) : (
+              <>
+                {canAccessJoiningForm && (
+                  <Button
+                    variant="primary"
+                    onClick={() => router.push(`/superadmin/joining/${lead._id}`)}
+                  >
+                    {joiningButtonLabel}
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowStatusUpdate(true);
+                    setNewStatus(lead?.leadStatus || '');
+                    setNewQuota(lead?.quota || 'Not Applicable');
+                    setComment('');
+                  }}
+                >
+                  Update Status
+                </Button>
+                <Button variant="primary" onClick={() => setIsEditing(true)}>
+                  Edit Lead
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleDelete}
+                  className="bg-red-50 hover:bg-red-100 text-red-600 border-red-300 hover:border-red-400"
+                >
+                  Delete Lead
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
 
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="space-y-8">
           {isEditing ? (
             <Card>
               <h2 className="text-xl font-semibold mb-6">Edit Lead</h2>
@@ -2142,8 +2185,7 @@ export default function LeadDetailPage() {
                 </div>
               </Card>
             </div>
-          )}
-        </main>
+        )}
       </div>
     </div>
   );

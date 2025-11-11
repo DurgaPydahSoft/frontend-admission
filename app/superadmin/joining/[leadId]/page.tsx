@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { joiningAPI, admissionAPI } from '@/lib/api';
+import { joiningAPI, admissionAPI, paymentAPI, paymentSettingsAPI } from '@/lib/api';
 import { showToast } from '@/lib/toast';
 import {
   Joining,
@@ -17,7 +17,31 @@ import {
   JoiningSibling,
   JoiningStatus,
   Admission,
+  PaymentSummary,
+  CoursePaymentSettings,
+  PaymentTransaction,
 } from '@/types';
+import { useDashboardHeader } from '@/components/layout/DashboardShell';
+
+const formatCurrency = (amount?: number | null) => {
+  if (amount === undefined || amount === null || Number.isNaN(amount)) {
+    return '—';
+  }
+  try {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return amount.toString();
+  }
+};
+
+const formatDateTime = (value?: string) => {
+  if (!value) return '—';
+  return new Date(value).toLocaleString();
+};
 
 const documentLabels: Record<keyof JoiningDocuments, string> = {
   ssc: 'SSC',
@@ -69,6 +93,8 @@ const defaultDocuments: JoiningDocuments = {
 
 const buildInitialState = (joining?: Joining): JoiningFormState => ({
   courseInfo: {
+    courseId: joining?.courseInfo?.courseId,
+    branchId: joining?.courseInfo?.branchId,
     course: joining?.courseInfo?.course || '',
     branch: joining?.courseInfo?.branch || '',
     quota: joining?.courseInfo?.quota || '',
@@ -169,6 +195,7 @@ const maskAadhaar = (value?: string) => {
 const JoiningDetailPage = () => {
   const params = useParams();
   const router = useRouter();
+  const { setHeaderContent, clearHeaderContent } = useDashboardHeader();
   const leadId = Array.isArray(params?.leadId) ? params.leadId[0] : params?.leadId;
 
   const [formState, setFormState] = useState<JoiningFormState>(buildInitialState());
@@ -185,6 +212,18 @@ const JoiningDetailPage = () => {
   const [showStudentAadhaar, setShowStudentAadhaar] = useState(false);
   const [showFatherAadhaar, setShowFatherAadhaar] = useState(false);
   const [showMotherAadhaar, setShowMotherAadhaar] = useState(false);
+  const [paymentSummary, setPaymentSummary] = useState<PaymentSummary | null>(null);
+  const [openPaymentMode, setOpenPaymentMode] = useState<'cash' | 'online' | null>(null);
+  const [shouldPromptPayment, setShouldPromptPayment] = useState(false);
+  const [paymentFormState, setPaymentFormState] = useState<{
+    amount: string;
+    notes: string;
+    isProcessing: boolean;
+  }>({
+    amount: '',
+    notes: '',
+    isProcessing: false,
+  });
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['joining', leadId],
@@ -196,6 +235,170 @@ const JoiningDetailPage = () => {
   });
 
   const lead = data?.data?.lead;
+  const joiningRecord = data?.data?.joining as Joining | undefined;
+
+  const {
+    data: courseSettingsResponse,
+    isLoading: isLoadingCourseSettings,
+  } = useQuery({
+    queryKey: ['payment-settings', 'courses'],
+    queryFn: async () => {
+      const response = await paymentSettingsAPI.listCourseSettings();
+      return response;
+    },
+  });
+
+  const courseSettings: CoursePaymentSettings[] = useMemo(() => {
+    const payload = courseSettingsResponse?.data;
+    if (Array.isArray(payload)) {
+      return payload as CoursePaymentSettings[];
+    }
+    if (payload && Array.isArray((payload as any).data)) {
+      return (payload as any).data as CoursePaymentSettings[];
+    }
+    return [];
+  }, [courseSettingsResponse]);
+
+  const { data: cashfreeConfigResponse } = useQuery({
+    queryKey: ['payments', 'cashfree-config'],
+    queryFn: async () => {
+      const response = await paymentSettingsAPI.getCashfreeConfig();
+      return response;
+    },
+  });
+
+  const cashfreeConfig: CashfreeConfigPreview | null = useMemo(() => {
+    const payload = cashfreeConfigResponse?.data;
+    if (!payload) return null;
+    if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+      if ('provider' in (payload as any) || 'environment' in (payload as any)) {
+        return payload as CashfreeConfigPreview;
+      }
+      if ('data' in (payload as any) && (payload as any).data) {
+        return (payload as any).data as CashfreeConfigPreview;
+      }
+    }
+    return null;
+  }, [cashfreeConfigResponse]);
+
+  const {
+    data: transactionsResponse,
+    isLoading: isLoadingTransactions,
+    refetch: refetchTransactions,
+  } = useQuery({
+    queryKey: ['payments', 'transactions', leadId],
+    enabled: !!leadId,
+    queryFn: async () => {
+      const response = await paymentAPI.listTransactions({ leadId: leadId as string });
+      return response;
+    },
+  });
+
+  const transactions: PaymentTransaction[] = useMemo(() => {
+    const payload = transactionsResponse?.data;
+    if (Array.isArray(payload)) {
+      return payload as PaymentTransaction[];
+    }
+    if (payload && Array.isArray((payload as any).data)) {
+      return (payload as any).data as PaymentTransaction[];
+    }
+    return [];
+  }, [transactionsResponse]);
+
+  useEffect(() => {
+    if (!lead) {
+      return () => clearHeaderContent();
+    }
+
+    setHeaderContent(
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            Joining &amp; Admission Workspace
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {lead.name}{' '}
+            {lead.enquiryNumber ? `· Enquiry #${lead.enquiryNumber}` : ''}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => router.push('/superadmin/joining')}>
+            Back to Joining Desk
+          </Button>
+          <Button variant="secondary" onClick={() => router.push(`/superadmin/leads/${lead._id}`)}>
+            View Lead
+          </Button>
+        </div>
+      </div>
+    );
+
+    return () => clearHeaderContent();
+  }, [lead, router, setHeaderContent, clearHeaderContent]);
+
+  const selectedCourseSetting = useMemo(() => {
+    if (!formState.courseInfo.courseId) return undefined;
+    return courseSettings.find((item) => item.course._id === formState.courseInfo.courseId);
+  }, [courseSettings, formState.courseInfo.courseId]);
+
+  const selectedBranchSetting = useMemo(() => {
+    if (!selectedCourseSetting || !formState.courseInfo.branchId) return undefined;
+    return selectedCourseSetting.payment.branchFees.find(
+      (entry) => entry.branch?._id === formState.courseInfo.branchId
+    );
+  }, [selectedCourseSetting, formState.courseInfo.branchId]);
+
+  const configuredFee = useMemo(() => {
+    if (selectedBranchSetting?.amount) return selectedBranchSetting.amount;
+    if (selectedCourseSetting?.payment.defaultFee?.amount) {
+      return selectedCourseSetting.payment.defaultFee.amount;
+    }
+    return null;
+  }, [selectedBranchSetting, selectedCourseSetting]);
+
+  const totalPaid = paymentSummary?.totalPaid ?? 0;
+  const effectiveTotalFee = useMemo(() => {
+    const summaryFee = paymentSummary?.totalFee ?? 0;
+    if (summaryFee > 0) {
+      return summaryFee;
+    }
+    return configuredFee ?? summaryFee;
+  }, [paymentSummary?.totalFee, configuredFee]);
+
+  const outstandingBalance = useMemo(() => {
+    if (!effectiveTotalFee) {
+      if (totalPaid > 0) {
+        return Math.max(0, -totalPaid);
+      }
+      return configuredFee ?? 0;
+    }
+    return Math.max(effectiveTotalFee - totalPaid, 0);
+  }, [effectiveTotalFee, totalPaid, configuredFee]);
+
+  const inferredPaymentStatus = useMemo(() => {
+    if (paymentSummary?.status) return paymentSummary.status;
+    if (totalPaid <= 0) return 'not_started';
+    if (outstandingBalance <= 0.5) return 'paid';
+    return 'partial';
+  }, [paymentSummary?.status, totalPaid, outstandingBalance]);
+
+  const paymentStatusLabel = useMemo(
+    () => inferredPaymentStatus.replace(/_/g, ' '),
+    [inferredPaymentStatus]
+  );
+
+  const paymentStatusBadgeClass = useMemo(() => {
+    switch (inferredPaymentStatus) {
+      case 'paid':
+        return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-200';
+      case 'partial':
+        return 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-200';
+      default:
+        return 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200';
+    }
+  }, [inferredPaymentStatus]);
+
+  const cashfreeMode = (cashfreeConfig?.environment || 'sandbox') as 'sandbox' | 'production';
+  const canUseCashfree = Boolean(cashfreeConfig?.isActive && cashfreeConfig?.environment);
 
   useEffect(() => {
     if (data?.data?.joining) {
@@ -207,6 +410,7 @@ const JoiningDetailPage = () => {
         approvedAt: joining.approvedAt as string | undefined,
         admissionNumber: lead?.admissionNumber,
       });
+      setPaymentSummary(joining.paymentSummary || null);
 
       if (joining.status !== 'approved' || !hasAppliedAdmissionSnapshot) {
         setFormState(buildInitialState(joining));
@@ -236,6 +440,7 @@ const JoiningDetailPage = () => {
           ...prev,
           admissionNumber: record.admissionNumber || prev.admissionNumber,
         }));
+        setPaymentSummary(record.paymentSummary || null);
         if (!hasAppliedAdmissionSnapshot) {
           setFormState(buildInitialState(record as unknown as Joining));
           setHasAppliedAdmissionSnapshot(true);
@@ -243,20 +448,291 @@ const JoiningDetailPage = () => {
       }
     } else {
       setAdmissionRecord(null);
+      setPaymentSummary(joiningRecord?.paymentSummary || null);
       if (hasAppliedAdmissionSnapshot) {
         setHasAppliedAdmissionSnapshot(false);
       }
     }
-  }, [status, admissionData, hasAppliedAdmissionSnapshot]);
+  }, [status, admissionData, hasAppliedAdmissionSnapshot, joiningRecord]);
 
-  const handleCourseChange = (field: 'course' | 'branch' | 'quota', value: string) => {
+  const handleCourseFieldChange = (field: 'course' | 'branch' | 'quota', value: string) => {
     setFormState((prev) => ({
       ...prev,
       courseInfo: {
         ...prev.courseInfo,
         [field]: value,
+        ...(field === 'course' ? { courseId: undefined } : {}),
+        ...(field === 'branch' ? { branchId: undefined } : {}),
       },
     }));
+  };
+
+  const handleManagedCourseSelect = (courseId: string) => {
+    if (!courseId) {
+      setFormState((prev) => ({
+        ...prev,
+        courseInfo: {
+          ...prev.courseInfo,
+          courseId: undefined,
+        },
+      }));
+      return;
+    }
+
+    const course = courseSettings.find((item) => item.course._id === courseId);
+    setFormState((prev) => ({
+      ...prev,
+      courseInfo: {
+        ...prev.courseInfo,
+        courseId,
+        course: course?.course?.name || prev.courseInfo.course || '',
+        branchId: undefined,
+        branch: '',
+      },
+    }));
+  };
+
+  const handleManagedBranchSelect = (branchId: string) => {
+    if (!branchId) {
+      setFormState((prev) => ({
+        ...prev,
+        courseInfo: {
+          ...prev.courseInfo,
+          branchId: undefined,
+        },
+      }));
+      return;
+    }
+
+    const branch = selectedCourseSetting?.branches.find((item) => item._id === branchId);
+    setFormState((prev) => ({
+      ...prev,
+      courseInfo: {
+        ...prev.courseInfo,
+        branchId,
+        branch: branch?.name || prev.courseInfo.branch || '',
+      },
+    }));
+  };
+
+  const loadCashfreeSDK = useCallback(
+    (mode: 'sandbox' | 'production') => {
+      return new Promise<any>((resolve, reject) => {
+        if (typeof window === 'undefined') {
+          reject(new Error('Cashfree SDK is only available in the browser'));
+          return;
+        }
+
+        const existing = (window as any).Cashfree;
+        if (existing) {
+          try {
+            const instance = existing({ mode });
+            resolve(instance);
+            return;
+          } catch (error) {
+            reject(error);
+            return;
+          }
+        }
+
+        const scriptId = 'cashfree-sdk';
+        const existingScript = document.getElementById(scriptId);
+        const handleReady = () => {
+          if ((window as any).Cashfree) {
+            try {
+              const instance = (window as any).Cashfree({ mode });
+              resolve(instance);
+            } catch (error) {
+              reject(error);
+            }
+          } else {
+            reject(new Error('Cashfree SDK failed to initialize'));
+          }
+        };
+
+        if (existingScript) {
+          const maxWaitMs = 6000;
+          const start = Date.now();
+          const interval = window.setInterval(() => {
+            if ((window as any).Cashfree) {
+              window.clearInterval(interval);
+              handleReady();
+            } else if (Date.now() - start > maxWaitMs) {
+              window.clearInterval(interval);
+              reject(new Error('Cashfree SDK initialization timed out'));
+            }
+          }, 150);
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.id = scriptId;
+        script.async = true;
+        script.src =
+          mode === 'production'
+            ? 'https://sdk.cashfree.com/js/ui/2.0/cashfree.prod.js'
+            : 'https://sdk.cashfree.com/js/ui/2.0/cashfree.sandbox.js';
+        script.onload = handleReady;
+        script.onerror = () => reject(new Error('Failed to load Cashfree SDK'));
+        document.body.appendChild(script);
+      });
+    },
+    []
+  );
+
+  const resetPaymentForm = () => {
+    setPaymentFormState({
+      amount: '',
+      notes: '',
+      isProcessing: false,
+    });
+  };
+
+  const openPaymentModal = (mode: 'cash' | 'online') => {
+    const defaultAmountValue =
+      outstandingBalance && outstandingBalance > 0
+        ? outstandingBalance
+        : configuredFee ?? effectiveTotalFee ?? 0;
+    const normalizedValue =
+      defaultAmountValue && defaultAmountValue > 0
+        ? Number(defaultAmountValue.toFixed(2))
+        : 0;
+    setPaymentFormState({
+      amount: normalizedValue > 0 ? String(normalizedValue) : '',
+      notes: '',
+      isProcessing: false,
+    });
+    setShouldPromptPayment(false);
+    setOpenPaymentMode(mode);
+  };
+
+  const closePaymentModal = () => {
+    if (paymentFormState.isProcessing) return;
+    setOpenPaymentMode(null);
+  };
+
+  const handleCashPaymentSubmit = async () => {
+    if (!leadId) return;
+    const amountValue = Number(paymentFormState.amount);
+    if (!amountValue || Number.isNaN(amountValue) || amountValue <= 0) {
+      showToast.error('Enter a valid payment amount');
+      return;
+    }
+
+    setPaymentFormState((prev) => ({ ...prev, isProcessing: true }));
+    try {
+      await paymentAPI.recordCashPayment({
+        leadId: leadId as string,
+        joiningId: joiningRecord?._id,
+        admissionId: admissionRecord?._id,
+        courseId: formState.courseInfo.courseId,
+        branchId: formState.courseInfo.branchId,
+        amount: amountValue,
+        currency: 'INR',
+        notes: paymentFormState.notes?.trim() || undefined,
+      });
+
+      showToast.success('Cash payment recorded');
+      setOpenPaymentMode(null);
+      resetPaymentForm();
+      setShouldPromptPayment(false);
+
+      await Promise.all([
+        refetch(),
+        refetchTransactions(),
+        status === 'approved' ? refetchAdmission() : Promise.resolve(),
+      ]);
+    } catch (error: any) {
+      console.error('Error recording cash payment:', error);
+      showToast.error(error?.response?.data?.message || 'Failed to record cash payment');
+    } finally {
+      setPaymentFormState((prev) => ({ ...prev, isProcessing: false }));
+    }
+  };
+
+  const handleCashfreePayment = async () => {
+    if (!leadId) return;
+    if (!canUseCashfree) {
+      showToast.error('Cashfree configuration is not active. Please update settings.');
+      return;
+    }
+
+    const amountValue = Number(paymentFormState.amount);
+    if (!amountValue || Number.isNaN(amountValue) || amountValue <= 0) {
+      showToast.error('Enter a valid payment amount');
+      return;
+    }
+
+    setPaymentFormState((prev) => ({ ...prev, isProcessing: true }));
+    let orderId: string | null = null;
+    try {
+      const orderResponse = await paymentAPI.createCashfreeOrder({
+        leadId: leadId as string,
+        joiningId: joiningRecord?._id,
+        admissionId: admissionRecord?._id,
+        courseId: formState.courseInfo.courseId,
+        branchId: formState.courseInfo.branchId,
+        amount: amountValue,
+        currency: 'INR',
+        customer: {
+          customerId: lead?._id || (leadId as string),
+          name: lead?.name || 'Prospective Student',
+          email: lead?.email || 'student@example.com',
+          phone: lead?.phone || '9999999999',
+        },
+        notes: paymentFormState.notes ? { remarks: paymentFormState.notes } : undefined,
+      });
+
+      const orderData = orderResponse?.data;
+      if (!orderData?.orderId || !orderData?.paymentSessionId) {
+        throw new Error('Missing payment session details');
+      }
+      orderId = orderData.orderId;
+
+      const cashfree = await loadCashfreeSDK(cashfreeMode);
+      try {
+        await cashfree.checkout({
+          paymentSessionId: orderData.paymentSessionId,
+          redirectTarget: '_modal',
+        });
+      } catch (sdkError) {
+        console.warn('Cashfree checkout error:', sdkError);
+      }
+
+      const verificationResponse = await paymentAPI.verifyCashfreePayment({ orderId });
+      const verification = verificationResponse?.data || {};
+      const statusResult = (verification.status || '').toLowerCase();
+
+      if (statusResult === 'success' || statusResult === 'paid') {
+        showToast.success('Online payment successful');
+        setOpenPaymentMode(null);
+        resetPaymentForm();
+        setShouldPromptPayment(false);
+        await Promise.all([
+          refetch(),
+          refetchTransactions(),
+          status === 'approved' ? refetchAdmission() : Promise.resolve(),
+        ]);
+      } else if (statusResult === 'failed') {
+        showToast.error('Payment failed. Please try again or choose a different mode.');
+      } else {
+        showToast.info('Payment pending. You can verify the status shortly.');
+      }
+    } catch (error: any) {
+      console.error('Error processing online payment:', error);
+      showToast.error(
+        error?.response?.data?.message || error?.message || 'Failed to initiate online payment'
+      );
+      if (orderId) {
+        try {
+          await paymentAPI.verifyCashfreePayment({ orderId });
+        } catch (verifyError) {
+          console.warn('Unable to verify payment status after failure:', verifyError);
+        }
+      }
+    } finally {
+      setPaymentFormState((prev) => ({ ...prev, isProcessing: false }));
+    }
   };
 
   const handleStudentInfoChange = (field: keyof JoiningFormState['studentInfo'], value: string) => {
@@ -553,6 +1029,16 @@ const JoiningDetailPage = () => {
     onSuccess: () => {
       showToast.success('Joining form submitted for approval');
       refetch();
+      refetchTransactions();
+      setShouldPromptPayment(true);
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          const panel = document.getElementById('payment-panel');
+          if (panel) {
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 250);
+      }
     },
     onError: (error: any) => {
       console.error('Error submitting joining form:', error);
@@ -595,6 +1081,7 @@ const JoiningDetailPage = () => {
       setAdmissionRecord(null);
       refetch();
       refetchAdmission();
+      refetchTransactions();
     },
     onError: (error: any) => {
       console.error('Error approving joining form:', error);
@@ -652,62 +1139,52 @@ const JoiningDetailPage = () => {
   const statusLabel = status.replace('_', ' ');
 
   return (
-    <div className="relative min-h-screen">
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-br from-sky-50/50 via-purple-50/40 to-rose-50/35 dark:from-slate-950/90 dark:via-slate-900/85 dark:to-slate-900/80" />
-      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(to_right,#94a3b81a_1px,transparent_1px),linear-gradient(to_bottom,#94a3b81a_1px,transparent_1px)] bg-[size:28px_28px]" />
-
-      <div className="relative z-10">
-        <div className="mx-auto max-w-7xl px-4 pb-24 pt-10 sm:px-6 lg:px-8">
-          <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <button
-                onClick={() => router.back()}
-                className="inline-flex items-center text-sm font-medium text-blue-600 transition hover:text-blue-700 dark:text-blue-300"
-              >
-                <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                Back
-              </button>
-              <h1 className="mt-4 text-3xl font-semibold text-slate-900 dark:text-slate-100">
-                Joining &amp; Admission Workspace
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
-                Capture all joining details, review admission readiness, and keep records polished for
-                onboarding.
-              </p>
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-                <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 font-semibold ${statusBadgeClass}`}>
-                  <span className="inline-block h-2 w-2 rounded-full bg-current opacity-75" />
-                  {statusLabel}
+    <div className="mx-auto max-w-7xl space-y-10 px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+    <div className="rounded-3xl border border-white/60 bg-white/95 p-6 shadow-lg shadow-blue-100/20 backdrop-blur dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+              <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 font-semibold ${statusBadgeClass}`}>
+                <span className="inline-block h-2 w-2 rounded-full bg-current opacity-75" />
+                {statusLabel}
+              </span>
+              {lead?.enquiryNumber && (
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 dark:bg-slate-800/70 dark:text-slate-200">
+                  Enquiry #{lead.enquiryNumber}
                 </span>
-                {lead?.enquiryNumber && (
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 dark:bg-slate-800/70 dark:text-slate-200">
-                    Enquiry #{lead.enquiryNumber}
-                  </span>
-                )}
-                {admissionNumberDisplay && (
-                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-200">
-                    Admission #{admissionNumberDisplay}
-                  </span>
-                )}
-                {meta.updatedAt && (
-                  <span>
-                    Last updated: <strong>{new Date(meta.updatedAt).toLocaleString()}</strong>
-                  </span>
-                )}
-                {meta.submittedAt && (
-                  <span>
-                    Submitted: <strong>{new Date(meta.submittedAt).toLocaleString()}</strong>
-                  </span>
-                )}
-                {meta.approvedAt && (
-                  <span>
-                    Approved: <strong>{new Date(meta.approvedAt).toLocaleString()}</strong>
-                  </span>
-                )}
+              )}
+              {admissionNumberDisplay && (
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-200">
+                  Admission #{admissionNumberDisplay}
+                </span>
+              )}
+              {meta.updatedAt && (
+                <span>
+                  Last updated: <strong>{new Date(meta.updatedAt).toLocaleString()}</strong>
+                </span>
+              )}
+              {meta.submittedAt && (
+                <span>
+                  Submitted: <strong>{new Date(meta.submittedAt).toLocaleString()}</strong>
+                </span>
+              )}
+              {meta.approvedAt && (
+                <span>
+                  Approved: <strong>{new Date(meta.approvedAt).toLocaleString()}</strong>
+                </span>
+              )}
+            </div>
+            <div className="text-sm text-slate-600 dark:text-slate-300">
+              <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                {lead?.name}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span>{lead?.phone || 'No phone recorded'}</span>
+                {lead?.courseInterested && <span>· {lead.courseInterested}</span>}
+                {lead?.district && <span>· {lead.district}</span>}
               </div>
             </div>
+          </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               {isAdmissionEditable ? (
@@ -760,9 +1237,9 @@ const JoiningDetailPage = () => {
                 </>
               )}
             </div>
-          </div>
+      </div>
 
-          {isBusy ? (
+      {isBusy ? (
             <div className="rounded-2xl border border-white/60 bg-white/90 p-12 text-center shadow-lg shadow-blue-100/20 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-none">
               <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-blue-400 border-t-transparent" />
               <p className="mt-4 text-sm font-medium text-slate-600 dark:text-slate-300">
@@ -779,6 +1256,59 @@ const JoiningDetailPage = () => {
               These values default from the confirmed lead. Adjust if the student opted for a
               different program.
             </p>
+            {isLoadingCourseSettings ? (
+              <p className="mt-4 text-sm text-slate-500 dark:text-slate-300">
+                Loading course and branch directory…
+              </p>
+            ) : courseSettings.length > 0 ? (
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                    Select Managed Course
+                  </label>
+                  <select
+                    value={formState.courseInfo.courseId || ''}
+                    onChange={(event) => handleManagedCourseSelect(event.target.value)}
+                    className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
+                  >
+                    <option value="">Choose a course</option>
+                    {courseSettings.map((item) => (
+                      <option key={item.course._id} value={item.course._id}>
+                        {item.course.name}
+                        {item.course.code ? ` (${item.course.code})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Managed in Course &amp; Branch Setup. Selecting here keeps payments in sync.
+                  </p>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                    Select Managed Branch
+                  </label>
+                  <select
+                    value={formState.courseInfo.branchId || ''}
+                    onChange={(event) => handleManagedBranchSelect(event.target.value)}
+                    disabled={!formState.courseInfo.courseId}
+                    className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
+                  >
+                    <option value="">
+                      {formState.courseInfo.courseId ? 'Choose a branch' : 'Select a course first'}
+                    </option>
+                    {selectedCourseSetting?.branches.map((branch) => (
+                      <option key={branch._id} value={branch._id}>
+                        {branch.name}
+                        {branch.code ? ` (${branch.code})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Branch list updates based on the selected course.
+                  </p>
+                </div>
+              </div>
+            ) : null}
             <div
               className={`mt-6 grid gap-4 ${
                 admissionNumberDisplay ? 'md:grid-cols-4' : 'md:grid-cols-3'
@@ -787,19 +1317,19 @@ const JoiningDetailPage = () => {
               <Input
                 label="Course"
                 value={formState.courseInfo.course}
-                onChange={(event) => handleCourseChange('course', event.target.value)}
+                onChange={(event) => handleCourseFieldChange('course', event.target.value)}
                 placeholder="e.g. B.Tech"
               />
               <Input
                 label="Branch"
                 value={formState.courseInfo.branch}
-                onChange={(event) => handleCourseChange('branch', event.target.value)}
+                onChange={(event) => handleCourseFieldChange('branch', event.target.value)}
                 placeholder="e.g. CSE"
               />
               <Input
                 label="Quota"
                 value={formState.courseInfo.quota}
-                onChange={(event) => handleCourseChange('quota', event.target.value)}
+                onChange={(event) => handleCourseFieldChange('quota', event.target.value)}
                 placeholder="e.g. Convenor / Management"
               />
               {admissionNumberDisplay && (
@@ -809,6 +1339,30 @@ const JoiningDetailPage = () => {
                 </div>
               )}
             </div>
+            {configuredFee !== null && (
+              <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700 shadow-sm dark:border-blue-900/50 dark:bg-blue-900/30 dark:text-blue-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-blue-500 dark:text-blue-300">
+                      Configured Admission Fee
+                    </p>
+                    <p className="text-lg font-semibold">{formatCurrency(configuredFee)}</p>
+                  </div>
+                  {selectedBranchSetting?.branch ? (
+                    <p className="text-right text-xs text-blue-500 dark:text-blue-300">
+                      Branch: {selectedBranchSetting.branch.name}
+                    </p>
+                  ) : selectedCourseSetting ? (
+                    <p className="text-right text-xs text-blue-500 dark:text-blue-300">
+                      Course-wide default fee
+                    </p>
+                  ) : null}
+                </div>
+                <p className="mt-2 text-xs text-blue-500/80 dark:text-blue-200/70">
+                  Update fee amounts any time under Payment Configuration settings.
+                </p>
+              </div>
+            )}
           </section>
 
           <section className="rounded-2xl border border-white/60 bg-white/95 p-6 shadow-lg shadow-blue-100/20 backdrop-blur dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none">
@@ -1465,11 +2019,279 @@ const JoiningDetailPage = () => {
               ))}
             </div>
           </section>
+
+          <section
+            id="payment-panel"
+            className={`rounded-2xl border border-white/60 bg-white/95 p-6 shadow-lg shadow-blue-100/20 backdrop-blur transition dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none ${
+              shouldPromptPayment
+                ? 'ring-2 ring-blue-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-950'
+                : ''
+            }`}
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
+                  10. Payments &amp; Transactions
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-slate-400">
+                  Collect admission fees in parts or full. Every transaction updates the balance and is
+                  logged for audit.
+                </p>
+                {paymentSummary?.lastPaymentAt && (
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    Last payment updated on{' '}
+                    <span className="font-semibold">
+                      {formatDateTime(paymentSummary.lastPaymentAt)}
+                    </span>
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="primary"
+                  onClick={() => openPaymentModal('cash')}
+                  disabled={paymentFormState.isProcessing}
+                >
+                  Record Cash Payment
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => openPaymentModal('online')}
+                  disabled={!canUseCashfree || paymentFormState.isProcessing}
+                >
+                  Collect via Cashfree UPI / QR
+                </Button>
+              </div>
+            </div>
+
+            {!canUseCashfree && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/40 dark:text-amber-200">
+                Cashfree credentials are not configured or inactive. Update them under Payment Settings
+                to enable online collections.
+              </div>
+            )}
+
+            <div className="mt-6 grid gap-6 lg:grid-cols-2">
+              <div className="space-y-4">
+                <div className="rounded-xl border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                      Total Fee
+                    </span>
+                    <span className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                      {formatCurrency(effectiveTotalFee || configuredFee || 0)}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                      Fee Paid
+                    </span>
+                    <span className="text-base font-semibold text-emerald-600 dark:text-emerald-300">
+                      {formatCurrency(totalPaid)}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                      Balance
+                    </span>
+                    <span className="text-base font-semibold text-blue-600 dark:text-blue-300">
+                      {formatCurrency(outstandingBalance)}
+                    </span>
+                  </div>
+                  <div className="mt-4 inline-flex items-center gap-2 rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-wide">
+                    <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 ${paymentStatusBadgeClass}`}>
+                      <span className="inline-block h-2 w-2 rounded-full bg-current opacity-75" />
+                      {paymentStatusLabel}
+                    </span>
+                    {cashfreeConfig && (
+                      <span className="text-[10px] uppercase text-slate-400 dark:text-slate-500">
+                        Cashfree mode: {cashfreeMode}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {configuredFee !== null && outstandingBalance > configuredFee && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-600 shadow-sm dark:border-rose-900/60 dark:bg-rose-900/40 dark:text-rose-200">
+                    Awaiting fee configuration update. Balance exceeds configured amount—verify course
+                    selection and fee setup.
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Payment Activity
+                </h3>
+                {isLoadingTransactions ? (
+                  <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
+                    Loading transactions…
+                  </p>
+                ) : transactions.length === 0 ? (
+                  <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
+                    No payments recorded yet. Collect fees using the actions above.
+                  </p>
+                ) : (
+                  <ul className="mt-4 space-y-3">
+                    {transactions.map((transaction) => {
+                      const modeLabel =
+                        transaction.mode === 'cash'
+                          ? 'Cash'
+                          : transaction.mode === 'online'
+                          ? 'Cashfree'
+                          : 'UPI QR';
+                      const statusClass =
+                        transaction.status === 'success'
+                          ? 'text-emerald-600 dark:text-emerald-300'
+                          : transaction.status === 'failed'
+                          ? 'text-rose-600 dark:text-rose-300'
+                          : 'text-amber-600 dark:text-amber-300';
+                      const collectorName =
+                        typeof transaction.collectedBy === 'object'
+                          ? transaction.collectedBy?.name
+                          : undefined;
+                      return (
+                        <li
+                          key={transaction._id}
+                          className="rounded-lg border border-slate-200 px-4 py-3 text-sm shadow-sm dark:border-slate-700"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-slate-800 dark:text-slate-100">
+                              {modeLabel}
+                            </span>
+                            <span className={`text-xs font-semibold uppercase ${statusClass}`}>
+                              {transaction.status}
+                            </span>
+                          </div>
+                          <div className="mt-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                            <span>{formatDateTime(transaction.processedAt || transaction.createdAt)}</span>
+                            <span>{formatCurrency(transaction.amount)}</span>
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            {collectorName && (
+                              <span>
+                                Collected by <span className="font-semibold">{collectorName}</span>
+                              </span>
+                            )}
+                            {transaction.referenceId && (
+                              <span className="ml-2">
+                                Ref: <span className="font-mono">{transaction.referenceId}</span>
+                              </span>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </section>
         </div>
       )}
     </div>
+    {openPaymentMode && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+        <div className="w-full max-w-lg rounded-2xl border border-white/40 bg-white/95 p-6 shadow-2xl shadow-slate-900/20 dark:border-slate-700 dark:bg-slate-900/95">
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                {openPaymentMode === 'cash' ? 'Record Cash Payment' : 'Collect via Cashfree'}
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                {openPaymentMode === 'cash'
+                  ? 'Confirm the amount received in cash. The logged-in user is marked as collector.'
+                  : 'Enter the amount to collect. The Cashfree checkout modal opens next for secure UPI/QR payment.'}
+              </p>
+            </div>
+            <button
+              className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              onClick={closePaymentModal}
+              aria-label="Close payment dialog"
+              disabled={paymentFormState.isProcessing}
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="mt-5 space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">
+                Amount (INR)
+              </label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={paymentFormState.amount}
+                onChange={(event) =>
+                  setPaymentFormState((prev) => ({
+                    ...prev,
+                    amount: event.target.value,
+                  }))
+                }
+                className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
+                placeholder={configuredFee ? String(configuredFee) : 'Enter amount'}
+                disabled={paymentFormState.isProcessing}
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">
+                Notes (Optional)
+              </label>
+              <textarea
+                rows={3}
+                value={paymentFormState.notes}
+                onChange={(event) =>
+                  setPaymentFormState((prev) => ({
+                    ...prev,
+                    notes: event.target.value,
+                  }))
+                }
+                className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
+                placeholder={
+                  openPaymentMode === 'cash'
+                    ? 'Add a quick remark (e.g., Received by accounts, Receipt no.123)'
+                    : 'Shown to student on receipt (e.g., Admission advance).'
+                }
+                disabled={paymentFormState.isProcessing}
+              />
+            </div>
+
+            {openPaymentMode === 'online' && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-700 dark:border-blue-900/60 dark:bg-blue-900/30 dark:text-blue-200">
+                The Cashfree modal appears once you continue. Students can pay via UPI apps or card.
+                Stay on this screen until the modal completes.
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 flex items-center justify-end gap-3">
+            <Button
+              variant="secondary"
+              onClick={closePaymentModal}
+              disabled={paymentFormState.isProcessing}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={openPaymentMode === 'cash' ? handleCashPaymentSubmit : handleCashfreePayment}
+              disabled={paymentFormState.isProcessing}
+            >
+              {paymentFormState.isProcessing
+                ? 'Processing…'
+                : openPaymentMode === 'cash'
+                ? 'Record Payment'
+                : 'Collect Payment'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
   </div>
-</div>
   );
 };
 
