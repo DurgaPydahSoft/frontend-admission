@@ -8,6 +8,7 @@ import {
   createContext,
   useContext,
   ReactNode,
+  ReactElement,
 } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -16,7 +17,7 @@ import { Button } from '../ui/Button';
 import { auth } from '@/lib/auth';
 
 type IconProps = React.SVGProps<SVGSVGElement>;
-type IconComponent = (props: IconProps) => JSX.Element;
+type IconComponent = React.FC<IconProps>;
 
 const createIcon = (path: string) => {
   const Icon: IconComponent = ({ className, ...props }) => (

@@ -7,6 +7,7 @@ import { auth } from '@/lib/auth';
 import { leadAPI, communicationAPI } from '@/lib/api';
 import {
   Lead,
+  LeadUpdatePayload,
   User,
   ActivityLog,
   MessageTemplate,
@@ -30,7 +31,7 @@ export default function LeadDetailPage() {
   const leadId = params?.id as string;
   const [user, setUser] = useState<User | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState<Partial<Lead>>({});
+  const [formData, setFormData] = useState<LeadUpdatePayload>({});
   const [isSaving, setIsSaving] = useState(false);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
@@ -257,7 +258,7 @@ export default function LeadDetailPage() {
       return response.data || response;
     },
     enabled: !!leadId && !!user,
-    keepPreviousData: true,
+    placeholderData: (previousData) => previousData,
   });
 
   const communicationHistory = (
@@ -379,7 +380,7 @@ export default function LeadDetailPage() {
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: async (data: Partial<Lead>) => {
+    mutationFn: async (data: LeadUpdatePayload) => {
       return await leadAPI.update(leadId, data);
     },
     onSuccess: () => {

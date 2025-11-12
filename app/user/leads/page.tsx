@@ -225,11 +225,14 @@ export default function UserLeadsPage() {
   const pagination = leadsData?.pagination || { page: 1, limit: 50, total: 0, pages: 1 };
 
   // Handle filter changes
-  const handleFilterChange = (key: keyof LeadFilters, value: string | undefined) => {
+  const handleFilterChange = <K extends keyof LeadFilters>(
+    key: K,
+    value: LeadFilters[K] | '' | undefined | null
+  ) => {
     setFilters((prev) => {
-      const newFilters = { ...prev };
-      if (value && value !== '') {
-        newFilters[key] = value;
+      const newFilters: LeadFilters = { ...prev };
+      if (value !== undefined && value !== null && value !== '') {
+        newFilters[key] = value as LeadFilters[K];
       } else {
         delete newFilters[key];
       }
@@ -289,7 +292,7 @@ export default function UserLeadsPage() {
     e.stopPropagation();
     setSelectedLead(lead);
     setComment('');
-    setNewStatus(lead.status || '');
+    setNewStatus(lead.leadStatus || '');
     setShowCommentModal(true);
   };
 
@@ -324,7 +327,7 @@ export default function UserLeadsPage() {
     if (!selectedLead) return;
     
     const hasComment = comment.trim().length > 0;
-    const hasStatusChange = newStatus && newStatus !== selectedLead.status;
+    const hasStatusChange = newStatus && newStatus !== selectedLead.leadStatus;
 
     if (!hasComment && !hasStatusChange) {
       showToast.error('Please add a comment or change the status');
@@ -349,7 +352,7 @@ export default function UserLeadsPage() {
     setShowConfirmModal(false);
     addActivityMutation.mutate({
       comment: comment.trim() ? comment.trim() : undefined,
-      newStatus: newStatus && newStatus !== selectedLead.status ? newStatus : undefined,
+      newStatus: newStatus && newStatus !== selectedLead.leadStatus ? newStatus : undefined,
     });
   };
 
@@ -587,8 +590,8 @@ export default function UserLeadsPage() {
                       {lead.enquiryNumber || '—'}
                     </p>
                   </div>
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStatusColor(lead.status)}`}>
-                    {lead.status || 'New'}
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${getStatusColor(lead.leadStatus || '')}`}>
+                    {lead.leadStatus || 'New'}
                   </span>
                 </div>
 
@@ -710,10 +713,10 @@ export default function UserLeadsPage() {
                             e.stopPropagation();
                             handleOpenCommentModal(lead, e);
                           }}
-                          className={`inline-flex cursor-pointer items-center rounded-full px-2 py-0.5 text-xs font-semibold transition ${getStatusColor(lead.status)}`}
+                          className={`inline-flex cursor-pointer items-center rounded-full px-2 py-0.5 text-xs font-semibold transition ${getStatusColor(lead.leadStatus || '')}`}
                           title="Click to update status"
                         >
-                          {lead.status || 'New'}
+                          {lead.leadStatus || 'New'}
                         </span>
                       </td>
                       <td className="hidden px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-slate-300 md:table-cell">
@@ -843,7 +846,7 @@ export default function UserLeadsPage() {
             <div className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                  Current Status: <span className="font-semibold">{selectedLead.status || 'New'}</span>
+                Current Status: <span className="font-semibold">{selectedLead.leadStatus || 'New'}</span>
                 </label>
                 <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">Update Status</label>
                 <select
@@ -874,7 +877,8 @@ export default function UserLeadsPage() {
                   variant="primary"
                   onClick={handleSaveActivity}
                   disabled={
-                    addActivityMutation.isPending || (!comment.trim() && newStatus === selectedLead.status)
+                    addActivityMutation.isPending ||
+                    (!comment.trim() && newStatus === selectedLead.leadStatus)
                   }
                 >
                   {addActivityMutation.isPending ? 'Saving...' : 'Save'}
@@ -905,7 +909,7 @@ export default function UserLeadsPage() {
             <div className="space-y-4">
               <p className="text-gray-700 dark:text-slate-200">
                 Are you sure you want to change the status from{' '}
-                <span className="font-semibold">{selectedLead.status || 'New'}</span> to{' '}
+                <span className="font-semibold">{selectedLead.leadStatus || 'New'}</span> to{' '}
                 <span className="font-semibold">{newStatus}</span>?
               </p>
               <div className="flex gap-2 pt-4">
@@ -920,7 +924,7 @@ export default function UserLeadsPage() {
                   variant="outline"
                   onClick={() => {
                     setShowConfirmModal(false);
-                    setNewStatus(selectedLead.status || '');
+                    setNewStatus(selectedLead.leadStatus || '');
                   }}
                   disabled={addActivityMutation.isPending}
                 >

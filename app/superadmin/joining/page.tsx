@@ -44,7 +44,7 @@ const JoiningPipelinePage = () => {
       });
       return response.data || response;
     },
-    keepPreviousData: true,
+    placeholderData: (previousData) => previousData,
   });
 
   const leads = (data?.leads ?? []) as Lead[];

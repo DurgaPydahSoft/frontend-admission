@@ -117,7 +117,7 @@ export default function UserLeadDetailPage() {
     if (!lead) return;
     
     const hasComment = comment.trim().length > 0;
-    const hasStatusChange = newStatus && newStatus !== lead.status;
+    const hasStatusChange = newStatus && newStatus !== lead.leadStatus;
 
     if (!hasComment && !hasStatusChange) {
       showToast.error('Please add a comment or change the status');
@@ -142,7 +142,7 @@ export default function UserLeadDetailPage() {
     setShowConfirmModal(false);
     addActivityMutation.mutate({
       comment: comment.trim() ? comment.trim() : undefined,
-      newStatus: newStatus && newStatus !== lead.status ? newStatus : undefined,
+      newStatus: newStatus && newStatus !== lead.leadStatus ? newStatus : undefined,
     });
   };
 
@@ -252,7 +252,7 @@ export default function UserLeadDetailPage() {
                   variant="outline"
                   onClick={() => {
                     setShowStatusUpdate(true);
-                    setNewStatus(lead?.status || '');
+                    setNewStatus(lead?.leadStatus || '');
                     setComment('');
                   }}
                 >
@@ -285,16 +285,16 @@ export default function UserLeadDetailPage() {
                     </label>
                     <span
                       onClick={() => {
-                        setShowStatusUpdate(true);
-                        setNewStatus(lead?.status || '');
+                    setShowStatusUpdate(true);
+                    setNewStatus(lead?.leadStatus || '');
                         setComment('');
                       }}
-                      className={`px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full cursor-pointer hover:opacity-80 transition-opacity ${getStatusColor(
-                        lead.status
+                  className={`px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full cursor-pointer hover:opacity-80 transition-opacity ${getStatusColor(
+                    lead.leadStatus
                       )}`}
                       title="Click to update status"
                     >
-                      {lead.status || 'New'}
+                  {lead.leadStatus || 'New'}
                     </span>
                   </div>
                   <div>
@@ -498,7 +498,7 @@ export default function UserLeadDetailPage() {
                     size="sm"
                     onClick={() => {
                       setShowStatusUpdate(true);
-                      setNewStatus(lead?.status || '');
+                      setNewStatus(lead?.leadStatus || '');
                       setComment('');
                     }}
                   >
@@ -559,7 +559,7 @@ export default function UserLeadDetailPage() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Current Status: <span className="font-semibold">{lead.status || 'New'}</span>
+                    Current Status: <span className="font-semibold">{lead.leadStatus || 'New'}</span>
                     </label>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Update Status
@@ -593,7 +593,10 @@ export default function UserLeadDetailPage() {
                     <Button
                       variant="primary"
                       onClick={handleSaveStatusUpdate}
-                      disabled={addActivityMutation.isPending || (!comment.trim() && newStatus === lead.status)}
+                      disabled={
+                        addActivityMutation.isPending ||
+                        (!comment.trim() && newStatus === lead.leadStatus)
+                      }
                     >
                       {addActivityMutation.isPending ? 'Saving...' : 'Save'}
                     </Button>
@@ -623,7 +626,7 @@ export default function UserLeadDetailPage() {
                 <div className="space-y-4">
                   <p className="text-gray-700">
                     Are you sure you want to change the status from{' '}
-                    <span className="font-semibold">{lead?.status || 'New'}</span> to{' '}
+                    <span className="font-semibold">{lead?.leadStatus || 'New'}</span> to{' '}
                     <span className="font-semibold">{newStatus}</span>?
                   </p>
                   <div className="flex gap-2 pt-4">
@@ -638,7 +641,7 @@ export default function UserLeadDetailPage() {
                       variant="outline"
                       onClick={() => {
                         setShowConfirmModal(false);
-                        setNewStatus(lead?.status || '');
+                        setNewStatus(lead?.leadStatus || '');
                       }}
                       disabled={addActivityMutation.isPending}
                     >

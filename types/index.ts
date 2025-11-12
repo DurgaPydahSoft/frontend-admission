@@ -172,6 +172,32 @@ export interface Lead {
   updatedAt: string;
 }
 
+export interface LeadUpdatePayload {
+  hallTicketNumber?: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+  fatherName?: string;
+  fatherPhone?: string;
+  motherName?: string;
+  village?: string;
+  district?: string;
+  courseInterested?: string;
+  mandal?: string;
+  state?: string;
+  quota?: string;
+  applicationStatus?: string;
+  gender?: string;
+  rank?: number;
+  interCollege?: string;
+  leadStatus?: string;
+  dynamicFields?: Record<string, any>;
+  assignedTo?: string;
+  source?: string;
+  notes?: string;
+  lastFollowUp?: string;
+}
+
 export interface MessageTemplateVariable {
   key: string;
   label: string;
@@ -375,11 +401,26 @@ export interface Joining {
   updatedAt: string;
 }
 
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
+export interface JoiningListItem extends Joining {
+  lead?: Lead;
+}
+
+export interface JoiningListPayload {
+  joinings: JoiningListItem[];
+  pagination: Pagination;
+}
+
 export interface JoiningListResponse {
-  data: {
-    joinings: JoiningListItem[];
-    pagination: Pagination;
-  };
+  success?: boolean;
+  message?: string;
+  data: JoiningListPayload;
 }
 
 export interface OverviewAnalyticsTotals {
@@ -456,12 +497,7 @@ export interface Admission {
 
 export interface AdmissionListResponse {
   admissions: Array<Admission & { lead: Lead }>;
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
-  };
+  pagination: Pagination;
 }
 
 export interface LeadUploadData {
@@ -518,10 +554,12 @@ export interface LeadFilters {
   state?: string;
   district?: string;
   quota?: string;
+  status?: string;
   leadStatus?: string;
   applicationStatus?: string;
   assignedTo?: string;
   search?: string;
+  enquiryNumber?: string;
   page?: number;
   limit?: number;
 }
@@ -538,6 +576,7 @@ export interface FilterOptions {
   districts: string[];
   states: string[];
   quotas: string[];
+  statuses?: string[];
   leadStatuses: string[];
   applicationStatuses: string[];
 }

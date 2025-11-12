@@ -47,11 +47,16 @@ const JoiningInProgressPage = () => {
       });
       return response.data;
     },
-    keepPreviousData: true,
+    placeholderData: (previousData) => previousData,
   });
 
-  const joinings = data?.joinings ?? [];
-  const pagination = data?.pagination ?? { page: 1, pages: 1, total: 0, limit };
+  const payload = data?.data ?? {
+    joinings: [],
+    pagination: { page: 1, pages: 1, total: 0, limit },
+  };
+
+  const joinings = payload.joinings ?? [];
+  const pagination = payload.pagination ?? { page: 1, pages: 1, total: 0, limit };
   const isEmpty = !isLoading && joinings.length === 0;
 
   const headerContent = useMemo(

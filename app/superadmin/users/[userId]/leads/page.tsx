@@ -148,11 +148,14 @@ export default function UserLeadsViewPage() {
   const pagination = leadsData?.pagination || { page: 1, limit: 50, total: 0, pages: 1 };
 
   // Handle filter changes
-  const handleFilterChange = (key: keyof LeadFilters, value: string | undefined) => {
+  const handleFilterChange = <K extends keyof LeadFilters>(
+    key: K,
+    value: LeadFilters[K] | '' | undefined | null
+  ) => {
     setFilters((prev) => {
-      const newFilters = { ...prev };
-      if (value && value !== '') {
-        newFilters[key] = value;
+      const newFilters: LeadFilters = { ...prev };
+      if (value !== undefined && value !== null && value !== '') {
+        newFilters[key] = value as LeadFilters[K];
       } else {
         delete newFilters[key];
       }
@@ -456,10 +459,10 @@ export default function UserLeadsViewPage() {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
                             className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full transition-all ${getStatusColor(
-                              lead.status
+                              lead.leadStatus
                             )}`}
                           >
-                            {lead.status || 'New'}
+                            {lead.leadStatus || 'New'}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

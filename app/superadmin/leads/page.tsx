@@ -61,7 +61,7 @@ export default function LeadsPage() {
   const [newQuota, setNewQuota] = useState('Not Applicable');
   const quotaOptions = ['Not Applicable', 'Management', 'Convenor'];
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
+  const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set<string>());
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [isSelectingAll, setIsSelectingAll] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -326,11 +326,14 @@ export default function LeadsPage() {
   }, [leads, sortField, sortOrder]);
 
   // Handle filter changes
-  const handleFilterChange = (key: keyof LeadFilters, value: string | undefined) => {
+  const handleFilterChange = <K extends keyof LeadFilters>(
+    key: K,
+    value: LeadFilters[K] | '' | undefined | null
+  ) => {
     setFilters((prev) => {
-      const newFilters = { ...prev };
-      if (value && value !== '') {
-        newFilters[key] = value;
+      const newFilters: LeadFilters = { ...prev };
+      if (value !== undefined && value !== null && value !== '') {
+        newFilters[key] = value as LeadFilters[K];
       } else {
         delete newFilters[key];
       }
@@ -474,7 +477,7 @@ export default function LeadsPage() {
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
-      setSelectedLeads(new Set());
+      setSelectedLeads(new Set<string>());
       setShowBulkDeleteModal(false);
       setPage(1); // Reset to first page
       const deletedCount = Array.isArray(variables) ? variables.length : 0;
@@ -520,7 +523,7 @@ export default function LeadsPage() {
 
   const toggleLeadSelection = (leadId: string, shouldSelect?: boolean) => {
     setSelectedLeads((prev) => {
-      const newSet = new Set(prev);
+      const newSet = new Set<string>(prev);
       const isSelected = prev.has(leadId);
       const nextValue = shouldSelect ?? !isSelected;
       if (nextValue) {
@@ -541,10 +544,10 @@ export default function LeadsPage() {
   // Handle select all
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      const allIds = new Set(displayedLeads.map((lead: Lead) => lead._id));
+      const allIds = new Set<string>(displayedLeads.map((lead: Lead) => lead._id));
       setSelectedLeads(allIds);
     } else {
-      setSelectedLeads(new Set());
+      setSelectedLeads(new Set<string>());
     }
   };
 
@@ -580,10 +583,10 @@ export default function LeadsPage() {
       
       // Fetch all lead IDs matching current filters
       const response = await leadAPI.getAllIds(filtersForIds);
-      const allIds = response.data?.ids || response.ids || [];
+      const allIds = (response.data?.ids || response.ids || []) as string[];
       
       // Select all IDs
-      setSelectedLeads(new Set(allIds));
+      setSelectedLeads(new Set<string>(allIds));
     } catch (error) {
       console.error('Error selecting all leads:', error);
       showToast.error('Failed to select all leads. Please try again.');

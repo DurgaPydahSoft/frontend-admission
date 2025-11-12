@@ -6,6 +6,7 @@ import type {
   CourseFeePayload,
   CashfreeConfigPreview,
   PaymentTransaction,
+  LeadUpdatePayload,
 } from '@/types';
 
 // API Base URL - Update this with your backend URL
@@ -153,31 +154,7 @@ export const leadAPI = {
     const response = await api.post('/leads', data);
     return response.data;
   },
-  update: async (id: string, data: {
-    hallTicketNumber?: string;
-    name?: string;
-    phone?: string;
-    email?: string;
-    fatherName?: string;
-    fatherPhone?: string;
-    motherName?: string;
-    village?: string;
-    district?: string;
-    courseInterested?: string;
-    mandal?: string;
-    state?: string;
-    quota?: string;
-    applicationStatus?: string;
-    gender?: string;
-    rank?: number;
-    interCollege?: string;
-    leadStatus?: string;
-    dynamicFields?: Record<string, any>;
-    assignedTo?: string;
-    source?: string;
-    notes?: string;
-    lastFollowUp?: string;
-  }) => {
+  update: async (id: string, data: LeadUpdatePayload) => {
     const response = await api.put(`/leads/${id}`, data);
     return response.data;
   },
