@@ -29,7 +29,7 @@ const ConfirmedLeadsPage = () => {
       });
       return response.data || response;
     },
-    keepPreviousData: true,
+    placeholderData: (previousData) => previousData,
   });
 
   const headerContent = useMemo(
