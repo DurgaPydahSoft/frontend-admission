@@ -600,6 +600,7 @@ export const paymentAPI = {
     amount: number;
     currency?: string;
     notes?: string;
+    isAdditionalFee?: boolean;
   }) => {
     const response = await api.post(`/payments/cash`, data);
     return response.data;
@@ -620,6 +621,7 @@ export const paymentAPI = {
       notifyUrl?: string;
     };
     notes?: Record<string, any>;
+    isAdditionalFee?: boolean;
   }) => {
     const response = await api.post(`/payments/cashfree/order`, data);
     return response.data;

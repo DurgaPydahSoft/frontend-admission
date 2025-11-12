@@ -9,26 +9,30 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { showToast } from '@/lib/toast';
 import { useDashboardHeader } from '@/components/layout/DashboardShell';
-import { FilterOptions } from '@/types';
+import { FilterOptions, LeadUploadData } from '@/types';
 
-interface LeadFormState {
-  name: string;
-  phone: string;
-  email: string;
-  fatherName: string;
-  fatherPhone: string;
-  motherName: string;
-  hallTicketNumber: string;
-  village: string;
-  district: string;
-  mandal: string;
-  state: string;
-  quota: string;
-  courseInterested: string;
-  applicationStatus: string;
-  gender: string;
-  interCollege: string;
-}
+type LeadFormState = Required<
+  Pick<
+    LeadUploadData,
+    | 'name'
+    | 'phone'
+    | 'email'
+    | 'fatherName'
+    | 'fatherPhone'
+    | 'motherName'
+    | 'hallTicketNumber'
+    | 'village'
+    | 'district'
+    | 'mandal'
+    | 'state'
+    | 'quota'
+    | 'courseInterested'
+    | 'applicationStatus'
+    | 'gender'
+    | 'interCollege'
+    | 'rank'
+  >
+>;
 
 const initialFormState: LeadFormState = {
   name: '',
@@ -47,6 +51,7 @@ const initialFormState: LeadFormState = {
   applicationStatus: 'Not Provided',
   gender: 'Not Specified',
   interCollege: '',
+  rank: '',
 };
 
 const requiredFields: Array<keyof LeadFormState> = [
@@ -95,6 +100,12 @@ const IndividualLeadPage = () => {
 
   const createLeadMutation = useMutation({
     mutationFn: async () => {
+      const rankInput =
+        typeof formState.rank === 'number'
+          ? String(formState.rank)
+          : formState.rank.trim();
+      const rankValue =
+        rankInput && !Number.isNaN(Number(rankInput)) ? Number(rankInput) : undefined;
       const payload = {
         ...formState,
         hallTicketNumber: formState.hallTicketNumber || undefined,
@@ -102,6 +113,7 @@ const IndividualLeadPage = () => {
         motherName: formState.motherName || undefined,
         courseInterested: formState.courseInterested || undefined,
         interCollege: formState.interCollege || undefined,
+        rank: rankValue,
       };
       return leadAPI.create(payload);
     },
@@ -124,7 +136,12 @@ const IndividualLeadPage = () => {
   const validate = () => {
     const nextErrors: Record<string, string> = {};
     requiredFields.forEach((field) => {
-      if (!formState[field]?.trim()) {
+      const value = formState[field];
+      if (typeof value === 'string') {
+        if (!value.trim()) {
+          nextErrors[field] = 'Required';
+        }
+      } else if (value === undefined || value === null) {
         nextErrors[field] = 'Required';
       }
     });
@@ -138,10 +155,12 @@ const IndividualLeadPage = () => {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleChange = (field: keyof LeadFormState) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { value } = event.target;
-    setFormState((prev) => ({ ...prev, [field]: value }));
-  };
+  const handleChange =
+    (field: keyof LeadFormState) =>
+    (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const { value } = event.target;
+      setFormState((prev) => ({ ...prev, [field]: value }));
+    };
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -209,12 +228,22 @@ const IndividualLeadPage = () => {
               onChange={handleChange('motherName')}
             />
             <Input
-              label="Intermediate / Diploma College"
-              name="interCollege"
-              value={formState.interCollege}
-              onChange={handleChange('interCollege')}
-              placeholder="Where did the student study last?"
+              label="Rank"
+              name="rank"
+              value={formState.rank}
+              onChange={handleChange('rank')}
+              placeholder="Rank (if available)"
+              inputMode="numeric"
             />
+            <div>
+              <Input
+                label="Intermediate / Diploma College"
+                name="interCollege"
+                value={formState.interCollege}
+                onChange={handleChange('interCollege')}
+                placeholder="Where did the student study last?"
+              />
+            </div>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

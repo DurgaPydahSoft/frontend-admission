@@ -98,6 +98,7 @@ export interface PaymentTransaction {
   referenceId?: string;
   notes?: string;
   meta?: Record<string, any>;
+  isAdditionalFee?: boolean;
   processedAt?: string;
   verifiedAt?: string;
   createdAt: string;
@@ -331,7 +332,7 @@ export interface JoiningQualifications {
   ssc?: boolean;
   interOrDiploma?: boolean;
   ug?: boolean;
-  medium?: 'english' | 'telugu' | 'other' | '';
+  mediums?: Array<'english' | 'telugu' | 'other'>;
   otherMediumLabel?: string;
 }
 

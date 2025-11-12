@@ -62,6 +62,104 @@ const documentLabels: Record<keyof JoiningDocuments, string> = {
   rationCard: 'Ration Card',
 };
 
+const quotaOptions = ['Management', 'Convenor', 'Not Applicable'] as const;
+
+const mediumOptions: Array<{ value: 'english' | 'telugu' | 'other'; label: string }> = [
+  { value: 'english', label: 'English' },
+  { value: 'telugu', label: 'Telugu' },
+  { value: 'other', label: 'Other' },
+];
+
+const mediumOptionValues = new Set(mediumOptions.map((option) => option.value));
+
+const documentStatusOptions: JoiningDocumentStatus[] = ['pending', 'received'];
+
+const normalizeDateInput = (value?: string) => {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const isoCandidate = new Date(value);
+  if (!Number.isNaN(isoCandidate.getTime())) {
+    return isoCandidate.toISOString().slice(0, 10);
+  }
+  const ddMmYyMatch = value.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (ddMmYyMatch) {
+    return `${ddMmYyMatch[3]}-${ddMmYyMatch[2]}-${ddMmYyMatch[1]}`;
+  }
+  return '';
+};
+
+const normalizeMediumSelections = (
+  qualifications?: Joining['qualifications']
+): Array<'english' | 'telugu' | 'other'> => {
+  const selections: string[] = [];
+
+  if (Array.isArray(qualifications?.mediums)) {
+    selections.push(...qualifications.mediums);
+  }
+
+  const legacyMedium = (qualifications as any)?.medium;
+  if (typeof legacyMedium === 'string' && legacyMedium) {
+    selections.push(legacyMedium);
+  }
+
+  return Array.from(
+    new Set(
+      selections.filter(
+        (item): item is 'english' | 'telugu' | 'other' => mediumOptionValues.has(item as any)
+      )
+    )
+  );
+};
+
+const sanitizeYearValue = (value: string) => value.replace(/\D/g, '').slice(0, 4);
+
+const sanitizeTotalMarksInput = (nextValue: string, previousValue: string) => {
+  const cleaned = nextValue.replace(/[^0-9.%]/g, '');
+
+  if (cleaned === '') {
+    return '';
+  }
+
+  const percentMatches = cleaned.match(/%/g)?.length ?? 0;
+  if (percentMatches > 1) {
+    return previousValue;
+  }
+
+  if (percentMatches === 1) {
+    if (!cleaned.endsWith('%')) {
+      return previousValue;
+    }
+
+    const numberPart = cleaned.slice(0, -1);
+    if (!numberPart) {
+      return previousValue;
+    }
+
+    if (numberPart.split('%').length > 1) {
+      return previousValue;
+    }
+
+    const [integerPart, decimalPart] = numberPart.split('.');
+    if (!integerPart || integerPart.length > 2 || !/^\d+$/.test(integerPart)) {
+      return previousValue;
+    }
+
+    if (decimalPart !== undefined) {
+      if (decimalPart.length > 2 || !/^\d*$/.test(decimalPart)) {
+        return previousValue;
+      }
+    }
+
+    return cleaned;
+  }
+
+  if (/^\d{0,4}(\.\d{0,2})?$/.test(cleaned)) {
+    return cleaned;
+  }
+
+  return previousValue;
+};
+
 type JoiningFormState = {
   courseInfo: Joining['courseInfo'];
   studentInfo: Joining['studentInfo'];
@@ -92,93 +190,99 @@ const defaultDocuments: JoiningDocuments = {
   rationCard: 'pending',
 };
 
-const buildInitialState = (joining?: Joining): JoiningFormState => ({
-  courseInfo: {
-    courseId: joining?.courseInfo?.courseId,
-    branchId: joining?.courseInfo?.branchId,
-    course: joining?.courseInfo?.course || '',
-    branch: joining?.courseInfo?.branch || '',
-    quota: joining?.courseInfo?.quota || '',
-  },
-  studentInfo: {
-    name: joining?.studentInfo?.name || '',
-    aadhaarNumber: joining?.studentInfo?.aadhaarNumber || '',
-    phone: joining?.studentInfo?.phone || '',
-    gender: joining?.studentInfo?.gender || '',
-    dateOfBirth: joining?.studentInfo?.dateOfBirth || '',
-    notes: joining?.studentInfo?.notes || 'As per SSC for no issues',
-  },
-  parents: {
-    father: {
-      name: joining?.parents?.father?.name || '',
-      phone: joining?.parents?.father?.phone || '',
-      aadhaarNumber: joining?.parents?.father?.aadhaarNumber || '',
+const buildInitialState = (joining?: Joining): JoiningFormState => {
+  const resolvedMediums = normalizeMediumSelections(joining?.qualifications);
+
+  return {
+    courseInfo: {
+      courseId: joining?.courseInfo?.courseId,
+      branchId: joining?.courseInfo?.branchId,
+      course: joining?.courseInfo?.course || '',
+      branch: joining?.courseInfo?.branch || '',
+      quota: joining?.courseInfo?.quota || '',
     },
-    mother: {
-      name: joining?.parents?.mother?.name || '',
-      phone: joining?.parents?.mother?.phone || '',
-      aadhaarNumber: joining?.parents?.mother?.aadhaarNumber || '',
+    studentInfo: {
+      name: joining?.studentInfo?.name || '',
+      aadhaarNumber: joining?.studentInfo?.aadhaarNumber || '',
+      phone: joining?.studentInfo?.phone || '',
+      gender: joining?.studentInfo?.gender || '',
+      dateOfBirth: normalizeDateInput(joining?.studentInfo?.dateOfBirth),
+      notes: joining?.studentInfo?.notes || 'As per SSC for no issues',
     },
-  },
-  reservation: {
-    general: joining?.reservation?.general || 'oc',
-    other: joining?.reservation?.other || [],
-  },
-  address: {
-    communication: {
-      doorOrStreet: joining?.address?.communication?.doorOrStreet || '',
-      landmark: joining?.address?.communication?.landmark || '',
-      villageOrCity: joining?.address?.communication?.villageOrCity || '',
-      mandal: joining?.address?.communication?.mandal || '',
-      district: joining?.address?.communication?.district || '',
-      pinCode: joining?.address?.communication?.pinCode || '',
+    parents: {
+      father: {
+        name: joining?.parents?.father?.name || '',
+        phone: joining?.parents?.father?.phone || '',
+        aadhaarNumber: joining?.parents?.father?.aadhaarNumber || '',
+      },
+      mother: {
+        name: joining?.parents?.mother?.name || '',
+        phone: joining?.parents?.mother?.phone || '',
+        aadhaarNumber: joining?.parents?.mother?.aadhaarNumber || '',
+      },
     },
-    relatives: joining?.address?.relatives?.length
-      ? joining.address.relatives.map((relative) => ({
-          name: relative.name || '',
-          relationship: relative.relationship || '',
-          doorOrStreet: relative.doorOrStreet || '',
-          landmark: relative.landmark || '',
-          villageOrCity: relative.villageOrCity || '',
-          mandal: relative.mandal || '',
-          district: relative.district || '',
-          pinCode: relative.pinCode || '',
+    reservation: {
+      general: joining?.reservation?.general || 'oc',
+      other: joining?.reservation?.other || [],
+    },
+    address: {
+      communication: {
+        doorOrStreet: joining?.address?.communication?.doorOrStreet || '',
+        landmark: joining?.address?.communication?.landmark || '',
+        villageOrCity: joining?.address?.communication?.villageOrCity || '',
+        mandal: joining?.address?.communication?.mandal || '',
+        district: joining?.address?.communication?.district || '',
+        pinCode: joining?.address?.communication?.pinCode || '',
+      },
+      relatives: joining?.address?.relatives?.length
+        ? joining.address.relatives.map((relative) => ({
+            name: relative.name || '',
+            relationship: relative.relationship || '',
+            doorOrStreet: relative.doorOrStreet || '',
+            landmark: relative.landmark || '',
+            villageOrCity: relative.villageOrCity || '',
+            mandal: relative.mandal || '',
+            district: relative.district || '',
+            pinCode: relative.pinCode || '',
+          }))
+        : [],
+    },
+    qualifications: {
+      ssc: joining?.qualifications?.ssc || false,
+      interOrDiploma: joining?.qualifications?.interOrDiploma || false,
+      ug: joining?.qualifications?.ug || false,
+      mediums: resolvedMediums,
+      otherMediumLabel: resolvedMediums.includes('other')
+        ? joining?.qualifications?.otherMediumLabel || ''
+        : '',
+    },
+    educationHistory: joining?.educationHistory?.length
+      ? joining.educationHistory.map((item) => ({
+          level: item.level,
+          otherLevelLabel: item.otherLevelLabel || '',
+          courseOrBranch: item.courseOrBranch || '',
+          yearOfPassing: item.yearOfPassing || '',
+          institutionName: item.institutionName || '',
+          institutionAddress: item.institutionAddress || '',
+          hallTicketNumber: item.hallTicketNumber || '',
+          totalMarksOrGrade: item.totalMarksOrGrade || '',
+          cetRank: item.cetRank || '',
         }))
       : [],
-  },
-  qualifications: {
-    ssc: joining?.qualifications?.ssc || false,
-    interOrDiploma: joining?.qualifications?.interOrDiploma || false,
-    ug: joining?.qualifications?.ug || false,
-    medium: joining?.qualifications?.medium || '',
-    otherMediumLabel: joining?.qualifications?.otherMediumLabel || '',
-  },
-  educationHistory: joining?.educationHistory?.length
-    ? joining.educationHistory.map((item) => ({
-        level: item.level,
-        otherLevelLabel: item.otherLevelLabel || '',
-        courseOrBranch: item.courseOrBranch || '',
-        yearOfPassing: item.yearOfPassing || '',
-        institutionName: item.institutionName || '',
-        institutionAddress: item.institutionAddress || '',
-        hallTicketNumber: item.hallTicketNumber || '',
-        totalMarksOrGrade: item.totalMarksOrGrade || '',
-        cetRank: item.cetRank || '',
-      }))
-    : [],
-  siblings: joining?.siblings?.length
-    ? joining.siblings.map((sibling) => ({
-        name: sibling.name || '',
-        relation: sibling.relation || '',
-        studyingStandard: sibling.studyingStandard || '',
-        institutionName: sibling.institutionName || '',
-      }))
-    : [],
-  documents: {
-    ...defaultDocuments,
-    ...(joining?.documents || {}),
-  },
-});
+    siblings: joining?.siblings?.length
+      ? joining.siblings.map((sibling) => ({
+          name: sibling.name || '',
+          relation: sibling.relation || '',
+          studyingStandard: sibling.studyingStandard || '',
+          institutionName: sibling.institutionName || '',
+        }))
+      : [],
+    documents: {
+      ...defaultDocuments,
+      ...(joining?.documents || {}),
+    },
+  };
+};
 
 const maskAadhaar = (value?: string) => {
   const digitsOnly = value?.replace(/\D/g, '') || '';
@@ -216,6 +320,7 @@ const JoiningDetailPage = () => {
   const [paymentSummary, setPaymentSummary] = useState<PaymentSummary | null>(null);
   const [openPaymentMode, setOpenPaymentMode] = useState<'cash' | 'online' | null>(null);
   const [shouldPromptPayment, setShouldPromptPayment] = useState(false);
+  const [isAdditionalFeeMode, setIsAdditionalFeeMode] = useState(false);
   const [paymentFormState, setPaymentFormState] = useState<{
     amount: string;
     notes: string;
@@ -409,6 +514,33 @@ const JoiningDetailPage = () => {
     }
   }, [inferredPaymentStatus]);
 
+  const baseFeeTarget = useMemo(() => {
+    return (effectiveTotalFee ?? configuredFee ?? 0) || 0;
+  }, [effectiveTotalFee, configuredFee]);
+
+  const additionalFeePaid = useMemo(() => {
+    if (!transactions || transactions.length === 0) return 0;
+    return transactions
+      .filter((transaction) => transaction.isAdditionalFee && transaction.status === 'success')
+      .reduce((sum, transaction) => sum + (transaction.amount || 0), 0);
+  }, [transactions]);
+
+  const normalizedBaseFeePaid = Math.max(totalPaid - additionalFeePaid, 0);
+  const baseFeePaid =
+    baseFeeTarget > 0 ? Math.min(normalizedBaseFeePaid, baseFeeTarget) : normalizedBaseFeePaid;
+  const totalAmountPaid = Math.max(totalPaid, 0);
+  const isBaseFeeCleared = baseFeeTarget > 0 && outstandingBalance <= 0.5;
+  const shouldShowAdditionalFeeButton =
+    isBaseFeeCleared || additionalFeePaid > 0 || isAdditionalFeeMode;
+  const paymentActionsDisabled =
+    paymentFormState.isProcessing || (!isAdditionalFeeMode && isBaseFeeCleared);
+
+  useEffect(() => {
+    if (isAdditionalFeeMode && !isBaseFeeCleared) {
+      setIsAdditionalFeeMode(false);
+    }
+  }, [isAdditionalFeeMode, isBaseFeeCleared]);
+
   const cashfreeMode: 'production' = 'production';
   const canUseCashfree = Boolean(cashfreeConfig?.isActive && cashfreeConfig?.environment);
 
@@ -596,18 +728,21 @@ const JoiningDetailPage = () => {
 
   const openPaymentModal = (mode: 'cash' | 'online') => {
     const defaultAmountValue =
-      outstandingBalance && outstandingBalance > 0
+      isAdditionalFeeMode
+        ? null
+        : outstandingBalance && outstandingBalance > 0
         ? outstandingBalance
         : configuredFee ?? effectiveTotalFee ?? 0;
     const normalizedValue =
       defaultAmountValue && defaultAmountValue > 0
         ? Number(defaultAmountValue.toFixed(2))
         : 0;
-    setPaymentFormState({
-      amount: normalizedValue > 0 ? String(normalizedValue) : '',
-      notes: '',
+    setPaymentFormState((prev) => ({
+      amount:
+        isAdditionalFeeMode || normalizedValue <= 0 ? '' : String(normalizedValue),
+      notes: isAdditionalFeeMode ? prev.notes || 'Additional fee' : '',
       isProcessing: false,
-    });
+    }));
     setShouldPromptPayment(false);
     setOpenPaymentMode(mode);
   };
@@ -636,12 +771,14 @@ const JoiningDetailPage = () => {
         amount: amountValue,
         currency: 'INR',
         notes: paymentFormState.notes?.trim() || undefined,
+        isAdditionalFee: isAdditionalFeeMode || undefined,
       });
 
       showToast.success('Cash payment recorded');
       setOpenPaymentMode(null);
       resetPaymentForm();
       setShouldPromptPayment(false);
+      setIsAdditionalFeeMode(false);
 
       await Promise.all([
         refetch(),
@@ -687,6 +824,7 @@ const JoiningDetailPage = () => {
           phone: lead?.phone || '9999999999',
         },
         notes: paymentFormState.notes ? { remarks: paymentFormState.notes } : undefined,
+        isAdditionalFee: isAdditionalFeeMode || undefined,
       });
 
       const orderData = orderResponse?.data;
@@ -718,6 +856,7 @@ const JoiningDetailPage = () => {
         setOpenPaymentMode(null);
         resetPaymentForm();
         setShouldPromptPayment(false);
+        setIsAdditionalFeeMode(false);
         await Promise.all([
           refetch(),
           refetchTransactions(),
@@ -879,7 +1018,7 @@ const JoiningDetailPage = () => {
     });
   };
 
-  const toggleQualification = (field: keyof JoiningFormState['qualifications']) => {
+  const toggleQualification = (field: 'ssc' | 'interOrDiploma' | 'ug') => {
     setFormState((prev) => ({
       ...prev,
       qualifications: {
@@ -889,15 +1028,33 @@ const JoiningDetailPage = () => {
     }));
   };
 
-  const handleQualificationMediumChange = (
-    field: 'medium' | 'otherMediumLabel',
-    value: string
-  ) => {
+  const toggleMediumSelection = (value: 'english' | 'telugu' | 'other') => {
+    setFormState((prev) => {
+      const current = Array.isArray(prev.qualifications.mediums)
+        ? prev.qualifications.mediums
+        : [];
+      const exists = current.includes(value);
+      const next = exists
+        ? current.filter((item) => item !== value)
+        : Array.from(new Set([...current, value]));
+
+      return {
+        ...prev,
+        qualifications: {
+          ...prev.qualifications,
+          mediums: next,
+          otherMediumLabel: next.includes('other') ? prev.qualifications.otherMediumLabel : '',
+        },
+      };
+    });
+  };
+
+  const handleMediumOtherLabelChange = (value: string) => {
     setFormState((prev) => ({
       ...prev,
       qualifications: {
         ...prev.qualifications,
-        [field]: value,
+        otherMediumLabel: value,
       },
     }));
   };
@@ -916,6 +1073,26 @@ const JoiningDetailPage = () => {
       return {
         ...prev,
         educationHistory: copy,
+      };
+    });
+  };
+
+  const handleYearOfPassingChange = (index: number, value: string) => {
+    updateEducationHistory(index, 'yearOfPassing', sanitizeYearValue(value));
+  };
+
+  const handleTotalMarksChange = (index: number, value: string) => {
+    setFormState((prev) => {
+      const historyCopy = [...prev.educationHistory];
+      const previousValue = historyCopy[index]?.totalMarksOrGrade || '';
+      const sanitized = sanitizeTotalMarksInput(value, previousValue);
+      historyCopy[index] = {
+        ...historyCopy[index],
+        totalMarksOrGrade: sanitized,
+      };
+      return {
+        ...prev,
+        educationHistory: historyCopy,
       };
     });
   };
@@ -1336,12 +1513,27 @@ const JoiningDetailPage = () => {
                 onChange={(event) => handleCourseFieldChange('branch', event.target.value)}
                 placeholder="e.g. CSE"
               />
-              <Input
-                label="Quota"
-                value={formState.courseInfo.quota}
-                onChange={(event) => handleCourseFieldChange('quota', event.target.value)}
-                placeholder="e.g. Convenor / Management"
-              />
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                  Quota
+                </label>
+                <select
+                  value={formState.courseInfo.quota || ''}
+                  onChange={(event) => handleCourseFieldChange('quota', event.target.value)}
+                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
+                >
+                  <option value="">Select quota</option>
+                  {formState.courseInfo.quota &&
+                    !quotaOptions.includes(formState.courseInfo.quota as (typeof quotaOptions)[number]) && (
+                      <option value={formState.courseInfo.quota}>{formState.courseInfo.quota}</option>
+                    )}
+                  {quotaOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
               {admissionNumberDisplay && (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 shadow-sm dark:border-emerald-900/60 dark:bg-emerald-900/40 dark:text-emerald-200">
                   Admission Number
@@ -1437,11 +1629,10 @@ const JoiningDetailPage = () => {
                   </select>
                 </div>
                 <Input
-                  label="Date of Birth (DD-MM-YYYY)"
+                  label="Date of Birth"
                   value={formState.studentInfo.dateOfBirth || ''}
                   onChange={(event) => handleStudentInfoChange('dateOfBirth', event.target.value)}
-                  placeholder="e.g. 12-07-2006"
-                  maxLength={10}
+                  type="date"
                 />
               </div>
               <div className="md:col-span-2">
@@ -1770,17 +1961,15 @@ const JoiningDetailPage = () => {
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <div className="space-y-3">
                 {[
-                  { key: 'ssc', label: 'SSC' },
-                  { key: 'interOrDiploma', label: 'Inter / Diploma' },
-                  { key: 'ug', label: 'UG' },
+                  { key: 'ssc' as const, label: 'SSC' },
+                  { key: 'interOrDiploma' as const, label: 'Inter / Diploma' },
+                  { key: 'ug' as const, label: 'UG' },
                 ].map((item) => (
                   <label key={item.key} className="flex items-center gap-3 text-sm text-gray-700">
                     <input
                       type="checkbox"
-                      checked={Boolean(formState.qualifications[item.key as 'ssc'])}
-                      onChange={() =>
-                        toggleQualification(item.key as keyof JoiningFormState['qualifications'])
-                      }
+                      checked={Boolean(formState.qualifications[item.key])}
+                      onChange={() => toggleQualification(item.key)}
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     {item.label}
@@ -1791,26 +1980,29 @@ const JoiningDetailPage = () => {
                 <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
                   Medium of Instruction
                 </label>
-                <select
-                  value={formState.qualifications.medium || ''}
-                  onChange={(event) =>
-                    handleQualificationMediumChange('medium', event.target.value)
-                  }
-                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
-                >
-                  <option value="">Select</option>
-                  <option value="english">English</option>
-                  <option value="telugu">Telugu</option>
-                  <option value="other">Other</option>
-                </select>
-                {formState.qualifications.medium === 'other' && (
+                <div className="flex flex-wrap gap-3">
+                  {mediumOptions.map((option) => (
+                    <label
+                      key={option.value}
+                      className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:border-blue-300 focus-within:border-blue-400 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={Array.isArray(formState.qualifications.mediums) && formState.qualifications.mediums.includes(option.value)}
+                        onChange={() => toggleMediumSelection(option.value)}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
+                {Array.isArray(formState.qualifications.mediums) &&
+                  formState.qualifications.mediums.includes('other') && (
                   <Input
                     className="mt-3"
                     placeholder="Specify medium"
                     value={formState.qualifications.otherMediumLabel || ''}
-                    onChange={(event) =>
-                      handleQualificationMediumChange('otherMediumLabel', event.target.value)
-                    }
+                    onChange={(event) => handleMediumOtherLabelChange(event.target.value)}
                   />
                 )}
               </div>
@@ -1889,9 +2081,9 @@ const JoiningDetailPage = () => {
                     <Input
                       label="Year of Passing"
                       value={entry.yearOfPassing || ''}
-                      onChange={(event) =>
-                        updateEducationHistory(index, 'yearOfPassing', event.target.value)
-                      }
+                      onChange={(event) => handleYearOfPassingChange(index, event.target.value)}
+                      inputMode="numeric"
+                      maxLength={4}
                     />
                     <Input
                       label="School / College Name"
@@ -1917,9 +2109,8 @@ const JoiningDetailPage = () => {
                     <Input
                       label="Total Marks / Grade / %"
                       value={entry.totalMarksOrGrade || ''}
-                      onChange={(event) =>
-                        updateEducationHistory(index, 'totalMarksOrGrade', event.target.value)
-                      }
+                      onChange={(event) => handleTotalMarksChange(index, event.target.value)}
+                      inputMode="decimal"
                     />
                     <Input
                       label="CET Rank (Optional)"
@@ -2012,19 +2203,34 @@ const JoiningDetailPage = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-800 dark:text-slate-200">{label}</p>
                   </div>
-                  <select
-                    value={formState.documents[key as keyof JoiningDocuments] || 'pending'}
-                    onChange={(event) =>
-                      updateDocumentStatus(
-                        key as keyof JoiningDocuments,
-                        event.target.value as JoiningDocumentStatus
-                      )
-                    }
-                    className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold uppercase text-gray-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="received">Received</option>
-                  </select>
+                  <div className="flex gap-3">
+                    {documentStatusOptions.map((statusOption) => (
+                      <label
+                        key={`${key}-${statusOption}`}
+                        className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1 text-xs font-semibold uppercase transition ${
+                          (formState.documents[key as keyof JoiningDocuments] || 'pending') ===
+                          statusOption
+                            ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500/60 dark:bg-blue-900/30 dark:text-blue-200'
+                            : 'border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-blue-400 dark:hover:text-blue-200'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name={`document-${key}`}
+                          value={statusOption}
+                          checked={
+                            (formState.documents[key as keyof JoiningDocuments] || 'pending') ===
+                            statusOption
+                          }
+                          onChange={() =>
+                            updateDocumentStatus(key as keyof JoiningDocuments, statusOption)
+                          }
+                          className="h-3 w-3 border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span>{statusOption === 'received' ? 'Received' : 'Pending'}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
@@ -2060,18 +2266,42 @@ const JoiningDetailPage = () => {
                 <Button
                   variant="primary"
                   onClick={() => openPaymentModal('cash')}
-                  disabled={paymentFormState.isProcessing}
+                  disabled={paymentActionsDisabled}
                 >
-                  Record Cash Payment
+                  {isAdditionalFeeMode ? 'Record Additional Cash Payment' : 'Record Cash Payment'}
                 </Button>
                 <Button
-                  variant="outline"
+                  variant={isAdditionalFeeMode ? 'secondary' : 'outline'}
                   onClick={() => openPaymentModal('online')}
-                  disabled={!canUseCashfree || paymentFormState.isProcessing}
+                  disabled={!canUseCashfree || paymentActionsDisabled}
                 >
-                  Collect via Cashfree UPI / QR
+                  {isAdditionalFeeMode
+                    ? 'Collect Additional Fee via Cashfree'
+                    : 'Collect via Cashfree UPI / QR'}
                 </Button>
+                {shouldShowAdditionalFeeButton && (
+                  <Button
+                    variant={isAdditionalFeeMode ? 'secondary' : 'outline'}
+                    onClick={() => {
+                      if (paymentFormState.isProcessing) return;
+                      setIsAdditionalFeeMode((prev) => {
+                        if (prev) {
+                          resetPaymentForm();
+                        }
+                        return !prev;
+                      });
+                    }}
+                    disabled={paymentFormState.isProcessing}
+                  >
+                    {isAdditionalFeeMode ? 'Cancel Additional Fee' : 'Additional Fee'}
+                  </Button>
+                )}
               </div>
+              {isAdditionalFeeMode && (
+                <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                  Additional fee mode active
+                </div>
+              )}
             </div>
 
             {!canUseCashfree && (
@@ -2089,23 +2319,39 @@ const JoiningDetailPage = () => {
                       Total Fee
                     </span>
                     <span className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                      {formatCurrency(effectiveTotalFee || configuredFee || 0)}
+                      {formatCurrency(baseFeeTarget)}
                     </span>
                   </div>
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                      Fee Paid
+                      Paid Fee
                     </span>
                     <span className="text-base font-semibold text-emerald-600 dark:text-emerald-300">
-                      {formatCurrency(totalPaid)}
+                      {formatCurrency(baseFeePaid)}
                     </span>
                   </div>
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                      Balance
+                      Balance Fee
                     </span>
                     <span className="text-base font-semibold text-blue-600 dark:text-blue-300">
                       {formatCurrency(outstandingBalance)}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                      Additional Fee
+                    </span>
+                    <span className="text-base font-semibold text-amber-600 dark:text-amber-300">
+                      {formatCurrency(additionalFeePaid)}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                      Total Amount Paid
+                    </span>
+                    <span className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                      {formatCurrency(totalAmountPaid)}
                     </span>
                   </div>
                   <div className="mt-4 inline-flex items-center gap-2 rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-wide">
@@ -2165,9 +2411,16 @@ const JoiningDetailPage = () => {
                           className="rounded-lg border border-slate-200 px-4 py-3 text-sm shadow-sm dark:border-slate-700"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-semibold text-slate-800 dark:text-slate-100">
-                              {modeLabel}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-slate-800 dark:text-slate-100">
+                                {modeLabel}
+                              </span>
+                              {transaction.isAdditionalFee && (
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+                                  Additional
+                                </span>
+                              )}
+                            </div>
                             <span className={`text-xs font-semibold uppercase ${statusClass}`}>
                               {transaction.status}
                             </span>
@@ -2205,10 +2458,18 @@ const JoiningDetailPage = () => {
           <div className="flex items-start justify-between">
             <div>
               <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                {openPaymentMode === 'cash' ? 'Record Cash Payment' : 'Collect via Cashfree'}
+                {isAdditionalFeeMode
+                  ? openPaymentMode === 'cash'
+                    ? 'Record Additional Cash Payment'
+                    : 'Collect Additional Fee via Cashfree'
+                  : openPaymentMode === 'cash'
+                  ? 'Record Cash Payment'
+                  : 'Collect via Cashfree'}
               </h3>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                {openPaymentMode === 'cash'
+                {isAdditionalFeeMode
+                  ? 'Capture any additional fee collected beyond the scheduled admission fee.'
+                  : openPaymentMode === 'cash'
                   ? 'Confirm the amount received in cash. The logged-in user is marked as collector.'
                   : 'Enter the amount to collect. The Cashfree checkout modal opens next for secure UPI/QR payment.'}
               </p>
@@ -2226,6 +2487,11 @@ const JoiningDetailPage = () => {
           </div>
 
           <div className="mt-5 space-y-4">
+            {isAdditionalFeeMode && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-900/40 dark:text-amber-200">
+                This transaction is marked as an additional fee. It will be tracked separately from the admission balance.
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">
                 Amount (INR)
@@ -2242,7 +2508,13 @@ const JoiningDetailPage = () => {
                   }))
                 }
                 className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
-                placeholder={configuredFee ? String(configuredFee) : 'Enter amount'}
+                placeholder={
+                  isAdditionalFeeMode
+                    ? 'Enter additional amount'
+                    : configuredFee
+                    ? String(configuredFee)
+                    : 'Enter amount'
+                }
                 disabled={paymentFormState.isProcessing}
               />
             </div>

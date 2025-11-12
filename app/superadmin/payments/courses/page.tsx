@@ -23,6 +23,15 @@ const emptyBranchForm: BranchFormState = {
   description: '',
 };
 
+type CourseFormState = {
+  name: string;
+  code: string;
+  description: string;
+  isActive: boolean;
+};
+
+type BranchEditFormState = BranchFormState & { isActive: boolean };
+
 export default function CourseManagementPage() {
   const { setHeaderContent, clearHeaderContent } = useDashboardHeader();
 
@@ -68,6 +77,24 @@ export default function CourseManagementPage() {
   const [branchForms, setBranchForms] = useState<Record<string, BranchFormState>>({});
   const [isCreateCourseOpen, setIsCreateCourseOpen] = useState(false);
   const [branchModalCourseId, setBranchModalCourseId] = useState<string | null>(null);
+  const [editingCourse, setEditingCourse] = useState<ManagedCourse | null>(null);
+  const [courseEditForm, setCourseEditForm] = useState<CourseFormState>({
+    name: '',
+    code: '',
+    description: '',
+    isActive: true,
+  });
+  const [editingBranch, setEditingBranch] = useState<{
+    courseId: string;
+    courseName: string;
+    branch: Branch;
+  } | null>(null);
+  const [branchEditForm, setBranchEditForm] = useState<BranchEditFormState>({
+    name: '',
+    code: '',
+    description: '',
+    isActive: true,
+  });
 
   const createCourseMutation = useMutation({
     mutationFn: (payload: { name: string; code?: string; description?: string }) =>
@@ -165,17 +192,54 @@ export default function CourseManagementPage() {
     });
   };
 
-  const handleEditCourse = (course: ManagedCourse) => {
-    const nextName = window.prompt('Update course name', course.name);
-    if (nextName === null) return;
-    if (!nextName.trim()) {
-      showToast.error('Course name cannot be empty');
+  const openCourseEditModal = (course: ManagedCourse) => {
+    setEditingCourse(course);
+    setCourseEditForm({
+      name: course.name,
+      code: course.code || '',
+      description: course.description || '',
+      isActive: course.isActive ?? true,
+    });
+  };
+
+  const closeCourseEditModal = () => {
+    setEditingCourse(null);
+    setCourseEditForm({
+      name: '',
+      code: '',
+      description: '',
+      isActive: true,
+    });
+  };
+
+  const handleUpdateCourse = () => {
+    if (!editingCourse) return;
+    if (!courseEditForm.name.trim()) {
+      showToast.error('Course name is required');
       return;
     }
-    updateCourseMutation.mutate({
-      courseId: course._id,
-      payload: { name: nextName.trim() },
-    });
+
+    updateCourseMutation.mutate(
+      {
+        courseId: editingCourse._id,
+        payload: {
+          name: courseEditForm.name.trim(),
+          code: courseEditForm.code.trim() || undefined,
+          description: courseEditForm.description.trim() || undefined,
+          isActive: courseEditForm.isActive,
+        },
+      },
+      {
+        onSuccess: () => {
+          closeCourseEditModal();
+        },
+        onError: (error: any) => {
+          if (error?.response?.data?.message) {
+            showToast.error(error.response.data.message);
+          }
+        },
+      }
+    );
   };
 
   const handleToggleCourse = (course: ManagedCourse) => {
@@ -213,18 +277,59 @@ export default function CourseManagementPage() {
     });
   };
 
-  const handleEditBranch = (courseId: string, branch: Branch) => {
-    const nextName = window.prompt('Update branch name', branch.name);
-    if (nextName === null) return;
-    if (!nextName.trim()) {
-      showToast.error('Branch name cannot be empty');
+  const openBranchEditModal = (courseId: string, branch: Branch) => {
+    const courseName = courses.find((item) => item._id === courseId)?.name || 'Course';
+    setEditingBranch({
+      courseId,
+      courseName,
+      branch,
+    });
+    setBranchEditForm({
+      name: branch.name,
+      code: branch.code || '',
+      description: branch.description || '',
+      isActive: branch.isActive ?? true,
+    });
+  };
+
+  const closeBranchEditModal = () => {
+    setEditingBranch(null);
+    setBranchEditForm({
+      name: '',
+      code: '',
+      description: '',
+      isActive: true,
+    });
+  };
+
+  const handleUpdateBranch = () => {
+    if (!editingBranch) return;
+    if (!branchEditForm.name.trim()) {
+      showToast.error('Branch name is required');
       return;
     }
-    updateBranchMutation.mutate({
-      courseId,
-      branchId: branch._id,
-      payload: { name: nextName.trim() },
-    });
+    updateBranchMutation.mutate(
+      {
+        courseId: editingBranch.courseId,
+        branchId: editingBranch.branch._id,
+        payload: {
+          name: branchEditForm.name.trim(),
+          code: branchEditForm.code.trim() || undefined,
+          description: branchEditForm.description.trim() || undefined,
+          isActive: branchEditForm.isActive,
+        },
+      },
+      {
+        onSuccess: () => {
+          closeBranchEditModal();
+        },
+        onError: (error: any) => {
+          if (error?.response?.data?.message) {
+            showToast.error(error.response.data.message);
+          }
+        },
+      }
+    );
   };
 
   const handleToggleBranch = (courseId: string, branch: Branch) => {
@@ -279,115 +384,120 @@ export default function CourseManagementPage() {
             No courses yet. Create your first course to begin mapping branches and fees.
           </div>
         ) : (
-          <div className="space-y-6">
-            {courses.map((course) => {
-              return (
-                <div
-                  key={course._id}
-                  className="rounded-3xl border border-white/60 bg-white/95 p-6 shadow-lg shadow-blue-100/20 backdrop-blur dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none"
-                >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {courses.map((course) => (
+              <div
+                key={course._id}
+                className="group relative flex h-full flex-col rounded-3xl border border-white/60 bg-white/95 p-6 shadow-lg shadow-blue-100/20 backdrop-blur transition hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                           {course.name}
                         </h3>
                         {!course.isActive && (
-                          <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                             Inactive
                           </span>
                         )}
                       </div>
-                      <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                        {course.code && <span>Code: {course.code} · </span>}
-                        <span>{course.description || 'No description provided.'}</span>
-                      </div>
-                      <div className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-                        {course.branches?.length || 0} branch
-                        {(course.branches?.length || 0) === 1 ? '' : 'es'}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="secondary" onClick={() => handleEditCourse(course)}>
-                        Rename
-                      </Button>
-                      <Button variant="secondary" onClick={() => handleToggleCourse(course)}>
-                        {course.isActive ? 'Deactivate' : 'Activate'}
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={() => {
-                          setBranchForms((prev) => ({
-                            ...prev,
-                            [course._id]: emptyBranchForm,
-                          }));
-                          setBranchModalCourseId(course._id);
-                        }}
-                      >
-                        Add Branch
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleDeleteCourse(course)}
-                        disabled={deleteCourseMutation.isPending}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 space-y-3">
-                    <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                      Branches
-                    </h4>
-                    {course.branches && course.branches.length > 0 ? (
-                      <div className="space-y-3">
-                        {course.branches.map((branch) => (
-                          <div
-                            key={branch._id}
-                            className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm shadow-sm transition hover:border-blue-200 dark:border-slate-700 dark:bg-slate-900/60"
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex flex-col">
-                                <span className="font-semibold text-slate-900 dark:text-slate-100">
-                                  {branch.name}
-                                </span>
-                                <span className="text-xs text-slate-500 dark:text-slate-400">
-                                  {branch.code ? `Code: ${branch.code}` : 'No code'}
-                                </span>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                <Button
-                                  variant="secondary"
-                                  onClick={() => handleEditBranch(course._id, branch)}
-                                >
-                                  Rename
-                                </Button>
-                                <Button
-                                  variant="secondary"
-                                  onClick={() => handleToggleBranch(course._id, branch)}
-                                >
-                                  {branch.isActive ? 'Deactivate' : 'Activate'}
-                                </Button>
-                              </div>
-                            </div>
-                            {branch.description && (
-                              <p className="text-xs text-slate-500 dark:text-slate-400">
-                                {branch.description}
-                              </p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-xs text-slate-500 dark:border-slate-600 dark:text-slate-400">
-                        No branches added yet.
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {course.code ? `Code · ${course.code}` : 'No course code'}
                       </p>
-                    )}
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 shadow-sm dark:bg-slate-800 dark:text-slate-300">
+                      {(course.branches?.length || 0).toString().padStart(2, '0')} branch
+                      {(course.branches?.length || 0) === 1 ? '' : 'es'}
+                    </span>
                   </div>
+                  <p className="text-sm text-slate-500 line-clamp-3 dark:text-slate-400">
+                    {course.description || 'No description provided.'}
+                  </p>
                 </div>
-              );
-            })}
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button variant="secondary" onClick={() => openCourseEditModal(course)}>
+                    Edit
+                  </Button>
+                  <Button variant="secondary" onClick={() => handleToggleCourse(course)}>
+                    {course.isActive ? 'Deactivate' : 'Activate'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setBranchForms((prev) => ({
+                        ...prev,
+                        [course._id]: emptyBranchForm,
+                      }));
+                      setBranchModalCourseId(course._id);
+                    }}
+                  >
+                    Add Branch
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleDeleteCourse(course)}
+                    disabled={deleteCourseMutation.isPending}
+                  >
+                    Delete
+                  </Button>
+                </div>
+
+                <div className="mt-6 space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    Branches
+                  </h4>
+                  {course.branches && course.branches.length > 0 ? (
+                    <div className="grid gap-3">
+                      {course.branches.map((branch) => (
+                        <div
+                          key={branch._id}
+                          className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white/80 p-4 text-sm shadow-sm transition hover:border-blue-200 dark:border-slate-700 dark:bg-slate-900/60"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="font-semibold text-slate-900 dark:text-slate-100">
+                                {branch.name}
+                              </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">
+                                {branch.code ? `Code · ${branch.code}` : 'No branch code'}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => openBranchEditModal(course._id, branch)}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => handleToggleBranch(course._id, branch)}
+                              >
+                                {branch.isActive ? 'Deactivate' : 'Activate'}
+                              </Button>
+                            </div>
+                          </div>
+                          {branch.description && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              {branch.description}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-xs text-slate-500 dark:border-slate-600 dark:text-slate-400">
+                      No branches added yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </section>
@@ -574,6 +684,191 @@ export default function CourseManagementPage() {
                 disabled={createBranchMutation.isPending}
               >
                 {createBranchMutation.isPending ? 'Adding…' : 'Add Branch'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingCourse && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+          <div className="w-full max-w-2xl rounded-3xl border border-white/60 bg-white/95 p-6 shadow-xl shadow-blue-100/30 dark:border-slate-800 dark:bg-slate-900/95">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  Edit Course
+                </h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Update course details used across joining and payment configuration.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeCourseEditModal}
+                className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                aria-label="Close edit course dialog"
+                disabled={updateCourseMutation.isPending}
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <Input
+                label="Course Name"
+                value={courseEditForm.name}
+                onChange={(event) =>
+                  setCourseEditForm((prev) => ({ ...prev, name: event.target.value }))
+                }
+                placeholder="e.g. B.Tech"
+              />
+              <Input
+                label="Course Code"
+                value={courseEditForm.code}
+                onChange={(event) =>
+                  setCourseEditForm((prev) => ({ ...prev, code: event.target.value }))
+                }
+                placeholder="Internal reference"
+              />
+              <div className="md:col-span-2">
+                <Input
+                  label="Description"
+                  value={courseEditForm.description}
+                  onChange={(event) =>
+                    setCourseEditForm((prev) => ({ ...prev, description: event.target.value }))
+                  }
+                  placeholder="Short description for admins"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">
+                  Status
+                </label>
+                <select
+                  value={courseEditForm.isActive ? 'active' : 'inactive'}
+                  onChange={(event) =>
+                    setCourseEditForm((prev) => ({
+                      ...prev,
+                      isActive: event.target.value === 'active',
+                    }))
+                  }
+                  className="w-full rounded-xl border-2 border-gray-200 bg-white/80 px-4 py-3 text-sm font-medium text-slate-600 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={closeCourseEditModal}
+                disabled={updateCourseMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleUpdateCourse}
+                disabled={updateCourseMutation.isPending}
+              >
+                {updateCourseMutation.isPending ? 'Saving…' : 'Update Course'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingBranch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+          <div className="w-full max-w-2xl rounded-3xl border border-white/60 bg-white/95 p-6 shadow-xl shadow-blue-100/30 dark:border-slate-800 dark:bg-slate-900/95">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  Edit Branch
+                </h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Update branch details for{' '}
+                  <span className="font-semibold">{editingBranch.courseName}</span>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeBranchEditModal}
+                className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                aria-label="Close edit branch dialog"
+                disabled={updateBranchMutation.isPending}
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <Input
+                label="Branch Name"
+                value={branchEditForm.name}
+                onChange={(event) =>
+                  setBranchEditForm((prev) => ({ ...prev, name: event.target.value }))
+                }
+                placeholder="e.g. Computer Science"
+              />
+              <Input
+                label="Branch Code"
+                value={branchEditForm.code}
+                onChange={(event) =>
+                  setBranchEditForm((prev) => ({ ...prev, code: event.target.value }))
+                }
+                placeholder="Short code"
+              />
+              <div className="md:col-span-2">
+                <Input
+                  label="Description"
+                  value={branchEditForm.description}
+                  onChange={(event) =>
+                    setBranchEditForm((prev) => ({ ...prev, description: event.target.value }))
+                  }
+                  placeholder="Brief description for admins"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">
+                  Status
+                </label>
+                <select
+                  value={branchEditForm.isActive ? 'active' : 'inactive'}
+                  onChange={(event) =>
+                    setBranchEditForm((prev) => ({
+                      ...prev,
+                      isActive: event.target.value === 'active',
+                    }))
+                  }
+                  className="w-full rounded-xl border-2 border-gray-200 bg-white/80 px-4 py-3 text-sm font-medium text-slate-600 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={closeBranchEditModal}
+                disabled={updateBranchMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleUpdateBranch}
+                disabled={updateBranchMutation.isPending}
+              >
+                {updateBranchMutation.isPending ? 'Saving…' : 'Update Branch'}
               </Button>
             </div>
           </div>
