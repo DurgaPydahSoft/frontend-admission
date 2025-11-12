@@ -307,6 +307,17 @@ const JoiningDetailPage = () => {
   }, [transactionsResponse]);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const scriptId = 'cashfree-sdk-v3';
+      if (!document.getElementById(scriptId)) {
+        const script = document.createElement('script');
+        script.id = scriptId;
+        script.async = true;
+        script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+        document.body.appendChild(script);
+      }
+    }
+
     if (!lead) {
       return () => clearHeaderContent();
     }
