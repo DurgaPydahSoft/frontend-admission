@@ -398,7 +398,7 @@ const JoiningDetailPage = () => {
     }
   }, [inferredPaymentStatus]);
 
-  const cashfreeMode = (cashfreeConfig?.environment || 'sandbox') as 'sandbox' | 'production';
+  const cashfreeMode: 'production' = 'production';
   const canUseCashfree = Boolean(cashfreeConfig?.isActive && cashfreeConfig?.environment);
 
   useEffect(() => {
@@ -516,70 +516,64 @@ const JoiningDetailPage = () => {
     }));
   };
 
-  const loadCashfreeSDK = useCallback(
-    (mode: 'sandbox' | 'production') => {
-      return new Promise<any>((resolve, reject) => {
-        if (typeof window === 'undefined') {
-          reject(new Error('Cashfree SDK is only available in the browser'));
+  const loadCashfreeSDK = useCallback(() => {
+    return new Promise<any>((resolve, reject) => {
+      if (typeof window === 'undefined') {
+        reject(new Error('Cashfree SDK is only available in the browser'));
+        return;
+      }
+
+      const existing = (window as any).Cashfree;
+      if (existing) {
+        try {
+          const instance = existing({ mode: 'production' });
+          resolve(instance);
+          return;
+        } catch (error) {
+          reject(error);
           return;
         }
+      }
 
-        const existing = (window as any).Cashfree;
-        if (existing) {
+      const scriptId = 'cashfree-sdk';
+      const existingScript = document.getElementById(scriptId);
+      const handleReady = () => {
+        if ((window as any).Cashfree) {
           try {
-            const instance = existing({ mode });
+            const instance = (window as any).Cashfree({ mode: 'production' });
             resolve(instance);
-            return;
           } catch (error) {
             reject(error);
-            return;
           }
+        } else {
+          reject(new Error('Cashfree SDK failed to initialize'));
         }
+      };
 
-        const scriptId = 'cashfree-sdk';
-        const existingScript = document.getElementById(scriptId);
-        const handleReady = () => {
+      if (existingScript) {
+        const maxWaitMs = 6000;
+        const start = Date.now();
+        const interval = window.setInterval(() => {
           if ((window as any).Cashfree) {
-            try {
-              const instance = (window as any).Cashfree({ mode });
-              resolve(instance);
-            } catch (error) {
-              reject(error);
-            }
-          } else {
-            reject(new Error('Cashfree SDK failed to initialize'));
+            window.clearInterval(interval);
+            handleReady();
+          } else if (Date.now() - start > maxWaitMs) {
+            window.clearInterval(interval);
+            reject(new Error('Cashfree SDK initialization timed out'));
           }
-        };
+        }, 150);
+        return;
+      }
 
-        if (existingScript) {
-          const maxWaitMs = 6000;
-          const start = Date.now();
-          const interval = window.setInterval(() => {
-            if ((window as any).Cashfree) {
-              window.clearInterval(interval);
-              handleReady();
-            } else if (Date.now() - start > maxWaitMs) {
-              window.clearInterval(interval);
-              reject(new Error('Cashfree SDK initialization timed out'));
-            }
-          }, 150);
-          return;
-        }
-
-        const script = document.createElement('script');
-        script.id = scriptId;
-        script.async = true;
-        script.src =
-          mode === 'production'
-            ? 'https://sdk.cashfree.com/js/ui/2.0/cashfree.prod.js'
-            : 'https://sdk.cashfree.com/js/ui/2.0/cashfree.sandbox.js';
-        script.onload = handleReady;
-        script.onerror = () => reject(new Error('Failed to load Cashfree SDK'));
-        document.body.appendChild(script);
-      });
-    },
-    []
-  );
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.async = true;
+      script.src = 'https://sdk.cashfree.com/js/ui/2.0/cashfree.prod.js';
+      script.onload = handleReady;
+      script.onerror = () => reject(new Error('Failed to load Cashfree SDK'));
+      document.body.appendChild(script);
+    });
+  }, []);
 
   const resetPaymentForm = () => {
     setPaymentFormState({
@@ -690,7 +684,7 @@ const JoiningDetailPage = () => {
       }
       orderId = orderData.orderId;
 
-      const cashfree = await loadCashfreeSDK(cashfreeMode);
+      const cashfree = await loadCashfreeSDK();
       try {
         await cashfree.checkout({
           paymentSessionId: orderData.paymentSessionId,
@@ -2110,7 +2104,7 @@ const JoiningDetailPage = () => {
                     </span>
                     {cashfreeConfig && (
                       <span className="text-[10px] uppercase text-slate-400 dark:text-slate-500">
-                        Cashfree mode: {cashfreeMode}
+                        Cashfree mode: production
                       </span>
                     )}
                   </div>
