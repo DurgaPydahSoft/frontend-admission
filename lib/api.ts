@@ -12,7 +12,7 @@ import type {
 } from '@/types';
 
 // API Base URL - Update this with your backend URL
-const API_BASE_URL =  'https:admissionpyd.onrender.com/api';
+const API_BASE_URL =  'https://admissionpyd.onrender.com/api';
 
 // Create axios instance
 const api = axios.create({
