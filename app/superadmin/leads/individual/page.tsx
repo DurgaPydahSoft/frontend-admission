@@ -2,14 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { leadAPI } from '@/lib/api';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { showToast } from '@/lib/toast';
 import { useDashboardHeader } from '@/components/layout/DashboardShell';
-import { FilterOptions, LeadUploadData } from '@/types';
+import { LeadUploadData } from '@/types';
+import { getAllDistricts, getMandalsByDistrict } from '@/lib/andhra-pradesh-data';
 
 type LeadFormState = Required<
   Pick<
@@ -70,16 +71,14 @@ const IndividualLeadPage = () => {
   const [formState, setFormState] = useState<LeadFormState>(initialFormState);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const { data: filterOptionsData, isLoading: isLoadingFilters } = useQuery({
-    queryKey: ['lead-filter-options'],
-    queryFn: async () => {
-      const response = await leadAPI.getFilterOptions();
-      return response.data || response;
-    },
-    staleTime: 300000,
-  });
+  // Get districts from hardcoded data
+  const districts = useMemo(() => getAllDistricts(), []);
 
-  const filterOptions = (filterOptionsData?.data || filterOptionsData) as FilterOptions | undefined;
+  // Get mandals based on selected district
+  const mandals = useMemo(() => {
+    if (!formState.district) return [];
+    return getMandalsByDistrict(formState.district);
+  }, [formState.district]);
 
   const headerContent = useMemo(
     () => (
@@ -159,7 +158,14 @@ const IndividualLeadPage = () => {
     (field: keyof LeadFormState) =>
     (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { value } = event.target;
-      setFormState((prev) => ({ ...prev, [field]: value }));
+      setFormState((prev) => {
+        const newState = { ...prev, [field]: value };
+        // Reset mandal if district is changed
+        if (field === 'district') {
+          newState.mandal = '';
+        }
+        return newState;
+      });
     };
 
   const handleSubmit = (event: React.FormEvent) => {
@@ -263,7 +269,7 @@ const IndividualLeadPage = () => {
                 className="w-full rounded-xl border-2 border-gray-200 bg-white/80 px-4 py-3 text-sm font-medium text-slate-600 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
               >
                 <option value="">Select district</option>
-                {filterOptions?.districts?.map((district) => (
+                {districts.map((district) => (
                   <option key={district} value={district}>
                     {district}
                   </option>
@@ -277,10 +283,13 @@ const IndividualLeadPage = () => {
                 name="mandal"
                 value={formState.mandal}
                 onChange={handleChange('mandal')}
-                className="w-full rounded-xl border-2 border-gray-200 bg-white/80 px-4 py-3 text-sm font-medium text-slate-600 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
+                disabled={!formState.district}
+                className="w-full rounded-xl border-2 border-gray-200 bg-white/80 px-4 py-3 text-sm font-medium text-slate-600 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100 disabled:bg-gray-100 dark:disabled:bg-slate-800 disabled:cursor-not-allowed"
               >
-                <option value="">Select mandal</option>
-                {filterOptions?.mandals?.map((mandal) => (
+                <option value="">
+                  {formState.district ? 'Select mandal' : 'Select district first'}
+                </option>
+                {mandals.map((mandal) => (
                   <option key={mandal} value={mandal}>
                     {mandal}
                   </option>
@@ -296,11 +305,7 @@ const IndividualLeadPage = () => {
                 onChange={handleChange('state')}
                 className="w-full rounded-xl border-2 border-gray-200 bg-white/80 px-4 py-3 text-sm font-medium text-slate-600 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
               >
-                {filterOptions?.states?.map((state) => (
-                  <option key={state} value={state}>
-                    {state}
-                  </option>
-                )) || <option value="Andhra Pradesh">Andhra Pradesh</option>}
+                <option value="Andhra Pradesh">Andhra Pradesh</option>
               </select>
             </div>
             <div>
@@ -375,7 +380,7 @@ const IndividualLeadPage = () => {
               >
                 Reset
               </Button>
-              <Button type="submit" variant="primary" disabled={createLeadMutation.isPending || isLoadingFilters}>
+              <Button type="submit" variant="primary" disabled={createLeadMutation.isPending}>
                 {createLeadMutation.isPending ? 'Saving…' : 'Create Lead'}
               </Button>
             </div>

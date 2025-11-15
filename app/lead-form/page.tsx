@@ -1,25 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { leadAPI } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { getAllDistricts, getMandalsByDistrict } from '@/lib/andhra-pradesh-data';
 
 export default function LeadFormPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filterOptions, setFilterOptions] = useState<{
-    mandals?: string[];
-    districts?: string[];
-    states?: string[];
-    quotas?: string[];
-    applicationStatuses?: string[];
-  } | null>(null);
 
   const [formData, setFormData] = useState({
     hallTicketNumber: '',
@@ -36,36 +30,35 @@ export default function LeadFormPage() {
     village: '',
     district: '',
     mandal: '',
-    state: '',
+    state: 'Andhra Pradesh',
     quota: 'Not Applicable',
     applicationStatus: '',
   });
 
-  // Load filter options from public endpoint
+  // Get districts from hardcoded data
+  const districts = useMemo(() => getAllDistricts(), []);
+
+  // Get mandals based on selected district
+  const mandals = useMemo(() => {
+    if (!formData.district) return [];
+    return getMandalsByDistrict(formData.district);
+  }, [formData.district]);
+
+  // Reset mandal when district changes
   useEffect(() => {
-    const loadFilterOptions = async () => {
-      try {
-        const options = await leadAPI.getPublicFilterOptions();
-        setFilterOptions(options.data || options);
-      } catch (error) {
-        console.error('Error loading filter options:', error);
-        // Set empty arrays on error
-        setFilterOptions({
-          mandals: [],
-          districts: [],
-          states: [],
-          quotas: [],
-          applicationStatuses: [],
-        });
-      }
-    };
-    loadFilterOptions();
-  }, []);
+    if (formData.district) {
+      setFormData((prev) => ({ ...prev, mandal: '' }));
+    }
+  }, [formData.district]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     setError(null);
+    // Reset mandal if district is changed
+    if (name === 'district') {
+      setFormData((prev) => ({ ...prev, mandal: '' }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -105,8 +98,8 @@ export default function LeadFormPage() {
         district: formData.district,
         mandal: formData.mandal,
         state: formData.state || undefined,
-        quota: formData.quota || undefined,
-        applicationStatus: formData.applicationStatus || undefined,
+        quota: 'Not Applicable',
+        applicationStatus: 'Not Provided',
         source: 'Public Form',
       });
 
@@ -130,9 +123,7 @@ export default function LeadFormPage() {
           village: '',
           district: '',
           mandal: '',
-          state: '',
-          quota: 'Not Applicable',
-          applicationStatus: '',
+          state: 'Andhra Pradesh',
         });
         setShowSuccess(false);
       }, 3000);
@@ -313,11 +304,15 @@ export default function LeadFormPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm"
                     >
                       <option value="">Select District</option>
-                      {filterOptions?.districts?.map((district) => (
-                        <option key={district} value={district}>
-                          {district}
-                        </option>
-                      ))}
+                      {districts && districts.length > 0 ? (
+                        districts.map((district) => (
+                          <option key={district} value={district}>
+                            {district}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="" disabled>Loading districts...</option>
+                      )}
                     </select>
                   </div>
 
@@ -331,14 +326,21 @@ export default function LeadFormPage() {
                       value={formData.mandal}
                       onChange={handleChange}
                       required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm"
+                      disabled={!formData.district}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
-                      <option value="">Select Mandal</option>
-                      {filterOptions?.mandals?.map((mandal) => (
-                        <option key={mandal} value={mandal}>
-                          {mandal}
-                        </option>
-                      ))}
+                      <option value="">
+                        {formData.district ? 'Select Mandal' : 'Select District first'}
+                      </option>
+                      {mandals && mandals.length > 0 ? (
+                        mandals.map((mandal) => (
+                          <option key={mandal} value={mandal}>
+                            {mandal}
+                          </option>
+                        ))
+                      ) : formData.district ? (
+                        <option value="" disabled>No mandals found for this district</option>
+                      ) : null}
                     </select>
                   </div>
 
@@ -388,33 +390,6 @@ export default function LeadFormPage() {
                     />
                   </div>
 
-                  {/* Application Status */}
-                  <div>
-                    <Input
-                      label="Application Status (EAPCET)"
-                      name="applicationStatus"
-                      value={formData.applicationStatus}
-                      onChange={handleChange}
-                      placeholder="e.g., Qualified / Not Qualified"
-                    />
-                  </div>
-
-                  {/* Quota */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Quota
-                    </label>
-                    <select
-                      name="quota"
-                      value={formData.quota}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm"
-                    >
-                      <option value="Not Applicable">Not Applicable</option>
-                      <option value="Management">Management</option>
-                      <option value="Convenor">Convenor</option>
-                    </select>
-                  </div>
                 </div>
 
                 <div className="flex gap-4 pt-4">

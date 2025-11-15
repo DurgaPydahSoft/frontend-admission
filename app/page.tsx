@@ -93,14 +93,25 @@ export default function Home() {
           </div>
         </div>
         
-        <Button
-          size="lg"
-          variant="primary"
-          className="px-8 py-3 text-lg"
-          onClick={() => router.push('/auth/login')}
-        >
-          Get Started
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-4 items-center">
+          <Button
+            size="lg"
+            variant="primary"
+            className="px-8 py-3 text-lg"
+            onClick={() => router.push('/auth/login')}
+          >
+            Get Started
+          </Button>
+          <Link href="/lead-form">
+            <Button
+              size="lg"
+              variant="outline"
+              className="px-8 py-3 text-lg"
+            >
+              Submit Lead Form
+            </Button>
+          </Link>
+        </div>
         
         <p className="text-sm text-gray-500 dark:text-slate-400">
           Already onboarded?{' '}
