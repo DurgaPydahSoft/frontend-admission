@@ -315,7 +315,6 @@ export interface JoiningStudentInfo {
   phone?: string;
   gender?: string;
   dateOfBirth?: string;
-  notes?: string;
 }
 
 export interface JoiningParentInfo {
@@ -390,7 +389,8 @@ export interface JoiningDocuments {
 
 export interface Joining {
   _id: string;
-  leadId: string;
+  leadId?: string; // Made optional to support joinings without leads
+  leadData?: any; // Snapshot of lead data stored in joining
   status: JoiningStatus;
   courseInfo: JoiningCourseInfo;
   studentInfo: JoiningStudentInfo;

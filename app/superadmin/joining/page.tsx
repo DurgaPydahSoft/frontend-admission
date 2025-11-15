@@ -357,16 +357,16 @@ const JoiningPipelinePage = () => {
                             >
                               {approveMutation.mutate.isPending ? 'Approving…' : 'Approve'}
                             </Button>
-                            <Link href={`/superadmin/joining/${joining.leadId || joining._id || 'new'}`}>
+                            <Link href={`/superadmin/joining/${joining.leadId || joining._id || 'new'}/detail`}>
                               <Button variant="outline" size="sm">
                                 View
                               </Button>
                             </Link>
                           </div>
                         ) : (
-                          <Link href={`/superadmin/joining/${joining.leadId || joining._id || 'new'}`}>
+                          <Link href={`/superadmin/joining/${joining.leadId || joining._id || 'new'}/detail`}>
                             <Button variant="primary" className="group inline-flex items-center gap-2">
-                              <span className="transition-transform group-hover:-translate-x-0.5">Open Form</span>
+                              <span className="transition-transform group-hover:-translate-x-0.5">View Details</span>
                               <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                               </svg>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -207,7 +208,6 @@ const buildInitialState = (joining?: Joining): JoiningFormState => {
       phone: joining?.studentInfo?.phone || '',
       gender: joining?.studentInfo?.gender || '',
       dateOfBirth: normalizeDateInput(joining?.studentInfo?.dateOfBirth),
-      notes: joining?.studentInfo?.notes || 'As per SSC for no issues',
     },
     parents: {
       father: {
@@ -320,17 +320,16 @@ const JoiningDetailPage = () => {
   const [showFatherAadhaar, setShowFatherAadhaar] = useState(false);
   const [showMotherAadhaar, setShowMotherAadhaar] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [paymentSummary, setPaymentSummary] = useState<PaymentSummary | null>(null);
   const [openPaymentMode, setOpenPaymentMode] = useState<'cash' | 'online' | null>(null);
   const [shouldPromptPayment, setShouldPromptPayment] = useState(false);
   const [isAdditionalFeeMode, setIsAdditionalFeeMode] = useState(false);
   const [paymentFormState, setPaymentFormState] = useState<{
     amount: string;
-    notes: string;
     isProcessing: boolean;
   }>({
     amount: '',
-    notes: '',
     isProcessing: false,
   });
 
@@ -748,7 +747,6 @@ const JoiningDetailPage = () => {
   const resetPaymentForm = () => {
     setPaymentFormState({
       amount: '',
-      notes: '',
       isProcessing: false,
     });
   };
@@ -804,7 +802,6 @@ const JoiningDetailPage = () => {
         branchId: formState.courseInfo.branchId,
         amount: amountValue,
         currency: 'INR',
-        notes: paymentFormState.notes?.trim() || undefined,
         isAdditionalFee: isAdditionalFeeMode || undefined,
       });
 
@@ -860,7 +857,6 @@ const JoiningDetailPage = () => {
           email: lead?.email || 'student@example.com',
           phone: formState.studentInfo.phone || lead?.phone || '9999999999',
         },
-        notes: paymentFormState.notes ? { remarks: paymentFormState.notes } : undefined,
         isAdditionalFee: isAdditionalFeeMode || undefined,
       });
 
@@ -1452,27 +1448,25 @@ const JoiningDetailPage = () => {
           </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Link href={`/superadmin/joining/${leadId}/detail`}>
+                <Button variant="outline" className="group inline-flex items-center gap-2">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  View Details
+                </Button>
+              </Link>
               {status === 'draft' && canWriteJoining && (
                 <Button
-                  variant={isEditMode ? 'secondary' : 'primary'}
-                  onClick={() => setIsEditMode(!isEditMode)}
+                  variant="primary"
+                  onClick={() => setIsEditModalOpen(true)}
                   className="group inline-flex items-center gap-2"
                 >
-                  {isEditMode ? (
-                    <>
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      Cancel Editing
-                    </>
-                  ) : (
-                    <>
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      Edit Form
-                    </>
-                  )}
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit Form
                 </Button>
               )}
               {isAdmissionEditable ? (
@@ -1634,136 +1628,75 @@ const JoiningDetailPage = () => {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
               1. Student Information
             </h2>
-            <p className="text-sm text-gray-500">Reference: As per SSC for no issues.</p>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
-              {isEditMode ? (
-                <>
-                  <Input
-                    label="Student Name"
-                    value={formState.studentInfo.name}
-                    onChange={(event) => handleStudentInfoChange('name', event.target.value)}
+              <div>
+                <Input
+                  label="Student Name"
+                  value={formState.studentInfo.name}
+                  onChange={(event) => handleStudentInfoChange('name', event.target.value)}
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Enter as per SSC</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                  Aadhaar Number
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type={showStudentAadhaar ? 'text' : 'password'}
+                    value={formState.studentInfo.aadhaarNumber || ''}
+                    onChange={(event) =>
+                      handleStudentInfoChange('aadhaarNumber', event.target.value)
+                    }
+                    placeholder="12-digit Aadhaar number"
+                    className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
+                    maxLength={14}
                   />
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                      Aadhaar Number
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type={showStudentAadhaar ? 'text' : 'password'}
-                        value={formState.studentInfo.aadhaarNumber || ''}
-                        onChange={(event) =>
-                          handleStudentInfoChange('aadhaarNumber', event.target.value)
-                        }
-                        placeholder="12-digit Aadhaar number"
-                        className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
-                        maxLength={14}
-                      />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => setShowStudentAadhaar((prev) => !prev)}
-                      >
-                        {showStudentAadhaar ? 'Hide' : 'Show'}
-                      </Button>
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Stored securely. Masked by default for privacy.
-                    </p>
-                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setShowStudentAadhaar((prev) => !prev)}
+                  >
+                    {showStudentAadhaar ? 'Hide' : 'Show'}
+                  </Button>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Stored securely. Masked by default for privacy.
+                </p>
+              </div>
+              <Input
+                label="Student Phone (10 digits)"
+                value={formState.studentInfo.phone || ''}
+                onChange={(event) => handleStudentInfoChange('phone', event.target.value)}
+                maxLength={10}
+                placeholder="Enter 10-digit number"
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                    Gender
+                  </label>
+                  <select
+                    value={formState.studentInfo.gender || ''}
+                    onChange={(event) => handleStudentInfoChange('gender', event.target.value)}
+                    className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
+                  >
+                    <option value="">Select</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
                   <Input
-                    label="Student Phone (10 digits)"
-                    value={formState.studentInfo.phone || ''}
-                    onChange={(event) => handleStudentInfoChange('phone', event.target.value)}
-                    maxLength={10}
-                    placeholder="Enter 10-digit number"
+                    label="Date of Birth"
+                    value={formState.studentInfo.dateOfBirth || ''}
+                    onChange={(event) => handleStudentInfoChange('dateOfBirth', event.target.value)}
+                    type="date"
                   />
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                        Gender
-                      </label>
-                      <select
-                        value={formState.studentInfo.gender || ''}
-                        onChange={(event) => handleStudentInfoChange('gender', event.target.value)}
-                        className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
-                      >
-                        <option value="">Select</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-                    <Input
-                      label="Date of Birth"
-                      value={formState.studentInfo.dateOfBirth || ''}
-                      onChange={(event) => handleStudentInfoChange('dateOfBirth', event.target.value)}
-                      type="date"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                      Notes
-                    </label>
-                    <textarea
-                      value={formState.studentInfo.notes || ''}
-                      onChange={(event) => handleStudentInfoChange('notes', event.target.value)}
-                      rows={3}
-                      className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                      Student Name
-                    </label>
-                    <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                      {formState.studentInfo.name || '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                      Aadhaar Number
-                    </label>
-                    <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                      {formState.studentInfo.aadhaarNumber ? maskAadhaar(formState.studentInfo.aadhaarNumber) : '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                      Student Phone
-                    </label>
-                    <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                      {formState.studentInfo.phone || '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                      Gender
-                    </label>
-                    <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                      {formState.studentInfo.gender || '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                      Date of Birth
-                    </label>
-                    <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                      {formState.studentInfo.dateOfBirth || '—'}
-                    </div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                      Notes
-                    </label>
-                    <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                      {formState.studentInfo.notes || '—'}
-                    </div>
-                  </div>
-                </>
-              )}
+                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Enter as per SSC</p>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -1777,72 +1710,44 @@ const JoiningDetailPage = () => {
                   Father Information
                 </h3>
                 <div className="mt-4 space-y-3">
-                  {isEditMode ? (
-                    <>
-                      <Input
-                        label="Father Name"
-                        value={formState.parents.father.name || ''}
-                        onChange={(event) => handleParentChange('father', 'name', event.target.value)}
+                  <div>
+                    <Input
+                      label="Father Name"
+                      value={formState.parents.father.name || ''}
+                      onChange={(event) => handleParentChange('father', 'name', event.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Enter as per SSC</p>
+                  </div>
+                  <Input
+                    label="Father Phone"
+                    value={formState.parents.father.phone || ''}
+                    onChange={(event) => handleParentChange('father', 'phone', event.target.value)}
+                    maxLength={10}
+                  />
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                      Father Aadhaar Number
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type={showFatherAadhaar ? 'text' : 'password'}
+                        value={formState.parents.father.aadhaarNumber || ''}
+                        onChange={(event) =>
+                          handleParentChange('father', 'aadhaarNumber', event.target.value)
+                        }
+                        placeholder="12-digit Aadhaar number"
+                        className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
+                        maxLength={14}
                       />
-                      <Input
-                        label="Father Phone"
-                        value={formState.parents.father.phone || ''}
-                        onChange={(event) => handleParentChange('father', 'phone', event.target.value)}
-                        maxLength={10}
-                      />
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                          Father Aadhaar Number
-                        </label>
-                        <div className="flex gap-2">
-                          <input
-                            type={showFatherAadhaar ? 'text' : 'password'}
-                            value={formState.parents.father.aadhaarNumber || ''}
-                            onChange={(event) =>
-                              handleParentChange('father', 'aadhaarNumber', event.target.value)
-                            }
-                            placeholder="12-digit Aadhaar number"
-                            className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
-                            maxLength={14}
-                          />
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => setShowFatherAadhaar((prev) => !prev)}
-                          >
-                            {showFatherAadhaar ? 'Hide' : 'Show'}
-                          </Button>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                          Father Name
-                        </label>
-                        <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                          {formState.parents.father.name || '—'}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                          Father Phone
-                        </label>
-                        <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                          {formState.parents.father.phone || '—'}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                          Father Aadhaar Number
-                        </label>
-                        <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                          {formState.parents.father.aadhaarNumber ? maskAadhaar(formState.parents.father.aadhaarNumber) : '—'}
-                        </div>
-                      </div>
-                    </>
-                  )}
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => setShowFatherAadhaar((prev) => !prev)}
+                      >
+                        {showFatherAadhaar ? 'Hide' : 'Show'}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div>
@@ -1850,72 +1755,44 @@ const JoiningDetailPage = () => {
                   Mother Information
                 </h3>
                 <div className="mt-4 space-y-3">
-                  {isEditMode ? (
-                    <>
-                      <Input
-                        label="Mother Name"
-                        value={formState.parents.mother.name || ''}
-                        onChange={(event) => handleParentChange('mother', 'name', event.target.value)}
+                  <div>
+                    <Input
+                      label="Mother Name"
+                      value={formState.parents.mother.name || ''}
+                      onChange={(event) => handleParentChange('mother', 'name', event.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Enter as per SSC</p>
+                  </div>
+                  <Input
+                    label="Mother Phone"
+                    value={formState.parents.mother.phone || ''}
+                    onChange={(event) => handleParentChange('mother', 'phone', event.target.value)}
+                    maxLength={10}
+                  />
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                      Mother Aadhaar Number
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type={showMotherAadhaar ? 'text' : 'password'}
+                        value={formState.parents.mother.aadhaarNumber || ''}
+                        onChange={(event) =>
+                          handleParentChange('mother', 'aadhaarNumber', event.target.value)
+                        }
+                        placeholder="12-digit Aadhaar number"
+                        className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
+                        maxLength={14}
                       />
-                      <Input
-                        label="Mother Phone"
-                        value={formState.parents.mother.phone || ''}
-                        onChange={(event) => handleParentChange('mother', 'phone', event.target.value)}
-                        maxLength={10}
-                      />
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                          Mother Aadhaar Number
-                        </label>
-                        <div className="flex gap-2">
-                          <input
-                            type={showMotherAadhaar ? 'text' : 'password'}
-                            value={formState.parents.mother.aadhaarNumber || ''}
-                            onChange={(event) =>
-                              handleParentChange('mother', 'aadhaarNumber', event.target.value)
-                            }
-                            placeholder="12-digit Aadhaar number"
-                            className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
-                            maxLength={14}
-                          />
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => setShowMotherAadhaar((prev) => !prev)}
-                          >
-                            {showMotherAadhaar ? 'Hide' : 'Show'}
-                          </Button>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                          Mother Name
-                        </label>
-                        <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                          {formState.parents.mother.name || '—'}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                          Mother Phone
-                        </label>
-                        <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                          {formState.parents.mother.phone || '—'}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                          Mother Aadhaar Number
-                        </label>
-                        <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                          {formState.parents.mother.aadhaarNumber ? maskAadhaar(formState.parents.mother.aadhaarNumber) : '—'}
-                        </div>
-                      </div>
-                    </>
-                  )}
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => setShowMotherAadhaar((prev) => !prev)}
+                      >
+                        {showMotherAadhaar ? 'Hide' : 'Show'}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2754,28 +2631,6 @@ const JoiningDetailPage = () => {
               />
             </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                Notes (Optional)
-              </label>
-              <textarea
-                rows={3}
-                value={paymentFormState.notes}
-                onChange={(event) =>
-                  setPaymentFormState((prev) => ({
-                    ...prev,
-                    notes: event.target.value,
-                  }))
-                }
-                className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
-                placeholder={
-                  openPaymentMode === 'cash'
-                    ? 'Add a quick remark (e.g., Received by accounts, Receipt no.123)'
-                    : 'Shown to student on receipt (e.g., Admission advance).'
-                }
-                disabled={paymentFormState.isProcessing}
-              />
-            </div>
 
             {openPaymentMode === 'online' && (
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-700 dark:border-blue-900/60 dark:bg-blue-900/30 dark:text-blue-200">
