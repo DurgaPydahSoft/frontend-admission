@@ -491,7 +491,13 @@ export default function SuperAdminDashboard() {
                   innerRadius={60}
                   outerRadius={100}
                   paddingAngle={3}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  label={(props: any) => {
+                    const { name, percent } = props;
+                    if (percent !== undefined) {
+                      return `${name}: ${(percent * 100).toFixed(0)}%`;
+                    }
+                    return name;
+                  }}
                   labelLine={false}
                 >
                   {leadStatusData.map((entry, index) => {
