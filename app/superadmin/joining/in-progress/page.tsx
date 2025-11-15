@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useDashboardHeader } from '@/components/layout/DashboardShell';
+import { useCourseLookup } from '@/hooks/useCourseLookup';
 
 const statusPalette: Record<JoiningStatus, string> = {
   draft: 'bg-blue-100 text-blue-700',
@@ -24,6 +25,7 @@ const JoiningInProgressPage = () => {
   const [limit] = useState(20);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<JoiningStatus[]>(defaultStatuses);
+  const { getCourseName, getBranchName } = useCourseLookup();
 
   const queryKey = useMemo(
     () => [
@@ -195,9 +197,9 @@ const JoiningInProgressPage = () => {
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
                       <div className="flex flex-col gap-1">
-                        <span>{joining.courseInfo?.course || joining.lead?.courseInterested || '—'}</span>
+                        <span>{getCourseName(joining.courseInfo?.courseId) || joining.courseInfo?.course || joining.lead?.courseInterested || '—'}</span>
                         <span className="text-xs text-slate-400">
-                          {joining.courseInfo?.branch || 'Branch pending'}
+                          {getBranchName(joining.courseInfo?.branchId) || joining.courseInfo?.branch || 'Branch pending'}
                         </span>
                       </div>
                     </td>

@@ -633,6 +633,10 @@ export const paymentAPI = {
     const response = await api.post(`/payments/cashfree/verify`, data);
     return response.data;
   },
+  reconcilePendingTransactions: async () => {
+    const response = await api.post(`/payments/cashfree/reconcile`);
+    return response.data;
+  },
 };
 
 export default api;

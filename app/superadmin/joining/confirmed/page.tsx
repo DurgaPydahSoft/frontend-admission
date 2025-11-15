@@ -49,21 +49,28 @@ const ConfirmedLeadsPage = () => {
     return () => clearHeaderContent();
   }, [headerContent, setHeaderContent, clearHeaderContent]);
 
-  const leads = (data?.data?.leads || data?.leads || []) as Lead[];
-  const pagination = data?.data?.pagination || data?.pagination || { page: 1, pages: 1, total: 0, limit };
+  const leads = (data?.leads ?? []) as Lead[];
+  const pagination = data?.pagination ?? { page: 1, pages: 1, total: 0, limit };
   const isEmpty = !isLoading && leads.length === 0;
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
       <Card className="space-y-4">
-        <Input
-          placeholder="Search by enquiry number, name, or phone…"
-          value={searchTerm}
-          onChange={(event) => {
-            setSearchTerm(event.target.value);
-            setPage(1);
-          }}
-        />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Input
+            placeholder="Search by enquiry number, name, or phone…"
+            value={searchTerm}
+            onChange={(event) => {
+              setSearchTerm(event.target.value);
+              setPage(1);
+            }}
+          />
+          <Link href="/superadmin/joining/new">
+            <Button variant="primary" className="whitespace-nowrap">
+              Add Joining Form
+            </Button>
+          </Link>
+        </div>
       </Card>
 
       <Card className="overflow-hidden border border-white/60 shadow-lg shadow-blue-100/30 dark:border-slate-800/70 dark:shadow-none">

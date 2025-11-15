@@ -678,7 +678,7 @@ export default function LeadsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6">
+    <div className="mx-auto w-full max-w-[95%] space-y-6">
       <Card className="mb-6 space-y-4">
           {/* Search and Filters Bar */}
           <div className="space-y-4">
@@ -1113,9 +1113,9 @@ export default function LeadsPage() {
                   ))}
                 </div>
 
-                <Card className="hidden md:block">
+                <Card className="hidden md:block overflow-hidden">
                   <div className="overflow-x-auto w-full">
-                    <table className="w-full divide-y divide-gray-200 dark:divide-slate-700">
+                    <table className="w-full divide-y divide-gray-200 dark:divide-slate-700 min-w-[1000px]">
                       <thead className="bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-slate-900/60 dark:to-slate-900/40">
                         <tr>
                           <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider w-10 dark:text-slate-200">
@@ -1128,7 +1128,7 @@ export default function LeadsPage() {
                             />
                           </th>
                           <th 
-                            className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                            className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60 w-24"
                             onClick={() => handleSort('enquiryNumber')}
                           >
                             <div className="flex items-center gap-1">
@@ -1141,7 +1141,7 @@ export default function LeadsPage() {
                             </div>
                           </th>
                           <th 
-                            className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60 hidden lg:table-cell"
+                            className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60 hidden lg:table-cell w-28"
                             onClick={() => handleSort('hallTicketNumber')}
                           >
                             <div className="flex items-center gap-1">
@@ -1154,7 +1154,7 @@ export default function LeadsPage() {
                             </div>
                           </th>
                           <th 
-                            className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                            className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60 w-32"
                             onClick={() => handleSort('name')}
                           >
                             <div className="flex items-center gap-1">
@@ -1167,7 +1167,7 @@ export default function LeadsPage() {
                             </div>
                           </th>
                           <th 
-                            className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                            className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60 w-28"
                             onClick={() => handleSort('phone')}
                           >
                             <div className="flex items-center gap-1">
@@ -1179,29 +1179,29 @@ export default function LeadsPage() {
                               )}
                             </div>
                           </th>
-                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell dark:text-slate-200">
+                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell dark:text-slate-200 w-40">
                             Email
                           </th>
-                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell dark:text-slate-200">
+                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell dark:text-slate-200 w-28">
                             Father Phone
                           </th>
-                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider dark:text-slate-200">
+                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider dark:text-slate-200 w-24">
                             Mandal
                           </th>
-                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider dark:text-slate-200 hidden xl:table-cell">
+                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider dark:text-slate-200 hidden xl:table-cell w-28">
                             Village
                           </th>
-                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden lg:table-cell dark:text-slate-200">
+                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden lg:table-cell dark:text-slate-200 w-28">
                             District
                           </th>
-                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden xl:table-cell dark:text-slate-200">
+                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden xl:table-cell dark:text-slate-200 w-20">
                             Gender
                           </th>
-                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden 2xl:table-cell dark:text-slate-200">
+                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden 2xl:table-cell dark:text-slate-200 w-32">
                             Inter College
                           </th>
                           <th 
-                            className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden lg:table-cell cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                            className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden lg:table-cell cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60 w-20"
                             onClick={() => handleSort('rank')}
                           >
                             <div className="flex items-center gap-1">
@@ -1213,14 +1213,14 @@ export default function LeadsPage() {
                               )}
                             </div>
                           </th>
-                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden 2xl:table-cell dark:text-slate-200">
+                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden 2xl:table-cell dark:text-slate-200 w-20">
                             Quota
                           </th>
-                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden xl:table-cell dark:text-slate-200">
+                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden xl:table-cell dark:text-slate-200 w-32">
                             Application Status
                           </th>
                           <th 
-                            className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                            className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60 w-28"
                             onClick={() => handleSort('leadStatus')}
                           >
                             <div className="flex items-center gap-1">
@@ -1232,10 +1232,10 @@ export default function LeadsPage() {
                               )}
                             </div>
                           </th>
-                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell dark:text-slate-200">
+                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell dark:text-slate-200 w-24">
                             Created
                           </th>
-                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider dark:text-slate-200">
+                          <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider dark:text-slate-200 w-24">
                             Actions
                           </th>
                         </tr>
@@ -1258,55 +1258,55 @@ export default function LeadsPage() {
                                 className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                               />
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs font-mono font-medium text-blue-600 dark:text-blue-300">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs font-mono font-medium text-blue-600 dark:text-blue-300 max-w-[96px] truncate" title={lead.enquiryNumber || '-'}>
                               {lead.enquiryNumber || '-'}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden lg:table-cell">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden lg:table-cell max-w-[112px] truncate" title={lead.hallTicketNumber || '—'}>
                               {lead.hallTicketNumber || '—'}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs font-medium text-gray-900 dark:text-slate-100">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs font-medium text-gray-900 dark:text-slate-100 max-w-[128px] truncate" title={lead.name}>
                               {lead.name}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 max-w-[112px] truncate" title={lead.phone}>
                               {lead.phone}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden sm:table-cell">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden sm:table-cell max-w-[160px] truncate" title={lead.email || '-'}>
                               {lead.email || '-'}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden md:table-cell">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden md:table-cell max-w-[112px] truncate" title={lead.fatherPhone || '—'}>
                               {lead.fatherPhone || '—'}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 max-w-[96px] truncate" title={lead.mandal}>
                               {lead.mandal}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden xl:table-cell">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden xl:table-cell max-w-[112px] truncate" title={lead.village}>
                               {lead.village}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden lg:table-cell">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden lg:table-cell max-w-[112px] truncate" title={lead.district}>
                               {lead.district}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden xl:table-cell">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden xl:table-cell max-w-[80px] truncate" title={lead.gender || '—'}>
                               {lead.gender || '—'}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden 2xl:table-cell">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden 2xl:table-cell max-w-[128px] truncate" title={lead.interCollege || '—'}>
                               {lead.interCollege || '—'}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden lg:table-cell">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden lg:table-cell max-w-[80px] truncate" title={lead.rank?.toString() || '—'}>
                               {lead.rank ?? '—'}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden 2xl:table-cell">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden 2xl:table-cell max-w-[80px] truncate" title={lead.quota}>
                               {lead.quota}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden xl:table-cell">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden xl:table-cell max-w-[128px] truncate" title={lead.applicationStatus || 'Not Provided'}>
                               {lead.applicationStatus || 'Not Provided'}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap">
+                            <td className="px-2 py-2 whitespace-nowrap max-w-[112px]">
                               <span
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleOpenCommentModal(lead, e);
                                 }}
-                                className={`px-2 py-0.5 inline-flex text-[10px] leading-4 font-semibold rounded-full transition-all cursor-pointer hover:opacity-80 ${getStatusColor(
+                                className={`px-2 py-0.5 inline-flex text-[10px] leading-4 font-semibold rounded-full transition-all cursor-pointer hover:opacity-80 truncate max-w-full ${getStatusColor(
                                   lead.leadStatus
                                 )}`}
                                 title="Click to update status"
@@ -1314,11 +1314,11 @@ export default function LeadsPage() {
                                 {lead.leadStatus || 'New'}
                               </span>
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden md:table-cell">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 hidden md:table-cell max-w-[96px] truncate" title={lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-'}>
                               {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-'}
                             </td>
-                            <td className="px-2 py-2 whitespace-nowrap text-xs">
-                              <div className="flex gap-2">
+                            <td className="px-2 py-2 whitespace-nowrap text-xs max-w-[96px]">
+                              <div className="flex gap-1">
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -1326,7 +1326,7 @@ export default function LeadsPage() {
                                     e.stopPropagation();
                                     handleOpenCommentModal(lead, e);
                                   }}
-                                  className="text-[10px]"
+                                  className="text-[10px] px-2 py-1"
                                 >
                                   Comment
                                 </Button>
@@ -1337,7 +1337,7 @@ export default function LeadsPage() {
                                     e.stopPropagation();
                                     router.push(`/superadmin/leads/${lead._id}`);
                                   }}
-                                  className="text-[10px]"
+                                  className="text-[10px] px-2 py-1"
                                 >
                                   View
                                 </Button>

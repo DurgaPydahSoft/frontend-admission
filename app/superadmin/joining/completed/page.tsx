@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useDashboardHeader } from '@/components/layout/DashboardShell';
+import { useCourseLookup } from '@/hooks/useCourseLookup';
 
 const statusOptions: Array<{ label: string; value: 'all' | 'active' | 'withdrawn' }> = [
   { label: 'All', value: 'all' },
@@ -22,6 +23,7 @@ const CompletedAdmissionsPage = () => {
   const [limit] = useState(20);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'withdrawn'>('active');
+  const { getCourseName, getBranchName } = useCourseLookup();
 
   const queryKey = useMemo(
     () => ['admissions', page, limit, searchTerm, statusFilter],
@@ -64,7 +66,7 @@ const CompletedAdmissionsPage = () => {
   const isEmpty = !isLoading && admissions.length === 0;
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6">
       <Card className="space-y-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <Input
@@ -144,7 +146,14 @@ const CompletedAdmissionsPage = () => {
                       {record.studentInfo?.name ?? '—'}
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
-                      {record.courseInfo?.course || '—'}
+                      <div className="flex flex-col gap-1">
+                        <span>{getCourseName(record.courseInfo?.courseId) || record.courseInfo?.course || '—'}</span>
+                        {record.courseInfo?.branchId && (
+                          <span className="text-xs text-slate-400">
+                            {getBranchName(record.courseInfo?.branchId) || record.courseInfo?.branch || ''}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
                       {record.status === 'active' ? (

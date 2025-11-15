@@ -319,6 +319,7 @@ const JoiningDetailPage = () => {
   const [showStudentAadhaar, setShowStudentAadhaar] = useState(false);
   const [showFatherAadhaar, setShowFatherAadhaar] = useState(false);
   const [showMotherAadhaar, setShowMotherAadhaar] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [paymentSummary, setPaymentSummary] = useState<PaymentSummary | null>(null);
   const [openPaymentMode, setOpenPaymentMode] = useState<'cash' | 'online' | null>(null);
   const [shouldPromptPayment, setShouldPromptPayment] = useState(false);
@@ -333,6 +334,8 @@ const JoiningDetailPage = () => {
     isProcessing: false,
   });
 
+  const isNewJoining = leadId === 'new';
+  
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['joining', leadId],
     enabled: !!leadId,
@@ -342,8 +345,9 @@ const JoiningDetailPage = () => {
     },
   });
 
-  const lead = data?.data?.lead;
   const joiningRecord = data?.data?.joining as Joining | undefined;
+  // Use leadData from joining instead of populated lead
+  const lead = (joiningRecord?.leadData as any) || data?.data?.lead;
 
   const {
     data: courseSettingsResponse,
@@ -394,10 +398,13 @@ const JoiningDetailPage = () => {
     isLoading: isLoadingTransactions,
     refetch: refetchTransactions,
   } = useQuery({
-    queryKey: ['payments', 'transactions', leadId],
-    enabled: !!leadId,
+    queryKey: ['payments', 'transactions', leadId, joiningRecord?._id],
+    enabled: !!leadId && !!joiningRecord?._id,
     queryFn: async () => {
-      const response = await paymentAPI.listTransactions({ leadId: leadId as string });
+      const response = await paymentAPI.listTransactions({ 
+        joiningId: joiningRecord?._id,
+        leadId: leadId as string 
+      });
       return response;
     },
   });
@@ -632,20 +639,24 @@ const JoiningDetailPage = () => {
         courseInfo: {
           ...prev.courseInfo,
           courseId: undefined,
+          course: '', // Clear course name when ID is cleared
+          branchId: undefined,
+          branch: '', // Clear branch when course is cleared
         },
       }));
       return;
     }
 
     const course = courseSettings.find((item) => item.course._id === courseId);
+    // Always store both ID and name when selecting
     setFormState((prev) => ({
       ...prev,
       courseInfo: {
         ...prev.courseInfo,
         courseId,
-        course: course?.course?.name || prev.courseInfo.course || '',
+        course: course?.course?.name || '', // Store the managed course name
         branchId: undefined,
-        branch: '',
+        branch: '', // Clear branch when course changes
       },
     }));
   };
@@ -657,18 +668,20 @@ const JoiningDetailPage = () => {
         courseInfo: {
           ...prev.courseInfo,
           branchId: undefined,
+          branch: '', // Clear branch name when ID is cleared
         },
       }));
       return;
     }
 
     const branch = selectedCourseSetting?.branches.find((item) => item._id === branchId);
+    // Always store both ID and name when selecting
     setFormState((prev) => ({
       ...prev,
       courseInfo: {
         ...prev.courseInfo,
         branchId,
-        branch: branch?.name || prev.courseInfo.branch || '',
+        branch: branch?.name || '', // Store the managed branch name
       },
     }));
   };
@@ -785,7 +798,6 @@ const JoiningDetailPage = () => {
     setPaymentFormState((prev) => ({ ...prev, isProcessing: true }));
     try {
       await paymentAPI.recordCashPayment({
-        leadId: leadId as string,
         joiningId: joiningRecord?._id,
         admissionId: admissionRecord?._id,
         courseId: formState.courseInfo.courseId,
@@ -836,7 +848,6 @@ const JoiningDetailPage = () => {
     let orderId: string | null = null;
     try {
       const orderResponse = await paymentAPI.createCashfreeOrder({
-        leadId: leadId as string,
         joiningId: joiningRecord?._id,
         admissionId: admissionRecord?._id,
         courseId: formState.courseInfo.courseId,
@@ -844,10 +855,10 @@ const JoiningDetailPage = () => {
         amount: amountValue,
         currency: 'INR',
         customer: {
-          customerId: lead?._id || (leadId as string),
-          name: lead?.name || 'Prospective Student',
+          customerId: lead?._id || joiningRecord?._id || (leadId as string),
+          name: formState.studentInfo.name || lead?.name || 'Prospective Student',
           email: lead?.email || 'student@example.com',
-          phone: lead?.phone || '9999999999',
+          phone: formState.studentInfo.phone || lead?.phone || '9999999999',
         },
         notes: paymentFormState.notes ? { remarks: paymentFormState.notes } : undefined,
         isAdditionalFee: isAdditionalFeeMode || undefined,
@@ -1203,8 +1214,28 @@ const JoiningDetailPage = () => {
   };
 
   const payloadForSave = useMemo(() => {
+    // Ensure course and branch names are stored when IDs are present
+    const courseInfo = { ...formState.courseInfo };
+    
+    // If courseId is present, ensure course name is also present
+    if (courseInfo.courseId && !courseInfo.course) {
+      const selectedCourse = courseSettings.find((item) => item.course._id === courseInfo.courseId);
+      if (selectedCourse) {
+        courseInfo.course = selectedCourse.course.name;
+      }
+    }
+    
+    // If branchId is present, ensure branch name is also present
+    if (courseInfo.branchId && !courseInfo.branch) {
+      const selectedCourse = courseSettings.find((item) => item.course._id === courseInfo.courseId);
+      const selectedBranch = selectedCourse?.branches.find((branch) => branch._id === courseInfo.branchId);
+      if (selectedBranch) {
+        courseInfo.branch = selectedBranch.name;
+      }
+    }
+    
     return {
-      courseInfo: formState.courseInfo,
+      courseInfo,
       studentInfo: formState.studentInfo,
       parents: formState.parents,
       reservation: {
@@ -1217,16 +1248,28 @@ const JoiningDetailPage = () => {
       siblings: formState.siblings,
       documents: formState.documents,
     };
-  }, [formState]);
+  }, [formState, courseSettings]);
 
   const saveDraftMutation = useMutation({
     mutationFn: async () => {
       if (!leadId) return null;
-      return joiningAPI.saveDraft(leadId, payloadForSave);
+      // Include joining _id if it exists (for new joinings)
+      const payload = {
+        ...payloadForSave,
+        ...(joiningRecord?._id ? { _id: joiningRecord._id } : {}),
+      };
+      return joiningAPI.saveDraft(leadId, payload);
     },
-    onSuccess: () => {
+    onSuccess: (response: any) => {
       showToast.success('Joining form saved as draft');
-      refetch();
+      // Response structure: response.data.data or response.data
+      const savedJoining = response?.data?.data || response?.data;
+      // If this was a new joining and we got an _id, redirect to use the _id instead of 'new'
+      if (isNewJoining && savedJoining?._id && leadId === 'new') {
+        router.replace(`/superadmin/joining/${savedJoining._id}`);
+      } else {
+        refetch();
+      }
     },
     onError: (error: any) => {
       console.error('Error saving draft:', error);
@@ -1365,9 +1408,14 @@ const JoiningDetailPage = () => {
                 <span className="inline-block h-2 w-2 rounded-full bg-current opacity-75" />
                 {statusLabel}
               </span>
-              {lead?.enquiryNumber && (
+              {!isNewJoining && lead?.enquiryNumber && (
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 dark:bg-slate-800/70 dark:text-slate-200">
                   Enquiry #{lead.enquiryNumber}
+                </span>
+              )}
+              {isNewJoining && (
+                <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-600 dark:bg-blue-900/60 dark:text-blue-200">
+                  New Joining Form
                 </span>
               )}
               {admissionNumberDisplay && (
@@ -1393,17 +1441,40 @@ const JoiningDetailPage = () => {
             </div>
             <div className="text-sm text-slate-600 dark:text-slate-300">
               <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                {lead?.name}
+                {formState.studentInfo.name || lead?.name || (isNewJoining ? 'New Student' : '—')}
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span>{lead?.phone || 'No phone recorded'}</span>
-                {lead?.courseInterested && <span>· {lead.courseInterested}</span>}
-                {lead?.district && <span>· {lead.district}</span>}
+                <span>{formState.studentInfo.phone || lead?.phone || 'No phone recorded'}</span>
+                {!isNewJoining && lead?.courseInterested && <span>· {lead.courseInterested}</span>}
+                {!isNewJoining && lead?.district && <span>· {lead.district}</span>}
               </div>
             </div>
           </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              {status === 'draft' && canWriteJoining && (
+                <Button
+                  variant={isEditMode ? 'secondary' : 'primary'}
+                  onClick={() => setIsEditMode(!isEditMode)}
+                  className="group inline-flex items-center gap-2"
+                >
+                  {isEditMode ? (
+                    <>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Cancel Editing
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Edit Form
+                    </>
+                  )}
+                </Button>
+              )}
               {isAdmissionEditable ? (
                 <>
                   <Button
@@ -1426,51 +1497,7 @@ const JoiningDetailPage = () => {
                     Joining List
                   </Button>
                 </>
-              ) : (
-                <>
-                  <Button
-                    variant="secondary"
-                    disabled={isSaving || isAdmissionEditable || !canWriteJoining}
-                    onClick={() => {
-                      if (!canWriteJoining) {
-                        showToast.error('You have read-only access to the joining desk');
-                        return;
-                      }
-                      saveDraftMutation.mutate();
-                    }}
-                  >
-                    {isSaving ? 'Saving…' : 'Save Draft'}
-                  </Button>
-                  <Button
-                    variant="primary"
-                    disabled={!canSubmit || isSubmitting}
-                    onClick={() => {
-                      if (!canWriteJoining) {
-                        showToast.error('You have read-only access to the joining desk');
-                        return;
-                      }
-                      submitMutation.mutate();
-                    }}
-                  >
-                    {isSubmitting ? 'Submitting…' : 'Submit for Approval'}
-                  </Button>
-                  {canApprove && (
-                    <Button
-                      variant="primary"
-                      disabled={isApproving}
-                      onClick={() => {
-                        if (!canWriteJoining) {
-                          showToast.error('You have read-only access to the joining desk');
-                          return;
-                        }
-                        approveMutation.mutate();
-                      }}
-                    >
-                      {isApproving ? 'Approving…' : 'Approve'}
-                    </Button>
-                  )}
-                </>
-              )}
+              ) : null}
             </div>
       </div>
 
@@ -1546,21 +1573,9 @@ const JoiningDetailPage = () => {
             ) : null}
             <div
               className={`mt-6 grid gap-4 ${
-                admissionNumberDisplay ? 'md:grid-cols-4' : 'md:grid-cols-3'
+                admissionNumberDisplay ? 'md:grid-cols-2' : 'md:grid-cols-1'
               }`}
             >
-              <Input
-                label="Course"
-                value={formState.courseInfo.course}
-                onChange={(event) => handleCourseFieldChange('course', event.target.value)}
-                placeholder="e.g. B.Tech"
-              />
-              <Input
-                label="Branch"
-                value={formState.courseInfo.branch}
-                onChange={(event) => handleCourseFieldChange('branch', event.target.value)}
-                placeholder="e.g. CSE"
-              />
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
                   Quota
@@ -1621,79 +1636,134 @@ const JoiningDetailPage = () => {
             </h2>
             <p className="text-sm text-gray-500">Reference: As per SSC for no issues.</p>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <Input
-                label="Student Name"
-                value={formState.studentInfo.name}
-                onChange={(event) => handleStudentInfoChange('name', event.target.value)}
-              />
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                  Aadhaar Number
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type={showStudentAadhaar ? 'text' : 'password'}
-                    value={formState.studentInfo.aadhaarNumber || ''}
-                    onChange={(event) =>
-                      handleStudentInfoChange('aadhaarNumber', event.target.value)
-                    }
-                    placeholder="12-digit Aadhaar number"
-                    className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
-                    maxLength={14}
+              {isEditMode ? (
+                <>
+                  <Input
+                    label="Student Name"
+                    value={formState.studentInfo.name}
+                    onChange={(event) => handleStudentInfoChange('name', event.target.value)}
                   />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setShowStudentAadhaar((prev) => !prev)}
-                  >
-                    {showStudentAadhaar ? 'Hide' : 'Show'}
-                  </Button>
-                </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  Stored securely. Masked by default for privacy.
-                </p>
-              </div>
-              <Input
-                label="Student Phone (10 digits)"
-                value={formState.studentInfo.phone || ''}
-                onChange={(event) => handleStudentInfoChange('phone', event.target.value)}
-                maxLength={10}
-                placeholder="Enter 10-digit number"
-              />
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                    Gender
-                  </label>
-                  <select
-                    value={formState.studentInfo.gender || ''}
-                    onChange={(event) => handleStudentInfoChange('gender', event.target.value)}
-                    className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
-                  >
-                    <option value="">Select</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <Input
-                  label="Date of Birth"
-                  value={formState.studentInfo.dateOfBirth || ''}
-                  onChange={(event) => handleStudentInfoChange('dateOfBirth', event.target.value)}
-                  type="date"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                  Notes
-                </label>
-                <textarea
-                  value={formState.studentInfo.notes || ''}
-                  onChange={(event) => handleStudentInfoChange('notes', event.target.value)}
-                  rows={3}
-                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
-                />
-              </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                      Aadhaar Number
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type={showStudentAadhaar ? 'text' : 'password'}
+                        value={formState.studentInfo.aadhaarNumber || ''}
+                        onChange={(event) =>
+                          handleStudentInfoChange('aadhaarNumber', event.target.value)
+                        }
+                        placeholder="12-digit Aadhaar number"
+                        className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
+                        maxLength={14}
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => setShowStudentAadhaar((prev) => !prev)}
+                      >
+                        {showStudentAadhaar ? 'Hide' : 'Show'}
+                      </Button>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Stored securely. Masked by default for privacy.
+                    </p>
+                  </div>
+                  <Input
+                    label="Student Phone (10 digits)"
+                    value={formState.studentInfo.phone || ''}
+                    onChange={(event) => handleStudentInfoChange('phone', event.target.value)}
+                    maxLength={10}
+                    placeholder="Enter 10-digit number"
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                        Gender
+                      </label>
+                      <select
+                        value={formState.studentInfo.gender || ''}
+                        onChange={(event) => handleStudentInfoChange('gender', event.target.value)}
+                        className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
+                      >
+                        <option value="">Select</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <Input
+                      label="Date of Birth"
+                      value={formState.studentInfo.dateOfBirth || ''}
+                      onChange={(event) => handleStudentInfoChange('dateOfBirth', event.target.value)}
+                      type="date"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                      Notes
+                    </label>
+                    <textarea
+                      value={formState.studentInfo.notes || ''}
+                      onChange={(event) => handleStudentInfoChange('notes', event.target.value)}
+                      rows={3}
+                      className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                      Student Name
+                    </label>
+                    <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                      {formState.studentInfo.name || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                      Aadhaar Number
+                    </label>
+                    <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                      {formState.studentInfo.aadhaarNumber ? maskAadhaar(formState.studentInfo.aadhaarNumber) : '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                      Student Phone
+                    </label>
+                    <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                      {formState.studentInfo.phone || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                      Gender
+                    </label>
+                    <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                      {formState.studentInfo.gender || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                      Date of Birth
+                    </label>
+                    <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                      {formState.studentInfo.dateOfBirth || '—'}
+                    </div>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                      Notes
+                    </label>
+                    <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                      {formState.studentInfo.notes || '—'}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </section>
 
@@ -1707,41 +1777,72 @@ const JoiningDetailPage = () => {
                   Father Information
                 </h3>
                 <div className="mt-4 space-y-3">
-                  <Input
-                    label="Father Name"
-                    value={formState.parents.father.name || ''}
-                    onChange={(event) => handleParentChange('father', 'name', event.target.value)}
-                  />
-                  <Input
-                    label="Father Phone"
-                    value={formState.parents.father.phone || ''}
-                    onChange={(event) => handleParentChange('father', 'phone', event.target.value)}
-                    maxLength={10}
-                  />
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                      Father Aadhaar Number
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type={showFatherAadhaar ? 'text' : 'password'}
-                        value={formState.parents.father.aadhaarNumber || ''}
-                        onChange={(event) =>
-                          handleParentChange('father', 'aadhaarNumber', event.target.value)
-                        }
-                        placeholder="12-digit Aadhaar number"
-                        className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
-                        maxLength={14}
+                  {isEditMode ? (
+                    <>
+                      <Input
+                        label="Father Name"
+                        value={formState.parents.father.name || ''}
+                        onChange={(event) => handleParentChange('father', 'name', event.target.value)}
                       />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => setShowFatherAadhaar((prev) => !prev)}
-                      >
-                        {showFatherAadhaar ? 'Hide' : 'Show'}
-                      </Button>
-                    </div>
-                  </div>
+                      <Input
+                        label="Father Phone"
+                        value={formState.parents.father.phone || ''}
+                        onChange={(event) => handleParentChange('father', 'phone', event.target.value)}
+                        maxLength={10}
+                      />
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                          Father Aadhaar Number
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type={showFatherAadhaar ? 'text' : 'password'}
+                            value={formState.parents.father.aadhaarNumber || ''}
+                            onChange={(event) =>
+                              handleParentChange('father', 'aadhaarNumber', event.target.value)
+                            }
+                            placeholder="12-digit Aadhaar number"
+                            className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
+                            maxLength={14}
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => setShowFatherAadhaar((prev) => !prev)}
+                          >
+                            {showFatherAadhaar ? 'Hide' : 'Show'}
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                          Father Name
+                        </label>
+                        <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                          {formState.parents.father.name || '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                          Father Phone
+                        </label>
+                        <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                          {formState.parents.father.phone || '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                          Father Aadhaar Number
+                        </label>
+                        <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                          {formState.parents.father.aadhaarNumber ? maskAadhaar(formState.parents.father.aadhaarNumber) : '—'}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
               <div>
@@ -1749,41 +1850,72 @@ const JoiningDetailPage = () => {
                   Mother Information
                 </h3>
                 <div className="mt-4 space-y-3">
-                  <Input
-                    label="Mother Name"
-                    value={formState.parents.mother.name || ''}
-                    onChange={(event) => handleParentChange('mother', 'name', event.target.value)}
-                  />
-                  <Input
-                    label="Mother Phone"
-                    value={formState.parents.mother.phone || ''}
-                    onChange={(event) => handleParentChange('mother', 'phone', event.target.value)}
-                    maxLength={10}
-                  />
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                      Mother Aadhaar Number
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type={showMotherAadhaar ? 'text' : 'password'}
-                        value={formState.parents.mother.aadhaarNumber || ''}
-                        onChange={(event) =>
-                          handleParentChange('mother', 'aadhaarNumber', event.target.value)
-                        }
-                        placeholder="12-digit Aadhaar number"
-                        className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
-                        maxLength={14}
+                  {isEditMode ? (
+                    <>
+                      <Input
+                        label="Mother Name"
+                        value={formState.parents.mother.name || ''}
+                        onChange={(event) => handleParentChange('mother', 'name', event.target.value)}
                       />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => setShowMotherAadhaar((prev) => !prev)}
-                      >
-                        {showMotherAadhaar ? 'Hide' : 'Show'}
-                      </Button>
-                    </div>
-                  </div>
+                      <Input
+                        label="Mother Phone"
+                        value={formState.parents.mother.phone || ''}
+                        onChange={(event) => handleParentChange('mother', 'phone', event.target.value)}
+                        maxLength={10}
+                      />
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                          Mother Aadhaar Number
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type={showMotherAadhaar ? 'text' : 'password'}
+                            value={formState.parents.mother.aadhaarNumber || ''}
+                            onChange={(event) =>
+                              handleParentChange('mother', 'aadhaarNumber', event.target.value)
+                            }
+                            placeholder="12-digit Aadhaar number"
+                            className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900/70"
+                            maxLength={14}
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => setShowMotherAadhaar((prev) => !prev)}
+                          >
+                            {showMotherAadhaar ? 'Hide' : 'Show'}
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                          Mother Name
+                        </label>
+                        <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                          {formState.parents.mother.name || '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                          Mother Phone
+                        </label>
+                        <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                          {formState.parents.mother.phone || '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                          Mother Aadhaar Number
+                        </label>
+                        <div className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                          {formState.parents.mother.aadhaarNumber ? maskAadhaar(formState.parents.mother.aadhaarNumber) : '—'}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -2498,6 +2630,59 @@ const JoiningDetailPage = () => {
               </div>
             </div>
             </section>
+          )}
+
+          {/* Action Buttons at Bottom - Always visible for draft/pending status */}
+          {!isAdmissionEditable && status !== 'approved' && (
+            <div className="sticky bottom-0 z-10 rounded-2xl border border-white/60 bg-white/95 p-6 shadow-lg shadow-blue-100/20 backdrop-blur dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none">
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                {status === 'draft' && (
+                  <Button
+                    variant="secondary"
+                    disabled={isSaving || !canWriteJoining}
+                    onClick={() => {
+                      if (!canWriteJoining) {
+                        showToast.error('You have read-only access to the joining desk');
+                        return;
+                      }
+                      saveDraftMutation.mutate();
+                    }}
+                  >
+                    {isSaving ? 'Saving…' : 'Save Draft'}
+                  </Button>
+                )}
+                {status === 'draft' && (
+                  <Button
+                    variant="primary"
+                    disabled={!canSubmit || isSubmitting}
+                    onClick={() => {
+                      if (!canWriteJoining) {
+                        showToast.error('You have read-only access to the joining desk');
+                        return;
+                      }
+                      submitMutation.mutate();
+                    }}
+                  >
+                    {isSubmitting ? 'Submitting…' : 'Submit for Approval'}
+                  </Button>
+                )}
+                {canApprove && (
+                  <Button
+                    variant="primary"
+                    disabled={isApproving}
+                    onClick={() => {
+                      if (!canWriteJoining) {
+                        showToast.error('You have read-only access to the joining desk');
+                        return;
+                      }
+                      approveMutation.mutate();
+                    }}
+                  >
+                    {isApproving ? 'Approving…' : 'Approve'}
+                  </Button>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}

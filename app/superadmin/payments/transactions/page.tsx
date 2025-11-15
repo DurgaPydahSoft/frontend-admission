@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useDashboardHeader } from '@/components/layout/DashboardShell';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { courseAPI, paymentAPI } from '@/lib/api';
-import { PaymentMode, PaymentStatus, PaymentTransaction, Course, Branch } from '@/types';
+import { paymentAPI } from '@/lib/api';
+import { PaymentMode, PaymentStatus, PaymentTransaction } from '@/types';
+import { showToast } from '@/lib/toast';
+import { useCourseLookup } from '@/hooks/useCourseLookup';
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-IN', {
@@ -20,6 +22,7 @@ const formatDateTime = (value?: string) =>
 
 export default function PaymentTransactionsPage() {
   const { setHeaderContent, clearHeaderContent } = useDashboardHeader();
+  const { getCourseName, getBranchName } = useCourseLookup();
 
   useEffect(() => {
     setHeaderContent(
@@ -43,11 +46,20 @@ export default function PaymentTransactionsPage() {
     },
   });
 
-  const { data: coursesResponse } = useQuery({
-    queryKey: ['courses', 'lookup'],
-    queryFn: async () => {
-      const response = await courseAPI.list({ includeBranches: true, showInactive: true });
-      return response;
+  const reconcileMutation = useMutation({
+    mutationFn: async () => {
+      return await paymentAPI.reconcilePendingTransactions();
+    },
+    onSuccess: (data) => {
+      const result = data?.data || data;
+      showToast(
+        `Reconciled ${result.checked || 0} transactions. ${result.updated || 0} updated, ${result.failed || 0} failed.`,
+        'success'
+      );
+      refetch();
+    },
+    onError: (error: any) => {
+      showToast(error?.response?.data?.message || 'Failed to reconcile transactions', 'error');
     },
   });
 
@@ -62,38 +74,35 @@ export default function PaymentTransactionsPage() {
     return [];
   }, [transactionsResponse]);
 
-  const courseLookup = useMemo(() => {
-    const payload = coursesResponse?.data;
-    const courseList: Array<Course & { branches?: Branch[] }> = Array.isArray(payload)
-      ? (payload as Array<Course & { branches?: Branch[] }>)
-      : Array.isArray((payload as any)?.data)
-      ? ((payload as any).data as Array<Course & { branches?: Branch[] }>)
-      : [];
-    const courses = new Map<string, string>();
-    const branches = new Map<string, string>();
-    courseList.forEach((item) => {
-      courses.set(item._id, item.name);
-      (item.branches || []).forEach((branch) => {
-        branches.set(branch._id, branch.name);
-      });
-    });
-    return { courses, branches };
-  }, [coursesResponse]);
-
   const [modeFilter, setModeFilter] = useState<'all' | PaymentMode>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | PaymentStatus>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter((transaction) => {
+    return transactions.filter((transaction: any) => {
       if (modeFilter !== 'all' && transaction.mode !== modeFilter) return false;
       if (statusFilter !== 'all' && transaction.status !== statusFilter) return false;
       if (searchTerm.trim()) {
         const term = searchTerm.trim().toLowerCase();
+        const admission = transaction.admissionId;
+        const joining = transaction.joiningId;
+        const isApproved = !!admission;
+        const leadData = isApproved 
+          ? (admission?.leadData || {})
+          : (joining?.leadData || {});
+        const enquiryNumber = isApproved 
+          ? (admission?.enquiryNumber || '')
+          : (leadData?.enquiryNumber || '');
+        const admissionNumber = isApproved ? (admission?.admissionNumber || '') : '';
+        const studentName = leadData?.name || '';
+        
         const matches =
           transaction.leadId?.toLowerCase().includes(term) ||
           transaction.cashfreeOrderId?.toLowerCase().includes(term) ||
-          transaction.referenceId?.toLowerCase().includes(term);
+          transaction.referenceId?.toLowerCase().includes(term) ||
+          admissionNumber.toLowerCase().includes(term) ||
+          enquiryNumber.toLowerCase().includes(term) ||
+          studentName.toLowerCase().includes(term);
         if (!matches) return false;
       }
       return true;
@@ -124,7 +133,7 @@ export default function PaymentTransactionsPage() {
   }, [transactions]);
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6">
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-3xl border border-emerald-200 bg-emerald-50 px-4 py-5 shadow-sm dark:border-emerald-900/60 dark:bg-emerald-900/40">
           <p className="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-200">
@@ -195,16 +204,25 @@ export default function PaymentTransactionsPage() {
             </div>
             <div className="sm:col-span-2 lg:flex-1">
               <Input
-                label="Search by Lead ID / Order ID / Reference"
+                label="Search by Admission # / Enquiry # / Order ID / Reference"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Type to filter transactions"
               />
             </div>
           </div>
-          <Button variant="secondary" onClick={() => refetch()} disabled={isLoading}>
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => reconcileMutation.mutate()}
+              disabled={reconcileMutation.isPending || isLoading}
+            >
+              {reconcileMutation.isPending ? 'Reconciling...' : 'Reconcile Pending'}
+            </Button>
+            <Button variant="secondary" onClick={() => refetch()} disabled={isLoading}>
+              Refresh
+            </Button>
+          </div>
         </div>
 
         <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
@@ -212,8 +230,8 @@ export default function PaymentTransactionsPage() {
             <thead className="bg-slate-50/80 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
               <tr>
                 <th className="px-4 py-3 text-left">Date</th>
-                <th className="px-4 py-3 text-left">Lead</th>
-                <th className="px-4 py-3 text-left">Course / Branch</th>
+                <th className="px-4 py-3 text-left">Student / Reference</th>
+                <th className="px-4 py-3 text-left">Course / Branch / Quota</th>
                 <th className="px-4 py-3 text-left">Mode</th>
                 <th className="px-4 py-3 text-left">Status</th>
                 <th className="px-4 py-3 text-right">Amount</th>
@@ -234,11 +252,34 @@ export default function PaymentTransactionsPage() {
                   </td>
                 </tr>
               ) : (
-                filteredTransactions.map((transaction) => {
-                  const courseName =
-                    (transaction.courseId && courseLookup.courses.get(transaction.courseId)) || '—';
-                  const branchName =
-                    (transaction.branchId && courseLookup.branches.get(transaction.branchId)) || '';
+                filteredTransactions.map((transaction: any) => {
+                  // Get data from admission if approved, otherwise from joining
+                  const admission = transaction.admissionId;
+                  const joining = transaction.joiningId;
+                  
+                  // If approved, use admission data
+                  const isApproved = !!admission;
+                  const leadData = isApproved 
+                    ? (admission?.leadData || {})
+                    : (joining?.leadData || {});
+                  
+                  const studentName = leadData?.name || '—';
+                  const enquiryNumber = isApproved 
+                    ? (admission?.enquiryNumber || '—')
+                    : (leadData?.enquiryNumber || '—');
+                  const admissionNumber = isApproved ? (admission?.admissionNumber || '—') : null;
+                  
+                  // Course, branch, quota from admission or joining
+                  const courseInfo = isApproved 
+                    ? admission?.courseInfo 
+                    : joining?.courseInfo;
+                  // Use managed course/branch from IDs, fallback to stored names
+                  const courseName = getCourseName(courseInfo?.courseId || transaction.courseId) || 
+                    courseInfo?.course || '—';
+                  const branchName = getBranchName(courseInfo?.branchId || transaction.branchId) || 
+                    courseInfo?.branch || '';
+                  const quota = courseInfo?.quota || '—';
+                  
                   const modeLabel =
                     transaction.mode === 'cash'
                       ? 'Cash'
@@ -255,17 +296,34 @@ export default function PaymentTransactionsPage() {
                     typeof transaction.collectedBy === 'object'
                       ? transaction.collectedBy?.name
                       : undefined;
+                  
                   return (
                     <tr key={transaction._id} className="hover:bg-blue-50/30 dark:hover:bg-slate-800/60">
                       <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
                         {formatDateTime(transaction.processedAt || transaction.createdAt)}
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-500 dark:text-slate-400">
-                        {transaction.leadId || '—'}
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                        <div className="flex flex-col gap-0.5">
+                          {isApproved && admissionNumber ? (
+                            <span className="font-semibold text-slate-800 dark:text-slate-100">
+                              {admissionNumber}
+                            </span>
+                          ) : (
+                            <span className="font-mono text-xs text-slate-500 dark:text-slate-400">
+                              {enquiryNumber}
+                            </span>
+                          )}
+                          <span className="text-xs text-slate-500 dark:text-slate-400">{studentName}</span>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
-                        {courseName}
-                        {branchName ? ` · ${branchName}` : ''}
+                        <div className="flex flex-col gap-0.5">
+                          <span>{courseName}</span>
+                          {branchName && <span className="text-xs text-slate-500 dark:text-slate-400">{branchName}</span>}
+                          {quota && quota !== '—' && (
+                            <span className="text-xs text-slate-500 dark:text-slate-400">Quota: {quota}</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
                         {modeLabel}

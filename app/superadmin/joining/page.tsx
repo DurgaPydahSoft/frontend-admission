@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import { leadAPI } from '@/lib/api';
-import { Lead } from '@/types';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { joiningAPI } from '@/lib/api';
+import { JoiningListResponse } from '@/types';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useDashboardHeader } from '@/components/layout/DashboardShell';
+import { showToast } from '@/lib/toast';
+import { useCourseLookup } from '@/hooks/useCourseLookup';
 
 const statusColors: Record<string, string> = {
   new: 'bg-blue-100 text-blue-700',
@@ -32,31 +34,92 @@ const JoiningPipelinePage = () => {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'draft' | 'pending'>('draft');
+  const { getCourseName, getBranchName } = useCourseLookup();
 
-  const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['joining-pipeline', page, limit, searchTerm],
+  const { data, isLoading, isFetching } = useQuery<JoiningListResponse>({
+    queryKey: ['joining-pipeline', page, limit, searchTerm, activeTab],
     queryFn: async () => {
-      const response = await leadAPI.getAll({
+      const statusValue = activeTab === 'pending' ? 'pending_approval' : 'draft';
+      const response = await joiningAPI.list({
         page,
         limit,
         search: searchTerm || undefined,
-        leadStatus: 'Confirmed',
+        status: statusValue,
       });
-      return response.data || response;
+      
+      // Debug logging
+      console.log('Joining API Response:', {
+        statusValue,
+        activeTab,
+        response,
+        data: response?.data,
+        joinings: response?.data?.joinings?.length || 0,
+      });
+      
+      return response;
     },
     placeholderData: (previousData) => previousData,
   });
 
-  const leads = (data?.leads ?? []) as Lead[];
-  const pagination = data?.pagination ?? { page: 1, pages: 1, total: 0, limit };
-  const isEmpty = !isLoading && leads.length === 0;
+  const payload = data?.data ?? {
+    joinings: [],
+    pagination: { page: 1, pages: 1, total: 0, limit },
+  };
+  const joinings = payload.joinings ?? [];
+  const pagination = payload.pagination ?? { page: 1, pages: 1, total: 0, limit };
+  
+  // Debug logging
+  useEffect(() => {
+    console.log('Joining Page State:', {
+      activeTab,
+      isLoading,
+      isFetching,
+      data,
+      payload,
+      joiningsCount: joinings.length,
+      pagination,
+    });
+  }, [activeTab, isLoading, isFetching, data, payload, joinings.length, pagination]);
+  const isEmpty = !isLoading && joinings.length === 0;
+  const queryClient = useQueryClient();
+
+  const approveMutation = useMutation({
+    mutationFn: async (leadId: string) => {
+      return await joiningAPI.approve(leadId);
+    },
+    onSuccess: () => {
+      showToast.success('Joining form approved successfully');
+      queryClient.invalidateQueries({ queryKey: ['joining-pipeline'] });
+    },
+    onError: (error: any) => {
+      showToast.error(error?.response?.data?.message || 'Failed to approve joining form');
+    },
+  });
+
+  const formatCurrency = (amount?: number | null) => {
+    if (amount === undefined || amount === null || Number.isNaN(amount)) {
+      return '—';
+    }
+    try {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        minimumFractionDigits: 2,
+      }).format(amount);
+    } catch {
+      return amount.toString();
+    }
+  };
 
   const headerContent = useMemo(
     () => (
-      <div className="flex flex-col items-end gap-2 text-right">
-        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Joining Pipeline</h1>
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
+          Joining Forms In Progress
+        </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Confirmed leads awaiting joining forms. Launch the form when the student is ready.
+          Track drafts and pending approvals. Open a form to continue the admission journey.
         </p>
       </div>
     ),
@@ -73,15 +136,50 @@ const JoiningPipelinePage = () => {
       <Card className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Input
-            placeholder="Search confirmed leads by name, phone, or enquiry number…"
+            placeholder="Search joining forms by student, phone, or enquiry number…"
             value={searchTerm}
             onChange={(event) => {
               setSearchTerm(event.target.value);
               setPage(1);
             }}
           />
+          <div className="flex items-center gap-2">
+            <Link href="/superadmin/joining/new">
+              <Button variant="primary" className="whitespace-nowrap">
+                Add Joining Form
+              </Button>
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('draft');
+                setPage(1);
+              }}
+              className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+                activeTab === 'draft'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-200'
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'
+              }`}
+            >
+              Draft Forms
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('pending');
+                setPage(1);
+              }}
+              className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+                activeTab === 'pending'
+                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-200'
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'
+              }`}
+            >
+              Pending Approval
+            </button>
+          </div>
           <div className="text-sm text-slate-500 dark:text-slate-400">
-            Total confirmed leads: <span className="font-semibold text-blue-600 dark:text-blue-300">{pagination.total}</span>
+            Total {activeTab === 'pending' ? 'pending' : 'in progress'}: <span className="font-semibold text-blue-600 dark:text-blue-300">{pagination.total}</span>
           </div>
         </div>
       </Card>
@@ -92,23 +190,42 @@ const JoiningPipelinePage = () => {
             <thead className="bg-slate-50/80 backdrop-blur-sm dark:bg-slate-900/70">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Lead
+                  {activeTab === 'pending' ? 'Enquiry #' : 'Lead'}
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Contact
+                  {activeTab === 'pending' ? 'Student Name' : 'Contact'}
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Course Interest
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Quota
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Mandal
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Updated
-                </th>
+                {activeTab === 'pending' ? (
+                  <>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Course
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Branch
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Quota
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Admission Fee Status
+                    </th>
+                  </>
+                ) : (
+                  <>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Course Interest
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Quota
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Mandal
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Updated
+                    </th>
+                  </>
+                )}
                 <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Actions
                 </th>
@@ -117,68 +234,149 @@ const JoiningPipelinePage = () => {
             <tbody className="divide-y divide-slate-100 bg-white/80 backdrop-blur-sm dark:divide-slate-800 dark:bg-slate-900/60">
               {isLoading || isFetching ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center text-sm text-slate-500">
+                  <td colSpan={activeTab === 'pending' ? 7 : 7} className="px-6 py-16 text-center text-sm text-slate-500">
                     <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-blue-400 border-t-transparent" />
-                    <p className="mt-4 text-xs uppercase tracking-[0.3em] text-slate-400">Loading confirmed leads…</p>
+                    <p className="mt-4 text-xs uppercase tracking-[0.3em] text-slate-400">Loading joining forms…</p>
                   </td>
                 </tr>
               ) : isEmpty ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center text-sm text-slate-500">
-                    <p className="font-medium text-slate-600 dark:text-slate-400">No confirmed leads available.</p>
+                  <td colSpan={activeTab === 'pending' ? 7 : 7} className="px-6 py-16 text-center text-sm text-slate-500">
+                    <p className="font-medium text-slate-600 dark:text-slate-400">
+                      No joining drafts or pending approvals yet.
+                    </p>
                     <p className="mt-1 text-xs uppercase tracking-[0.3em] text-slate-400">
-                      Update a lead to “Confirmed” from the Lead Console to begin the joining journey.
+                      CREATE A JOINING FORM FROM A CONFIRMED LEAD TO SEE IT LISTED HERE.
                     </p>
                   </td>
                 </tr>
               ) : (
-                leads.map((lead) => (
-                  <tr key={lead._id} className="transition hover:bg-blue-50/60 dark:hover:bg-slate-800/60">
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{lead.name}</span>
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                          {lead.enquiryNumber && <span className="rounded-full bg-slate-100 px-2 py-0.5">{lead.enquiryNumber}</span>}
-                          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${getStatusBadge(lead.leadStatus)}`}>
-                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-current opacity-70" />
-                            {lead.leadStatus || 'New'}
+                joinings.map((joining) => {
+                  const paymentStatus = joining.paymentSummary?.status || 'not_started';
+                  const paymentStatusLabel = paymentStatus.replace(/_/g, ' ');
+                  const paymentStatusClass = 
+                    paymentStatus === 'paid' 
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-200'
+                      : paymentStatus === 'partial'
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-200'
+                      : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200';
+                  
+                  return (
+                    <tr key={joining._id} className="transition hover:bg-blue-50/60 dark:hover:bg-slate-800/60">
+                      <td className="px-6 py-4">
+                        {activeTab === 'pending' ? (
+                          <span className="text-sm font-semibold text-blue-600 dark:text-blue-300">
+                            {joining.lead?.enquiryNumber || joining.leadData?.enquiryNumber || '—'}
                           </span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
-                      <div className="flex flex-col gap-1">
-                        <span>{lead.phone}</span>
-                        {lead.fatherPhone && <span className="text-xs text-slate-400">Father: {lead.fatherPhone}</span>}
-                        {lead.email && <span className="text-xs text-slate-400">{lead.email}</span>}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
-                      <div className="flex flex-col gap-1">
-                        <span>{lead.courseInterested || 'Course not set'}</span>
-                        {lead.interCollege && <span className="text-xs text-slate-400">{lead.interCollege}</span>}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{lead.quota || 'Not Applicable'}</td>
-                    <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
-                      <div className="flex flex-col gap-1">
-                        <span>{lead.mandal}</span>
-                        <span className="text-xs text-slate-400">{lead.district}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-500">{new Date(lead.updatedAt).toLocaleString()}</td>
-                    <td className="px-6 py-4 text-right">
-                      <Link href={`/superadmin/joining/${lead._id}`}>
-                        <Button variant="primary" className="group inline-flex items-center gap-2">
-                          <span className="transition-transform group-hover:-translate-x-0.5">Add Joining Form</span>
-                          <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </Button>
-                      </Link>
-                    </td>
-                  </tr>
-                ))
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                              {joining.lead?.name || joining.studentInfo?.name || joining.leadData?.name || '—'}
+                            </span>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                              {joining.lead?.enquiryNumber || joining.leadData?.enquiryNumber ? (
+                                <span className="rounded-full bg-slate-100 px-2 py-0.5">
+                                  {joining.lead?.enquiryNumber || joining.leadData?.enquiryNumber}
+                                </span>
+                              ) : null}
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${getStatusBadge(joining.status)}`}>
+                                <span className="inline-block h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+                                Draft
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
+                        {activeTab === 'pending' ? (
+                          <span className="font-medium text-slate-900 dark:text-slate-100">
+                            {joining.studentInfo?.name || joining.lead?.name || joining.leadData?.name || '—'}
+                          </span>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <span>{joining.studentInfo?.phone || joining.lead?.phone || joining.leadData?.phone || '—'}</span>
+                            {(joining.lead?.fatherPhone || joining.leadData?.fatherPhone) && (
+                              <span className="text-xs text-slate-400">
+                                Father: {joining.lead?.fatherPhone || joining.leadData?.fatherPhone}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      {activeTab === 'pending' ? (
+                        <>
+                          <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
+                            {getCourseName(joining.courseInfo?.courseId) || joining.courseInfo?.course || '—'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
+                            {getBranchName(joining.courseInfo?.branchId) || joining.courseInfo?.branch || '—'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
+                            {joining.courseInfo?.quota || '—'}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${paymentStatusClass}`}>
+                              {paymentStatusLabel}
+                            </span>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
+                            <div className="flex flex-col gap-1">
+                              <span>{getCourseName(joining.courseInfo?.courseId) || joining.courseInfo?.course || joining.lead?.courseInterested || joining.leadData?.courseInterested || '—'}</span>
+                              <span className="text-xs text-slate-400">
+                                {getBranchName(joining.courseInfo?.branchId) || joining.courseInfo?.branch || 'Branch pending'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
+                            {joining.courseInfo?.quota || joining.lead?.quota || joining.leadData?.quota || '—'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
+                            <div className="flex flex-col gap-1">
+                              <span>{joining.lead?.mandal || joining.leadData?.mandal || '—'}</span>
+                              <span className="text-xs text-slate-400">{joining.lead?.district || joining.leadData?.district || '—'}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-500">
+                            {new Date(joining.updatedAt).toLocaleString()}
+                          </td>
+                        </>
+                      )}
+                      <td className="px-6 py-4 text-right">
+                        {activeTab === 'pending' ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={approveMutation.isPending}
+                              onClick={() => {
+                                approveMutation.mutate(joining.leadId || joining._id);
+                              }}
+                            >
+                              {approveMutation.mutate.isPending ? 'Approving…' : 'Approve'}
+                            </Button>
+                            <Link href={`/superadmin/joining/${joining.leadId || joining._id || 'new'}`}>
+                              <Button variant="outline" size="sm">
+                                View
+                              </Button>
+                            </Link>
+                          </div>
+                        ) : (
+                          <Link href={`/superadmin/joining/${joining.leadId || joining._id || 'new'}`}>
+                            <Button variant="primary" className="group inline-flex items-center gap-2">
+                              <span className="transition-transform group-hover:-translate-x-0.5">Open Form</span>
+                              <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </Button>
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
