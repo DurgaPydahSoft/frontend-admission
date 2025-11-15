@@ -443,6 +443,8 @@ export interface OverviewAnalyticsTotals {
   leads: number;
   confirmedLeads: number;
   admittedLeads: number;
+  assignedLeads?: number;
+  unassignedLeads?: number;
   joinings: {
     draft: number;
     pendingApproval: number;
@@ -683,6 +685,8 @@ export interface OverviewAnalytics {
     leads: number;
     confirmedLeads: number;
     admittedLeads: number;
+    assignedLeads?: number;
+    unassignedLeads?: number;
     joinings: {
       draft: number;
       pendingApproval: number;

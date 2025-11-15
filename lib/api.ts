@@ -264,6 +264,10 @@ export const leadAPI = {
     const response = await api.get(`/leads/analytics/overview${suffix}`);
     return response.data;
   },
+  getUserAnalytics: async () => {
+    const response = await api.get('/leads/analytics/users');
+    return response.data;
+  },
   // Public lead submission (no auth required)
   submitPublicLead: async (data: {
     hallTicketNumber?: string;

@@ -43,11 +43,35 @@ const formatShortDate = (isoDate: string) => {
   }
 };
 
+const formatDateWithToday = (isoDate: string) => {
+  try {
+    const date = new Date(isoDate);
+    const today = new Date();
+    const isToday = date.toDateString() === today.toDateString();
+    const formatted = date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+    return isToday ? `${formatted} (Today)` : formatted;
+  } catch {
+    return isoDate;
+  }
+};
+
+const isToday = (isoDate: string): boolean => {
+  try {
+    const date = new Date(isoDate);
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
+  } catch {
+    return false;
+  }
+};
+
 const summaryCardStyles = [
   'from-blue-500/10 via-blue-500/15 to-transparent text-blue-700 dark:text-blue-200',
   'from-emerald-500/10 via-emerald-500/15 to-transparent text-emerald-700 dark:text-emerald-200',
+  'from-rose-500/10 via-rose-500/15 to-transparent text-rose-700 dark:text-rose-200',
   'from-violet-500/10 via-violet-500/15 to-transparent text-violet-700 dark:text-violet-200',
   'from-amber-500/10 via-amber-500/15 to-transparent text-amber-700 dark:text-amber-200',
+  'from-indigo-500/10 via-indigo-500/15 to-transparent text-indigo-700 dark:text-indigo-200',
 ];
 
 export default function SuperAdminDashboard() {
@@ -70,7 +94,12 @@ export default function SuperAdminDashboard() {
     const loadTeam = async () => {
       try {
         const response = await userAPI.getAll();
-        setTeam(response.data || response);
+        const allUsers = response.data || response;
+        // Filter out Super Admin and Sub Super Admin users
+        const filteredUsers = allUsers.filter(
+          (user: User) => user.roleName !== 'Super Admin' && user.roleName !== 'Sub Super Admin'
+        );
+        setTeam(filteredUsers);
       } catch (error) {
         console.error('Failed to load team roster', error);
         showToast.error('Unable to load team roster right now');
@@ -89,6 +118,18 @@ export default function SuperAdminDashboard() {
     queryKey: ['overview-analytics'],
     queryFn: async () => {
       const response = await leadAPI.getOverviewAnalytics({ days: 14 });
+      return response.data || response;
+    },
+    staleTime: 120_000,
+  });
+
+  const {
+    data: userAnalyticsData,
+    isLoading: isLoadingUserAnalytics,
+  } = useQuery({
+    queryKey: ['user-analytics'],
+    queryFn: async () => {
+      const response = await leadAPI.getUserAnalytics();
       return response.data || response;
     },
     staleTime: 120_000,
@@ -122,11 +163,15 @@ export default function SuperAdminDashboard() {
     return map;
   }, [admissionsTrend]);
 
-  const leadsAdmissionsData = leadsTrend.map((point) => ({
-    date: formatShortDate(point.date),
-    leads: point.count,
-    admissions: admissionsMap.get(point.date) ?? 0,
-  }));
+  const leadsAdmissionsData = useMemo(() => {
+    return leadsTrend.map((point) => ({
+      date: formatDateWithToday(point.date),
+      dateKey: point.date,
+      isToday: isToday(point.date),
+      leads: point.count,
+      admissions: admissionsMap.get(point.date) ?? 0,
+    }));
+  }, [leadsTrend, admissionsMap]);
 
   const statusChanges = overviewAnalytics?.daily.statusChanges ?? [];
   const statusKeys = useMemo(() => {
@@ -136,24 +181,46 @@ export default function SuperAdminDashboard() {
         if (key !== 'total') collector.add(key);
       });
     });
-    return Array.from(collector).slice(0, 4);
+    
+    // Priority statuses to always show
+    const priorityStatuses = ['Admitted', 'Interested', 'Partial'];
+    const allStatuses = Array.from(collector);
+    
+    // Sort: priority statuses first, then others
+    const sorted = [
+      ...priorityStatuses.filter(s => allStatuses.includes(s)),
+      ...allStatuses.filter(s => !priorityStatuses.includes(s))
+    ];
+    
+    // Return all statuses (or limit if needed, but show priority ones first)
+    return sorted;
   }, [statusChanges]);
 
-  const statusChangeData = statusChanges.map((entry) => {
-    const row: Record<string, number | string> = { date: formatShortDate(entry.date) };
-    statusKeys.forEach((key) => {
-      row[key] = entry.statuses?.[key] ?? 0;
+  const statusChangeData = useMemo(() => {
+    return statusChanges.map((entry) => {
+      const row: Record<string, number | string | boolean> = { 
+        date: formatDateWithToday(entry.date),
+        dateKey: entry.date,
+        isToday: isToday(entry.date),
+      };
+      statusKeys.forEach((key) => {
+        row[key] = entry.statuses?.[key] ?? 0;
+      });
+      return row;
     });
-    return row;
-  });
+  }, [statusChanges, statusKeys]);
 
   const joiningProgress = overviewAnalytics?.daily.joiningProgress ?? [];
-  const joiningProgressData = joiningProgress.map((entry) => ({
-    date: formatShortDate(entry.date),
-    draft: entry.draft,
-    pending: entry.pending_approval,
-    approved: entry.approved,
-  }));
+  const joiningProgressData = useMemo(() => {
+    return joiningProgress.map((entry) => ({
+      date: formatDateWithToday(entry.date),
+      dateKey: entry.date,
+      isToday: isToday(entry.date),
+      draft: entry.draft,
+      pending: entry.pending_approval,
+      approved: entry.approved,
+    }));
+  }, [joiningProgress]);
 
   const radialJoiningData = [
     {
@@ -187,6 +254,16 @@ export default function SuperAdminDashboard() {
       helper: 'Captured so far',
     },
     {
+      label: 'Assigned Leads',
+      value: overviewAnalytics?.totals.assignedLeads ?? 0,
+      helper: 'Assigned to team members',
+    },
+    {
+      label: 'Unassigned Leads',
+      value: overviewAnalytics?.totals.unassignedLeads ?? 0,
+      helper: 'Pending assignment',
+    },
+    {
       label: 'Confirmed Leads',
       value: overviewAnalytics?.totals.confirmedLeads ?? 0,
       helper: 'Awaiting joining forms',
@@ -203,12 +280,9 @@ export default function SuperAdminDashboard() {
     },
   ]), [overviewAnalytics]);
 
-  const activeUsers = useMemo(() => {
-    const sorted = [...team].sort((a, b) => Number(b.isActive) - Number(a.isActive));
-    return sorted.slice(0, 6);
-  }, [team]);
+  const userAnalytics = userAnalyticsData?.users || [];
 
-  if (isTeamLoading || isLoadingOverview) {
+  if (isTeamLoading || isLoadingOverview || isLoadingUserAnalytics) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <CardSkeleton />
@@ -220,11 +294,11 @@ export default function SuperAdminDashboard() {
     <div className="space-y-10">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
-            Super Admin Overview
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
+            Super Admin Dashboard
           </h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Monitor lead momentum, joining velocity, and admissions in one elegant glance.
+          <p className="mt-2 text-base text-slate-600 dark:text-slate-300">
+            Comprehensive analytics and insights for lead management, admissions, and team performance.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -237,7 +311,7 @@ export default function SuperAdminDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 lg:grid-cols-6">
         {summaryCards.map((card, index) => (
           <Card
             key={card.label}
@@ -262,7 +336,7 @@ export default function SuperAdminDashboard() {
             <div>
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Leads vs Admissions</h2>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Trailing 14-day trend comparing captured leads to approved admissions.
+                Trailing 14-day trend including today's live data. Today is highlighted.
               </p>
             </div>
           </div>
@@ -280,9 +354,22 @@ export default function SuperAdminDashboard() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="6 4" stroke={chartGridColor} />
-                <XAxis dataKey="date" stroke={chartTextColor} tick={{ fill: chartTextColor }} />
+                <XAxis 
+                  dataKey="date" 
+                  stroke={chartTextColor} 
+                  tick={{ fill: chartTextColor }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
                 <YAxis stroke={chartTextColor} tick={{ fill: chartTextColor }} allowDecimals={false} />
-                <Tooltip contentStyle={tooltipStyle} />
+                <Tooltip 
+                  contentStyle={tooltipStyle}
+                  labelFormatter={(label, payload) => {
+                    const data = payload?.[0]?.payload;
+                    return data?.isToday ? `📅 ${label} (Live)` : label;
+                  }}
+                />
                 <Legend />
                 <Area type="monotone" dataKey="leads" stroke="#3b82f6" fill="url(#leadsGradient)" strokeWidth={2.5} />
                 <Area type="monotone" dataKey="admissions" stroke="#22c55e" fill="url(#admissionsGradient)" strokeWidth={2.5} />
@@ -292,7 +379,12 @@ export default function SuperAdminDashboard() {
         </Card>
 
         <Card className="space-y-6 p-6 shadow-lg shadow-blue-100/30 dark:shadow-none">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Joining Funnel Snapshot</h2>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Joining Funnel Snapshot</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Current status breakdown of all joining forms
+            </p>
+          </div>
           <div className="h-72">
             <ResponsiveContainer>
               <RadialBarChart
@@ -320,25 +412,58 @@ export default function SuperAdminDashboard() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="space-y-6 p-6 shadow-lg shadow-blue-100/30 dark:shadow-none">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Status Change Velocity</h2>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Status Change Velocity</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Daily status changes including today's live data. Today is highlighted.
+            </p>
+          </div>
           <div className="h-72">
             <ResponsiveContainer>
               <LineChart data={statusChangeData}>
                 <CartesianGrid strokeDasharray="6 4" stroke={chartGridColor} />
-                <XAxis dataKey="date" stroke={chartTextColor} tick={{ fill: chartTextColor }} />
+                <XAxis 
+                  dataKey="date" 
+                  stroke={chartTextColor} 
+                  tick={{ fill: chartTextColor }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
                 <YAxis stroke={chartTextColor} tick={{ fill: chartTextColor }} allowDecimals={false} />
-                <Tooltip contentStyle={tooltipStyle} />
+                <Tooltip 
+                  contentStyle={tooltipStyle}
+                  labelFormatter={(label, payload) => {
+                    const data = payload?.[0]?.payload;
+                    return data?.isToday ? `📅 ${label} (Live)` : label;
+                  }}
+                />
                 <Legend />
-                {statusKeys.map((status, index) => (
-                  <Line
-                    key={status}
-                    type="monotone"
-                    dataKey={status}
-                    strokeWidth={2}
-                    stroke={['#3b82f6', '#22c55e', '#f97316', '#a855f7'][index % 4]}
-                    dot={false}
-                  />
-                ))}
+                {statusKeys.map((status, index) => {
+                  const colors = [
+                    '#3b82f6', // Blue
+                    '#22c55e', // Green
+                    '#f97316', // Orange
+                    '#a855f7', // Purple
+                    '#ef4444', // Red
+                    '#06b6d4', // Cyan
+                    '#f59e0b', // Amber
+                    '#ec4899', // Pink
+                    '#6366f1', // Indigo
+                    '#84cc16', // Lime
+                  ];
+                  return (
+                    <Line
+                      key={status}
+                      type="monotone"
+                      dataKey={status}
+                      strokeWidth={2.5}
+                      stroke={colors[index % colors.length]}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  );
+                })}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -346,7 +471,12 @@ export default function SuperAdminDashboard() {
 
         <Card className="space-y-6 p-6 shadow-lg shadow-blue-100/30 dark:shadow-none">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Lead Pool Composition</h2>
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Lead Pool Composition</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Distribution of leads by status
+              </p>
+            </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300">
               {leadStatusData.length} statuses
             </span>
@@ -358,18 +488,34 @@ export default function SuperAdminDashboard() {
                   data={leadStatusData}
                   dataKey="value"
                   nameKey="name"
-                  innerRadius={70}
-                  outerRadius={110}
-                  paddingAngle={4}
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={3}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  labelLine={false}
                 >
-                  {leadStatusData.map((entry, index) => (
-                    <Cell
-                      key={entry.name}
-                      fill={['#2563eb', '#16a34a', '#f97316', '#7c3aed', '#f59e0b', '#ef4444'][index % 6]}
-                    />
-                  ))}
+                  {leadStatusData.map((entry, index) => {
+                    const colors = ['#2563eb', '#16a34a', '#f97316', '#7c3aed', '#f59e0b', '#ef4444', '#06b6d4', '#84cc16', '#ec4899', '#6366f1'];
+                    return (
+                      <Cell
+                        key={entry.name}
+                        fill={colors[index % colors.length]}
+                      />
+                    );
+                  })}
                 </Pie>
-                <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => formatNumber(value)} />
+                <Tooltip 
+                  contentStyle={tooltipStyle} 
+                  formatter={(value: number, name: string) => [
+                    formatNumber(value),
+                    name
+                  ]}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36}
+                  formatter={(value) => value}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -379,47 +525,78 @@ export default function SuperAdminDashboard() {
       <Card className="space-y-6 p-6 shadow-lg shadow-blue-100/30 dark:shadow-none">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Team Snapshot</h2>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">User Performance Analytics</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Quick glance at the counsellor roster. Dive deeper from the User Management module.
+              Track assigned leads and status breakdown for each team member.
             </p>
           </div>
           <Link href="/superadmin/users">
             <Button size="sm" variant="outline">
-              View all users
+              Manage Users
             </Button>
           </Link>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {activeUsers.map((member) => (
-            <div
-              key={member._id}
-              className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm shadow-blue-100/30 backdrop-blur dark:border-slate-800/60 dark:bg-slate-900/60 dark:shadow-none"
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{member.name}</p>
-                <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    member.isActive
-                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-200'
-                      : 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-200'
-                  }`}
+        {userAnalytics.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {userAnalytics.map((user: any) => {
+              const statusEntries = Object.entries(user.statusBreakdown || {}).filter(([_, count]) => (count as number) > 0);
+              return (
+                <div
+                  key={user.userId}
+                  className="rounded-2xl border border-white/70 bg-white/80 p-5 shadow-sm shadow-blue-100/30 backdrop-blur dark:border-slate-800/60 dark:bg-slate-900/60 dark:shadow-none"
                 >
-                  {member.isActive ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{member.email}</p>
-              <p className="mt-3 text-xs font-medium uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
-                {member.roleName}
-              </p>
-            </div>
-          ))}
-          {activeUsers.length === 0 && (
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-base font-semibold text-slate-900 dark:text-slate-100">{user.name}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{user.email}</p>
+                    </div>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        user.isActive
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-200'
+                          : 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-200'
+                      }`}
+                    >
+                      {user.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Total Assigned</span>
+                      <span className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                        {formatNumber(user.totalAssigned || 0)}
+                      </span>
+                    </div>
+                    {statusEntries.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
+                          Status Breakdown
+                        </p>
+                        {statusEntries.map(([status, count]) => (
+                          <div key={status} className="flex items-center justify-between">
+                            <span className="text-xs text-slate-600 dark:text-slate-400 truncate">{status}</span>
+                            <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 ml-2">
+                              {formatNumber(count as number)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {statusEntries.length === 0 && (
+                      <p className="text-xs text-slate-400 dark:text-slate-500 italic">No leads assigned</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-8">
             <p className="text-sm text-slate-500 dark:text-slate-400">
               No users found. Use the User Management module to onboard your counselling team.
             </p>
-          )}
-        </div>
+          </div>
+        )}
       </Card>
     </div>
   );
