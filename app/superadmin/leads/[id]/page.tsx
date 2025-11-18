@@ -789,6 +789,77 @@ export default function LeadDetailPage() {
     return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
   };
 
+  const getCallOutcomeIconColor = (outcome?: string) => {
+    if (!outcome) {
+      return {
+        iconBg: 'bg-gradient-to-br from-gray-500 to-gray-600',
+        border: 'border-gray-400',
+        line: 'from-gray-400 to-gray-200',
+        cardBg: 'from-gray-50/50',
+        cardBorder: 'border-gray-400',
+      };
+    }
+    
+    const outcomeLower = outcome.toLowerCase().trim();
+    
+    // Positive outcomes - Green
+    if (outcomeLower.includes('answered') || 
+        outcomeLower.includes('interested') ||
+        outcomeLower.includes('yes') ||
+        outcomeLower.includes('confirmed') ||
+        outcomeLower.includes('agreed') ||
+        outcomeLower.includes('accepted')) {
+      return {
+        iconBg: 'bg-gradient-to-br from-green-500 to-green-600',
+        border: 'border-green-400',
+        line: 'from-green-400 to-green-200',
+        cardBg: 'from-green-50/50',
+        cardBorder: 'border-green-400',
+      };
+    }
+    
+    // Negative outcomes - Red
+    if (outcomeLower.includes('not interested') ||
+        outcomeLower.includes('rejected') ||
+        outcomeLower.includes('declined') ||
+        outcomeLower.includes('wrong number') ||
+        outcomeLower.includes('wrong data') ||
+        (outcomeLower.includes('no') && !outcomeLower.includes('answer'))) {
+      return {
+        iconBg: 'bg-gradient-to-br from-red-500 to-red-600',
+        border: 'border-red-400',
+        line: 'from-red-400 to-red-200',
+        cardBg: 'from-red-50/50',
+        cardBorder: 'border-red-400',
+      };
+    }
+    
+    // Neutral/Warning outcomes - Yellow/Orange
+    if (outcomeLower.includes('busy') ||
+        outcomeLower.includes('not answered') ||
+        outcomeLower.includes('no answer') ||
+        outcomeLower.includes('missed') ||
+        outcomeLower.includes('call back') ||
+        outcomeLower.includes('follow up')) {
+      return {
+        iconBg: 'bg-gradient-to-br from-yellow-500 to-yellow-600',
+        border: 'border-yellow-400',
+        line: 'from-yellow-400 to-yellow-200',
+        cardBg: 'from-yellow-50/50',
+        cardBorder: 'border-yellow-400',
+      };
+    }
+    
+    // Default - Gray
+    return {
+      iconBg: 'bg-gradient-to-br from-gray-500 to-gray-600',
+      border: 'border-gray-400',
+      line: 'from-gray-400 to-gray-200',
+      cardBg: 'from-gray-50/50',
+      cardBorder: 'border-gray-400',
+    };
+  };
+
   if (!isMounted || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -1544,17 +1615,18 @@ export default function LeadDetailPage() {
               <div className="space-y-0 max-h-[400px] overflow-y-auto">
                 {callLogs.map((call, index) => {
                   const callWithSequence = call as CommunicationRecord & { sequenceNumber: number; ordinal: string };
+                  const iconColors = getCallOutcomeIconColor(call.callOutcome);
                   return (
                     <div key={call._id} className="relative pl-8 pb-6 last:pb-0">
                       {index !== callLogs.length - 1 && (
-                        <div className="absolute left-3 top-6 bottom-0 w-0.5 bg-gradient-to-b from-green-400 to-green-200"></div>
+                        <div className={`absolute left-3 top-6 bottom-0 w-0.5 bg-gradient-to-b ${iconColors.line}`}></div>
                       )}
-                      <div className="absolute left-0 top-1 w-6 h-6 rounded-full bg-gradient-to-br from-green-500 to-green-600 border-2 border-white shadow-md flex items-center justify-center">
+                      <div className={`absolute left-0 top-1 w-6 h-6 rounded-full ${iconColors.iconBg} border-2 border-white shadow-md flex items-center justify-center`}>
                         <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                         </svg>
                       </div>
-                      <div className="bg-gradient-to-r from-green-50/50 to-transparent rounded-lg p-3 border-l-2 border-green-400">
+                      <div className={`bg-gradient-to-r ${iconColors.cardBg} to-transparent rounded-lg p-3 border-l-2 ${iconColors.cardBorder}`}>
                         <div className="flex justify-between items-start mb-2">
                           <div>
                             <span className="text-sm font-semibold text-gray-900">
