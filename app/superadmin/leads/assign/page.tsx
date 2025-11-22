@@ -1,16 +1,26 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { auth } from '@/lib/auth';
 import { leadAPI, userAPI } from '@/lib/api';
-import { User, FilterOptions } from '@/types';
+import { User, FilterOptions, Lead } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { showToast } from '@/lib/toast';
 import { useDashboardHeader } from '@/components/layout/DashboardShell';
+
+type AssignmentMode = 'bulk' | 'single';
+
+interface AssignmentStats {
+  totalLeads: number;
+  assignedCount: number;
+  unassignedCount: number;
+  mandalBreakdown: Array<{ mandal: string; count: number }>;
+  stateBreakdown: Array<{ state: string; count: number }>;
+}
 
 export default function AssignLeadsPage() {
   const router = useRouter();
@@ -18,6 +28,7 @@ export default function AssignLeadsPage() {
   const { setHeaderContent, clearHeaderContent } = useDashboardHeader();
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [mode, setMode] = useState<AssignmentMode>('bulk');
   const [users, setUsers] = useState<User[]>([]);
   const [filters, setFilters] = useState<FilterOptions | null>(null);
   const [selectedUserId, setSelectedUserId] = useState('');
@@ -25,6 +36,13 @@ export default function AssignLeadsPage() {
   const [state, setState] = useState('');
   const [count, setCount] = useState(1000);
   const [isReady, setIsReady] = useState(false);
+
+  // Single assignment state
+  const [selectedLeadId, setSelectedLeadId] = useState('');
+  const [leadSearch, setLeadSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<Lead[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const user = auth.getUser();
@@ -53,25 +71,97 @@ export default function AssignLeadsPage() {
         setFilters(filtersResponse.data || filtersResponse);
       } catch (error) {
         console.error('Failed to load assign-leads data:', error);
-        showToast.error('Unable to load counsellors or filters.');
+        showToast.error('Unable to load users or filters.');
       }
     };
 
     load();
   }, [currentUser]);
 
+  // Fetch assignment statistics
+  const { data: statsData, refetch: refetchStats } = useQuery<{ data: AssignmentStats }>({
+    queryKey: ['assignmentStats', mandal, state],
+    queryFn: async () => {
+      const response = await leadAPI.getAssignmentStats({
+        mandal: mandal || undefined,
+        state: state || undefined,
+      });
+      return { data: response.data || response };
+    },
+    enabled: isReady && !!currentUser,
+  });
+
+  const stats = statsData?.data;
+
+  // Search leads for single assignment
+  useEffect(() => {
+    if (!leadSearch || leadSearch.length < 2) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    const searchLeads = async () => {
+      try {
+        const response = await leadAPI.getAll({
+          search: leadSearch,
+          limit: 10,
+          page: 1,
+        });
+        const leads = response.data?.leads || response.leads || [];
+        setSearchResults(leads);
+        setShowSearchResults(true);
+      } catch (error) {
+        console.error('Failed to search leads:', error);
+      }
+    };
+
+    const timeoutId = setTimeout(searchLeads, 300);
+    return () => clearTimeout(timeoutId);
+  }, [leadSearch]);
+
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+
+    if (showSearchResults) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showSearchResults]);
+
   const assignMutation = useMutation({
-    mutationFn: async (payload: { userId: string; mandal?: string; state?: string; count: number }) =>
-      leadAPI.assignLeads(payload),
+    mutationFn: async (payload: {
+      userId: string;
+      mandal?: string;
+      state?: string;
+      count?: number;
+      leadIds?: string[];
+    }) => leadAPI.assignLeads(payload),
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['assignmentStats'] });
+      refetchStats();
       const assignedCount = response.data?.assigned || response.assigned || 0;
       const userName = response.data?.userName || 'user';
-      showToast.success(`Assigned ${assignedCount} leads to ${userName}`);
-      setSelectedUserId('');
-      setMandal('');
-      setState('');
-      setCount(1000);
+      showToast.success(`Successfully assigned ${assignedCount} lead${assignedCount !== 1 ? 's' : ''} to ${userName}`);
+      
+      // Reset form
+      if (mode === 'bulk') {
+        setSelectedUserId('');
+        setMandal('');
+        setState('');
+        setCount(1000);
+      } else {
+        setSelectedUserId('');
+        setSelectedLeadId('');
+        setLeadSearch('');
+        setSearchResults([]);
+      }
     },
     onError: (error: any) => {
       console.error('Assign leads error:', error);
@@ -79,10 +169,10 @@ export default function AssignLeadsPage() {
     },
   });
 
-  const handleAssign = (event: React.FormEvent) => {
+  const handleBulkAssign = (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedUserId) {
-      showToast.error('Select a user to assign leads.');
+      showToast.error('Please select a user to assign leads.');
       return;
     }
     if (count <= 0) {
@@ -98,12 +188,29 @@ export default function AssignLeadsPage() {
     });
   };
 
+  const handleSingleAssign = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedUserId) {
+      showToast.error('Please select a user to assign the lead.');
+      return;
+    }
+    if (!selectedLeadId) {
+      showToast.error('Please select a lead to assign.');
+      return;
+    }
+
+    assignMutation.mutate({
+      userId: selectedUserId,
+      leadIds: [selectedLeadId],
+    });
+  };
+
   const header = useMemo(
     () => (
       <div className="flex flex-col items-end gap-2 text-right">
         <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Assign Leads</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Distribute unassigned leads to counsellors using mandal and state filters.
+          Distribute leads to counsellors and sub-admins using bulk or single assignment.
         </p>
       </div>
     ),
@@ -126,97 +233,345 @@ export default function AssignLeadsPage() {
     );
   }
 
-  const counsellors = users.filter((u) => u.roleName === 'User' && u.isActive);
+  // Filter users: include both Users and Sub Super Admins (exclude Super Admin)
+  const assignableUsers = users.filter(
+    (u) => u.isActive && u.roleName !== 'Super Admin' && (u.roleName === 'User' || u.roleName === 'Sub Super Admin')
+  );
+
+  // Group users by role
+  const usersByRole = {
+    'Sub Super Admin': assignableUsers.filter((u) => u.roleName === 'Sub Super Admin'),
+    User: assignableUsers.filter((u) => u.roleName === 'User'),
+  };
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6">
+      {/* Statistics Cards */}
+      {stats && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <Card className="p-4">
+            <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Total Leads</div>
+            <div className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">{stats.totalLeads.toLocaleString()}</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Assigned Leads</div>
+            <div className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">{stats.assignedCount.toLocaleString()}</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-sm font-medium text-gray-600 dark:text-slate-400">Unassigned Leads</div>
+            <div className="mt-1 text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.unassignedCount.toLocaleString()}</div>
+          </Card>
+        </div>
+      )}
+
+      {/* Mode Tabs */}
       <Card>
-        <h2 className="mb-6 text-xl font-semibold dark:text-slate-100">Assign Leads</h2>
-        <form onSubmit={handleAssign} className="space-y-6">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">Select User *</label>
-            <select
-              className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
-              value={selectedUserId}
-              onChange={(event) => setSelectedUserId(event.target.value)}
-              required
-            >
-              <option value="">Choose a user…</option>
-              {counsellors.map((user) => (
-                <option key={user._id} value={user._id}>
-                  {user.name} ({user.email})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">Mandal (optional)</label>
-              <select
-                className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
-                value={mandal}
-                onChange={(event) => setMandal(event.target.value)}
-              >
-                <option value="">All Mandals</option>
-                {filters?.mandals?.map((mandalOption) => (
-                  <option key={mandalOption} value={mandalOption}>
-                    {mandalOption}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Leave blank to assign from every mandal.</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">State (optional)</label>
-              <select
-                className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
-                value={state}
-                onChange={(event) => setState(event.target.value)}
-              >
-                <option value="">All States</option>
-                {filters?.states?.map((stateOption) => (
-                  <option key={stateOption} value={stateOption}>
-                    {stateOption}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">Number of leads *</label>
-            <Input
-              type="number"
-              min={1}
-              max={5000}
-              value={count}
-              onChange={(event) => setCount(Number(event.target.value))}
-              required
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Button type="submit" disabled={assignMutation.isPending || !selectedUserId}>
-              {assignMutation.isPending ? 'Assigning…' : 'Assign Leads'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
+        <div className="border-b border-gray-200 dark:border-slate-700">
+          <nav className="flex space-x-4" aria-label="Tabs">
+            <button
               onClick={() => {
-                setSelectedUserId('');
+                setMode('bulk');
+                setSelectedLeadId('');
+                setLeadSearch('');
+                setSearchResults([]);
+              }}
+              className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                mode === 'bulk'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-300'
+              }`}
+            >
+              Bulk Assignment
+            </button>
+            <button
+              onClick={() => {
+                setMode('single');
                 setMandal('');
                 setState('');
                 setCount(1000);
               }}
-              disabled={assignMutation.isPending}
+              className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                mode === 'single'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-300'
+              }`}
             >
-              Reset
-            </Button>
-          </div>
-        </form>
+              Single Assignment
+            </button>
+          </nav>
+        </div>
+
+        <div className="p-6">
+          {mode === 'bulk' ? (
+            <form onSubmit={handleBulkAssign} className="space-y-6">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                  Select User or Sub Admin *
+                </label>
+                <select
+                  className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
+                  value={selectedUserId}
+                  onChange={(event) => setSelectedUserId(event.target.value)}
+                  required
+                >
+                  <option value="">Choose a user or sub-admin…</option>
+                  {usersByRole['Sub Super Admin'].length > 0 && (
+                    <optgroup label="Sub Super Admins">
+                      {usersByRole['Sub Super Admin'].map((user) => (
+                        <option key={user._id} value={user._id}>
+                          {user.name} ({user.email}) - Sub Admin
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {usersByRole.User.length > 0 && (
+                    <optgroup label="Users">
+                      {usersByRole.User.map((user) => (
+                        <option key={user._id} value={user._id}>
+                          {user.name} ({user.email})
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                  Select a user or sub-admin to assign leads to.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                    Mandal (optional)
+                  </label>
+                  <select
+                    className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
+                    value={mandal}
+                    onChange={(event) => setMandal(event.target.value)}
+                  >
+                    <option value="">All Mandals</option>
+                    {filters?.mandals?.map((mandalOption) => (
+                      <option key={mandalOption} value={mandalOption}>
+                        {mandalOption}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                    Filter leads by mandal. Leave blank to assign from all mandals.
+                  </p>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                    State (optional)
+                  </label>
+                  <select
+                    className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
+                    value={state}
+                    onChange={(event) => setState(event.target.value)}
+                  >
+                    <option value="">All States</option>
+                    {filters?.states?.map((stateOption) => (
+                      <option key={stateOption} value={stateOption}>
+                        {stateOption}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                    Filter leads by state. Leave blank to assign from all states.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                  Number of Leads *
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={10000}
+                  value={count}
+                  onChange={(event) => setCount(Number(event.target.value))}
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                  Number of unassigned leads to assign. Available: {stats?.unassignedCount.toLocaleString() || 0} leads
+                  {mandal && ` in ${mandal}`}
+                  {state && `, ${state}`}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button type="submit" disabled={assignMutation.isPending || !selectedUserId}>
+                  {assignMutation.isPending ? 'Assigning…' : 'Assign Leads'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedUserId('');
+                    setMandal('');
+                    setState('');
+                    setCount(1000);
+                  }}
+                  disabled={assignMutation.isPending}
+                >
+                  Reset
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleSingleAssign} className="space-y-6">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                  Select User or Sub Admin *
+                </label>
+                <select
+                  className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
+                  value={selectedUserId}
+                  onChange={(event) => setSelectedUserId(event.target.value)}
+                  required
+                >
+                  <option value="">Choose a user or sub-admin…</option>
+                  {usersByRole['Sub Super Admin'].length > 0 && (
+                    <optgroup label="Sub Super Admins">
+                      {usersByRole['Sub Super Admin'].map((user) => (
+                        <option key={user._id} value={user._id}>
+                          {user.name} ({user.email}) - Sub Admin
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {usersByRole.User.length > 0 && (
+                    <optgroup label="Users">
+                      {usersByRole.User.map((user) => (
+                        <option key={user._id} value={user._id}>
+                          {user.name} ({user.email})
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                  Select a user or sub-admin to assign the lead to.
+                </p>
+              </div>
+
+              <div className="relative" ref={searchRef}>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                  Search and Select Lead *
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Search by name, phone, email, or enquiry number..."
+                  value={leadSearch}
+                  onChange={(event) => {
+                    setLeadSearch(event.target.value);
+                    setSelectedLeadId('');
+                  }}
+                  onFocus={() => {
+                    if (searchResults.length > 0) setShowSearchResults(true);
+                  }}
+                  required
+                />
+                {showSearchResults && searchResults.length > 0 && (
+                  <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-300 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                    {searchResults.map((lead) => (
+                      <button
+                        key={lead._id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedLeadId(lead._id);
+                          setLeadSearch(
+                            `${lead.name}${lead.enquiryNumber ? ` (${lead.enquiryNumber})` : ''} - ${lead.phone}`
+                          );
+                          setShowSearchResults(false);
+                        }}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-slate-800 ${
+                          selectedLeadId === lead._id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                        }`}
+                      >
+                        <div className="font-medium text-slate-900 dark:text-slate-100">{lead.name}</div>
+                        <div className="text-xs text-gray-500 dark:text-slate-400">
+                          {lead.phone} {lead.email && `• ${lead.email}`}
+                          {lead.enquiryNumber && ` • EN: ${lead.enquiryNumber}`}
+                        </div>
+                        {lead.assignedTo && (
+                          <div className="text-xs text-orange-600 dark:text-orange-400">
+                            Already assigned to: {typeof lead.assignedTo === 'object' ? lead.assignedTo.name : 'User'}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedLeadId && (
+                  <p className="mt-1 text-xs text-green-600 dark:text-green-400">✓ Lead selected</p>
+                )}
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                  Search for a lead by name, phone number, email, or enquiry number.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button type="submit" disabled={assignMutation.isPending || !selectedUserId || !selectedLeadId}>
+                  {assignMutation.isPending ? 'Assigning…' : 'Assign Lead'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedUserId('');
+                    setSelectedLeadId('');
+                    setLeadSearch('');
+                    setSearchResults([]);
+                    setShowSearchResults(false);
+                  }}
+                  disabled={assignMutation.isPending}
+                >
+                  Reset
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
       </Card>
+
+      {/* Additional Statistics */}
+      {stats && (stats.mandalBreakdown.length > 0 || stats.stateBreakdown.length > 0) && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {stats.mandalBreakdown.length > 0 && (
+            <Card>
+              <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                Unassigned Leads by Mandal
+              </h3>
+              <div className="max-h-60 space-y-2 overflow-y-auto">
+                {stats.mandalBreakdown.slice(0, 10).map((item) => (
+                  <div key={item.mandal} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-700 dark:text-slate-300">{item.mandal}</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{item.count}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+          {stats.stateBreakdown.length > 0 && (
+            <Card>
+              <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                Unassigned Leads by State
+              </h3>
+              <div className="max-h-60 space-y-2 overflow-y-auto">
+                {stats.stateBreakdown.map((item) => (
+                  <div key={item.state} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-700 dark:text-slate-300">{item.state}</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{item.count}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 }
-

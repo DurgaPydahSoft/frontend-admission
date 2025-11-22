@@ -13,6 +13,7 @@ import {
   UserIcon,
   CurrencyIcon,
   SettingsIcon,
+  ReportIcon,
 } from '@/components/layout/DashboardShell';
 import { auth } from '@/lib/auth';
 import type { ModulePermission, User } from '@/types';
@@ -54,6 +55,7 @@ const BASE_NAV_ITEMS: DashboardNavItem[] = [
   },
   { href: '/superadmin/users', label: 'User Management', icon: UserIcon, permissionKey: 'users' },
   { href: '/superadmin/communications/templates', label: 'SMS Templates', icon: TemplateIcon, permissionKey: 'communications' },
+  { href: '/superadmin/reports', label: 'Reports', icon: ReportIcon, permissionKey: 'reports' },
 ];
 
 const buildFullAccessPermissions = (): Record<PermissionModuleKey, ModulePermission> => {

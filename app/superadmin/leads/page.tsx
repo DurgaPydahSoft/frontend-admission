@@ -4,8 +4,8 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { auth } from '@/lib/auth';
-import { leadAPI } from '@/lib/api';
-import { Lead, LeadFilters, FilterOptions, DeleteJobStatusResponse } from '@/types';
+import { leadAPI, userAPI } from '@/lib/api';
+import { User, Lead, LeadFilters, FilterOptions, DeleteJobStatusResponse } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -63,6 +63,9 @@ export default function LeadsPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set<string>());
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignSelectedUserId, setAssignSelectedUserId] = useState('');
+  const [assignableUsers, setAssignableUsers] = useState<User[]>([]);
   const [isSelectingAll, setIsSelectingAll] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [sortField, setSortField] = useState<string>('');
@@ -284,6 +287,12 @@ export default function LeadsPage() {
               onClick={() => router.push('/superadmin/leads/upload')}
             >
               Add Bulk data
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => router.push('/superadmin/leads/assign')}
+            >
+              Assign Leads
             </Button>
           </div>
         </div>
@@ -596,6 +605,66 @@ export default function LeadsPage() {
       showToast.error(error.response?.data?.message || 'Failed to queue delete job');
     },
   });
+
+  // Load assignable users (Users and Sub Super Admins)
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const response = await userAPI.getAll();
+        const allUsers = response.data || response;
+        // Filter: include Users and Sub Super Admins, exclude Super Admin
+        const assignable = allUsers.filter(
+          (u: User) => u.isActive && u.roleName !== 'Super Admin' && (u.roleName === 'User' || u.roleName === 'Sub Super Admin')
+        );
+        setAssignableUsers(assignable);
+      } catch (error) {
+        console.error('Error loading users:', error);
+      }
+    };
+    if (user) {
+      loadUsers();
+    }
+  }, [user]);
+
+  // Bulk assign mutation
+  const bulkAssignMutation = useMutation({
+    mutationFn: async ({ userId, leadIds }: { userId: string; leadIds: string[] }) => {
+      return await leadAPI.assignLeads({
+        userId,
+        leadIds,
+      });
+    },
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      const assignedCount = response.data?.assigned || response.assigned || 0;
+      const userName = response.data?.userName || 'user';
+      showToast.success(`Successfully assigned ${assignedCount} lead${assignedCount !== 1 ? 's' : ''} to ${userName}`);
+      setSelectedLeads(new Set<string>());
+      setShowAssignModal(false);
+      setAssignSelectedUserId('');
+    },
+    onError: (error: any) => {
+      console.error('Error assigning leads:', error);
+      showToast.error(error.response?.data?.message || 'Failed to assign leads');
+    },
+  });
+
+  const handleBulkAssign = () => {
+    if (selectedLeads.size === 0) {
+      showToast.error('Please select at least one lead to assign');
+      return;
+    }
+    setShowAssignModal(true);
+  };
+
+  const handleConfirmAssign = () => {
+    if (!assignSelectedUserId) {
+      showToast.error('Please select a user to assign leads to');
+      return;
+    }
+    const leadIds = Array.from(selectedLeads);
+    bulkAssignMutation.mutate({ userId: assignSelectedUserId, leadIds });
+  };
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -942,6 +1011,13 @@ export default function LeadsPage() {
                       <span className="text-sm text-gray-700 font-medium">
                         {selectedLeads.size} selected
                       </span>
+                      <Button
+                        variant="primary"
+                        onClick={handleBulkAssign}
+                        size="sm"
+                      >
+                        Assign Selected
+                      </Button>
                       <Button
                         variant="outline"
                         onClick={handleBulkDelete}
@@ -1534,6 +1610,66 @@ export default function LeadsPage() {
                     setNewQuota(selectedLead.quota || 'Not Applicable');
                   }}
                   disabled={addActivityMutation.isPending}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="max-w-md w-full">
+            <h2 className="text-xl font-semibold mb-4 text-blue-600">Assign Selected Leads</h2>
+            <div className="space-y-4">
+              <p className="text-gray-700 dark:text-slate-200">
+                Assign <span className="font-semibold">{selectedLeads.size}</span> selected lead(s) to a user or sub-admin.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">
+                  Select User or Sub Admin *
+                </label>
+                <select
+                  className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
+                  value={assignSelectedUserId}
+                  onChange={(e) => setAssignSelectedUserId(e.target.value)}
+                >
+                  <option value="">Choose a user or sub-admin…</option>
+                  {assignableUsers
+                    .filter((u) => u.roleName === 'Sub Super Admin')
+                    .map((user) => (
+                      <option key={user._id} value={user._id}>
+                        {user.name} ({user.email}) - Sub Admin
+                      </option>
+                    ))}
+                  {assignableUsers
+                    .filter((u) => u.roleName === 'User')
+                    .map((user) => (
+                      <option key={user._id} value={user._id}>
+                        {user.name} ({user.email})
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="flex gap-2 pt-4">
+                <Button
+                  variant="primary"
+                  onClick={handleConfirmAssign}
+                  disabled={bulkAssignMutation.isPending || !assignSelectedUserId}
+                >
+                  {bulkAssignMutation.isPending ? 'Assigning…' : 'Assign Leads'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!bulkAssignMutation.isPending) {
+                      setShowAssignModal(false);
+                      setAssignSelectedUserId('');
+                    }
+                  }}
+                  disabled={bulkAssignMutation.isPending}
                 >
                   Cancel
                 </Button>

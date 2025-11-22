@@ -7,7 +7,8 @@ export type PermissionModuleKey =
   | 'joining'
   | 'payments'
   | 'users'
-  | 'communications';
+  | 'communications'
+  | 'reports';
 
 export interface PermissionModuleDefinition {
   key: PermissionModuleKey;
@@ -40,6 +41,11 @@ export const PERMISSION_MODULES: PermissionModuleDefinition[] = [
     key: 'communications',
     label: 'SMS Templates',
     description: 'Author and maintain outbound communication templates.',
+  },
+  {
+    key: 'reports',
+    label: 'Reports',
+    description: 'View call reports and lead conversion analytics.',
   },
 ];
 

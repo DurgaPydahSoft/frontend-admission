@@ -177,7 +177,8 @@ export const leadAPI = {
       maxBodyLength: Infinity,
       maxContentLength: Infinity,
     });
-    return response.data?.data as BulkUploadJobResponse | undefined;
+    // Backend returns: { success: true, data: { batchId, total, success, errors, ... }, message: "..." }
+    return response.data?.data || response.data;
   },
   inspectBulkUpload: async (formData: FormData) => {
     const response = await api.post('/leads/bulk-upload/inspect', formData, {
@@ -246,10 +247,19 @@ export const leadAPI = {
     userId: string;
     mandal?: string;
     state?: string;
-    count: number;
+    count?: number;
+    leadIds?: string[];
     assignNow?: boolean;
   }) => {
     const response = await api.post('/leads/assign', data);
+    return response.data;
+  },
+  getAssignmentStats: async (params?: { mandal?: string; state?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.mandal) queryParams.append('mandal', params.mandal);
+    if (params?.state) queryParams.append('state', params.state);
+    const query = queryParams.toString();
+    const response = await api.get(`/leads/assign/stats${query ? `?${query}` : ''}`);
     return response.data;
   },
   getAnalytics: async (userId: string) => {
@@ -655,6 +665,82 @@ export const paymentAPI = {
   },
   reconcilePendingTransactions: async () => {
     const response = await api.post(`/payments/cashfree/reconcile`);
+    return response.data;
+  },
+};
+
+// Notification API
+export const notificationAPI = {
+  getAll: async (params?: { page?: number; limit?: number; unreadOnly?: boolean }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', String(params.page));
+    if (params?.limit) queryParams.append('limit', String(params.limit));
+    if (params?.unreadOnly) queryParams.append('unreadOnly', String(params.unreadOnly));
+    const query = queryParams.toString();
+    const response = await api.get(`/notifications${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+  markAsRead: async (id: string) => {
+    const response = await api.put(`/notifications/${id}/read`);
+    return response.data;
+  },
+  markAllAsRead: async () => {
+    const response = await api.put('/notifications/read-all');
+    return response.data;
+  },
+  delete: async (id: string) => {
+    const response = await api.delete(`/notifications/${id}`);
+    return response.data;
+  },
+  getVapidKey: async () => {
+    const response = await api.get('/notifications/push/vapid-key');
+    return response.data;
+  },
+  subscribeToPush: async (subscription: {
+    endpoint: string;
+    keys: { p256dh: string; auth: string };
+  }) => {
+    const response = await api.post('/notifications/push/subscribe', { subscription });
+    return response.data;
+  },
+  unsubscribeFromPush: async (endpoint: string) => {
+    const response = await api.post('/notifications/push/unsubscribe', { endpoint });
+    return response.data;
+  },
+  sendTestPush: async () => {
+    const response = await api.post('/notifications/push/test');
+    return response.data;
+  },
+};
+
+// Report API
+export const reportAPI = {
+  getDailyCallReports: async (params?: {
+    startDate?: string;
+    endDate?: string;
+    userId?: string;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.userId) queryParams.append('userId', params.userId);
+    const query = queryParams.toString();
+    const response = await api.get(`/reports/calls/daily${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+  getConversionReports: async (params?: {
+    startDate?: string;
+    endDate?: string;
+    userId?: string;
+    period?: 'weekly' | 'monthly' | 'custom';
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.userId) queryParams.append('userId', params.userId);
+    if (params?.period) queryParams.append('period', params.period);
+    const query = queryParams.toString();
+    const response = await api.get(`/reports/conversions${query ? `?${query}` : ''}`);
     return response.data;
   },
 };

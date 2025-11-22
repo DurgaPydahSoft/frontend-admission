@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '../ui/Button';
 import { auth } from '@/lib/auth';
 import type { ModulePermission } from '@/types';
+import { NotificationBell } from '../NotificationBell';
 
 type IconProps = React.SVGProps<SVGSVGElement>;
 type IconComponent = React.FC<IconProps>;
@@ -52,6 +53,12 @@ export const ChevronDownIcon = createIcon('M6 9l6 6 6-6');
 export const CurrencyIcon = createIcon('M7 5h10M7 9h7a3 3 0 1 1-3 3m3 7-5-5');
 export const SettingsIcon = createIcon(
   'M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0-5.5v2m0 15v2m8-9h-2m-15 0H3m14.07-7.07-1.41 1.41M7.34 16.66l-1.41 1.41m0-12.73 1.41 1.41m9.32 9.32 1.41 1.41'
+);
+export const ReportIcon = createIcon(
+  'M3 3h18v18H3V3zm2 2v14h14V5H5zm2 2h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z'
+);
+export const BellIcon = createIcon(
+  'M10 2a6 6 0 0 0-6 6v3.586l-.707.707A1 1 0 0 0 4 14h12a1 1 0 0 0 .707-1.707L16 11.586V8a6 6 0 0 0-6-6zM10 18a3 3 0 0 1-3-3h6a3 3 0 0 1-3 3z'
 );
 
 type DashboardHeaderContextValue = {
@@ -465,7 +472,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-1 justify-end">
+                  <div className="flex flex-1 justify-end items-center gap-4">
                     <div className="flex flex-col items-end gap-2 text-right">
                       {headerContent ? (
                         headerContent
@@ -477,6 +484,9 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                           )}
                         </>
                       )}
+                    </div>
+                    <div className="flex-shrink-0">
+                      <NotificationBell />
                     </div>
                   </div>
                 </div>

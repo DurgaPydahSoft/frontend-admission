@@ -341,14 +341,31 @@ export default function BulkUploadPage() {
       if (!response) {
         throw new Error('Upload response was empty');
       }
-      setJobInfo(response);
-      jobInfoRef.current = response;
-      setJobStatus({
-        jobId: response.jobId,
-        uploadId: response.uploadId,
-        status: response.status,
-      });
-      startJobPolling(response.jobId);
+      
+      // Backend processes uploads synchronously and returns results immediately
+      // Response structure: { batchId, total, success, errors, sheetsProcessed, errorDetails, durationMs }
+      setIsProcessing(false);
+      setUploadProgress(100);
+      
+      // Set upload result directly from response
+      const uploadResultData: BulkUploadResponse = {
+        batchId: response.batchId,
+        total: response.total ?? 0,
+        success: response.success ?? 0,
+        errors: response.errors ?? 0,
+        durationMs: response.durationMs,
+        sheetsProcessed: response.sheetsProcessed ?? [],
+        errorDetails: response.errorDetails ?? [],
+        message: `Processed ${response.total ?? 0} row(s). ${response.success ?? 0} succeeded, ${response.errors ?? 0} failed`,
+      };
+      
+      setUploadResult(uploadResultData);
+      
+      // Clear job-related state since we don't need polling
+      setJobInfo(null);
+      jobInfoRef.current = null;
+      setJobStatus(null);
+      stopJobPolling();
     } catch (err: any) {
       const message = err.response?.data?.message || err.message || 'Upload failed. Please try again.';
       setError(message);
