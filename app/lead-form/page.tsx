@@ -3,17 +3,50 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { leadAPI } from '@/lib/api';
+import { leadAPI, utmAPI } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
-import { getAllDistricts, getMandalsByDistrict } from '@/lib/andhra-pradesh-data';
+import { getAllStates, getDistrictsByState, getMandalsByStateAndDistrict } from '@/lib/indian-states-data';
 
 export default function LeadFormPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Capture UTM parameters from URL
+  const [utmParams, setUtmParams] = useState({
+    utm_source: '',
+    utm_medium: '',
+    utm_campaign: '',
+    utm_term: '',
+    utm_content: '',
+  });
+
+  // Extract UTM parameters from URL on mount and track click if needed
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      setUtmParams({
+        utm_source: urlParams.get('utm_source') || '',
+        utm_medium: urlParams.get('utm_medium') || '',
+        utm_campaign: urlParams.get('utm_campaign') || '',
+        utm_term: urlParams.get('utm_term') || '',
+        utm_content: urlParams.get('utm_content') || '',
+      });
+
+      // Track click if redirect=false or redirect parameter is missing (long URL direct click)
+      const redirectParam = urlParams.get('redirect');
+      if (redirectParam !== 'true') {
+        // This is a long URL click - track it
+        utmAPI.trackClick(window.location.href).catch((err: any) => {
+          // Silently fail - tracking is not critical
+          console.log('Click tracking failed:', err);
+        });
+      }
+    }
+  }, []);
 
   const [formData, setFormData] = useState({
     hallTicketNumber: '',
@@ -35,14 +68,27 @@ export default function LeadFormPage() {
     applicationStatus: '',
   });
 
-  // Get districts from hardcoded data
-  const districts = useMemo(() => getAllDistricts(), []);
+  // Get all states
+  const states = useMemo(() => getAllStates(), []);
 
-  // Get mandals based on selected district
+  // Get districts based on selected state
+  const districts = useMemo(() => {
+    if (!formData.state) return [];
+    return getDistrictsByState(formData.state);
+  }, [formData.state]);
+
+  // Get mandals based on selected state and district
   const mandals = useMemo(() => {
-    if (!formData.district) return [];
-    return getMandalsByDistrict(formData.district);
-  }, [formData.district]);
+    if (!formData.state || !formData.district) return [];
+    return getMandalsByStateAndDistrict(formData.state, formData.district);
+  }, [formData.state, formData.district]);
+
+  // Reset district and mandal when state changes
+  useEffect(() => {
+    if (formData.state) {
+      setFormData((prev) => ({ ...prev, district: '', mandal: '' }));
+    }
+  }, [formData.state]);
 
   // Reset mandal when district changes
   useEffect(() => {
@@ -73,6 +119,7 @@ export default function LeadFormPage() {
       !formData.fatherName ||
       !formData.fatherPhone ||
       !formData.village ||
+      !formData.state ||
       !formData.district ||
       !formData.mandal
     ) {
@@ -95,12 +142,18 @@ export default function LeadFormPage() {
         interCollege: formData.interCollege || undefined,
         rank: formData.rank ? Number(formData.rank) : undefined,
         village: formData.village,
+        state: formData.state,
         district: formData.district,
         mandal: formData.mandal,
-        state: formData.state || undefined,
+        isNRI: formData.isNRI,
         quota: 'Not Applicable',
         applicationStatus: 'Not Provided',
         source: 'Public Form',
+        utmSource: utmParams.utm_source || undefined,
+        utmMedium: utmParams.utm_medium || undefined,
+        utmCampaign: utmParams.utm_campaign || undefined,
+        utmTerm: utmParams.utm_term || undefined,
+        utmContent: utmParams.utm_content || undefined,
       });
 
       // Show success message
@@ -123,9 +176,10 @@ export default function LeadFormPage() {
           village: '',
           district: '',
           mandal: '',
-          state: 'Andhra Pradesh',
+          state: '',
           quota: 'Not Applicable',
           applicationStatus: '',
+          isNRI: false,
         });
         setShowSuccess(false);
       }, 3000);
@@ -293,6 +347,31 @@ export default function LeadFormPage() {
                     />
                   </div>
 
+                  {/* State */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      State *
+                    </label>
+                    <select
+                      name="state"
+                      value={formData.state}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm"
+                    >
+                      <option value="">Select State</option>
+                      {states && states.length > 0 ? (
+                        states.map((state) => (
+                          <option key={state} value={state}>
+                            {state}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="" disabled>Loading states...</option>
+                      )}
+                    </select>
+                  </div>
+
                   {/* District */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -303,18 +382,21 @@ export default function LeadFormPage() {
                       value={formData.district}
                       onChange={handleChange}
                       required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm"
+                      disabled={!formData.state}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
-                      <option value="">Select District</option>
+                      <option value="">
+                        {formData.state ? 'Select District' : 'Select State first'}
+                      </option>
                       {districts && districts.length > 0 ? (
                         districts.map((district) => (
                           <option key={district} value={district}>
                             {district}
                           </option>
                         ))
-                      ) : (
-                        <option value="" disabled>Loading districts...</option>
-                      )}
+                      ) : formData.state ? (
+                        <option value="" disabled>No districts found for this state</option>
+                      ) : null}
                     </select>
                   </div>
 

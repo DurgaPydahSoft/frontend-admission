@@ -774,6 +774,50 @@ export const reportAPI = {
   },
 };
 
+// UTM API
+export const utmAPI = {
+  buildUrl: async (data: {
+    baseUrl: string;
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    utmTerm?: string;
+    utmContent?: string;
+  }) => {
+    const response = await api.post('/utm/build-url', data);
+    return response.data;
+  },
+  trackClick: async (originalUrl: string) => {
+    const response = await api.post('/utm/track-click', { originalUrl });
+    return response.data;
+  },
+  shortenUrl: async (data: {
+    baseUrl: string;
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    utmTerm?: string;
+    utmContent?: string;
+    shortCode?: string;
+    useMeaningfulCode?: boolean;
+    expiresAt?: string;
+  }) => {
+    const response = await api.post('/utm/shorten', data);
+    return response.data;
+  },
+  getAllShortUrls: async (page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.append('page', String(page));
+    if (limit) params.append('limit', String(limit));
+    const response = await api.get(`/utm/short-urls?${params.toString()}`);
+    return response.data;
+  },
+  getUrlAnalytics: async (urlId: string) => {
+    const response = await api.get(`/utm/analytics/${urlId}`);
+    return response.data;
+  },
+};
+
 export default api;
 
 
