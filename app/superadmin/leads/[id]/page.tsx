@@ -45,6 +45,9 @@ export default function LeadDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<LeadUpdatePayload>({});
   
+  // Expandable details section
+  const [isDetailsExpanded, setIsDetailsExpanded] = useState(false);
+  
   // Action bar modals
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState('');
@@ -440,13 +443,17 @@ export default function LeadDetailPage() {
             Lead Details
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            {lead.name}
+            <span className="flex items-center gap-2">
+              <span>{lead.name}</span>
+              {lead.isNRI && (
+                <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded">
+                  NRI
+                </span>
+              )}
+            </span>
             {lead.enquiryNumber ? ` · Enquiry #${lead.enquiryNumber}` : ''}
           </p>
         </div>
-        <Button variant="outline" onClick={() => router.push('/superadmin/leads')}>
-          Back to Leads
-        </Button>
       </div>
     );
 
@@ -890,9 +897,6 @@ export default function LeadDetailPage() {
             <p className="text-red-600 mb-4">
               {error instanceof Error ? error.message : 'Lead not found'}
             </p>
-            <Button onClick={() => router.push('/superadmin/leads')}>
-              Back to Leads
-            </Button>
           </div>
         </Card>
       </div>
@@ -1030,121 +1034,219 @@ export default function LeadDetailPage() {
               </form>
             ) : (
               <div className="space-y-6">
-                {/* Basic Information */}
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Enquiry Number</label>
-                      <p className="text-lg font-mono font-semibold text-blue-600">{lead.enquiryNumber || '-'}</p>
-                    </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Status</label>
-                      <span className={`px-3 py-1 inline-flex rounded-full text-sm font-semibold ${getStatusColor(lead.leadStatus)}`}>
-                        {lead.leadStatus || 'New'}
+                  {/* Badges at top - single line */}
+                  <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+                    {lead.enquiryNumber && (
+                      <span className="px-3 py-1.5 text-sm font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-full border border-blue-200 dark:border-blue-800 whitespace-nowrap flex-shrink-0">
+                        #{lead.enquiryNumber}
                       </span>
+                    )}
+                    <span className={`px-3 py-1.5 text-sm font-medium rounded-full border whitespace-nowrap flex-shrink-0 ${getStatusColor(lead.leadStatus)}`}>
+                      {lead.leadStatus || 'New'}
+                    </span>
+                    {lead.courseInterested && (
+                      <span className="px-3 py-1.5 text-sm font-medium bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 rounded-full border border-gray-200 dark:border-gray-700 whitespace-nowrap flex-shrink-0">
+                        {lead.courseInterested}
+                      </span>
+                    )}
+                    {lead.source && (
+                      <span className="px-3 py-1.5 text-sm font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-full border border-green-200 dark:border-green-800 whitespace-nowrap flex-shrink-0">
+                        {lead.source}
+                      </span>
+                    )}
+                  </div>
+
+                {/* Main student details - larger font with gender and email */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+                  <div>
+                    <label className="block text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1 sm:mb-2">Name</label>
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                      <p className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 break-words">{lead.name}</p>
+                      {lead.isNRI && (
+                        <span className="px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded whitespace-nowrap">
+                          NRI
+                        </span>
+                      )}
+                      {lead.gender && (
+                        <span className="px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 rounded whitespace-nowrap">
+                          {lead.gender.charAt(0).toUpperCase()}
+                        </span>
+                      )}
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Course Interested</label>
-                      <p className="text-gray-900 font-medium">{lead.courseInterested || '-'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1 sm:mb-2">Phone</label>
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                      <p className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 break-all">{lead.phone || '-'}</p>
+                      {lead.email && (
+                        <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 break-all">({lead.email})</span>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Student Information */}
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Student Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="bg-blue-50 p-3 rounded-lg">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Name</label>
-                      <p className="text-gray-900 font-semibold text-lg">{lead.name}</p>
-                    </div>
-                    <div className="bg-blue-50 p-3 rounded-lg">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Phone</label>
-                      <p className="text-gray-900 font-medium">{lead.phone || '-'}</p>
-                    </div>
-                    <div className="bg-blue-50 p-3 rounded-lg">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Email</label>
-                      <p className="text-gray-900 font-medium">{lead.email || '-'}</p>
-                    </div>
+                {/* Address Information - without heading */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6">
+                  <div>
+                    <label className="block text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">Village</label>
+                    <p className="text-xs sm:text-sm text-gray-900 dark:text-gray-100 break-words">{lead.village}</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">Mandal/Tehsil</label>
+                    <p className="text-xs sm:text-sm text-gray-900 dark:text-gray-100 break-words">{lead.mandal}</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">District</label>
+                    <p className="text-xs sm:text-sm text-gray-900 dark:text-gray-100 break-words">{lead.district}</p>
                   </div>
                 </div>
 
                 {/* Parent Information */}
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Parent Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="bg-green-50 p-3 rounded-lg">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Father Name</label>
-                      <p className="text-gray-900 font-medium">{lead.fatherName}</p>
+                <div>
+                  <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-gray-100 mb-3 sm:mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">Parent Information</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                    <div>
+                      <label className="block text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">Father Name</label>
+                      <p className="text-xs sm:text-sm text-gray-900 dark:text-gray-100 break-words">{lead.fatherName}</p>
                     </div>
-                    <div className="bg-green-50 p-3 rounded-lg">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Father Phone</label>
-                      <p className="text-gray-900 font-medium">{lead.fatherPhone}</p>
+                    <div>
+                      <label className="block text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">Father Phone</label>
+                      <p className="text-xs sm:text-sm text-gray-900 dark:text-gray-100 break-all">{lead.fatherPhone}</p>
                     </div>
-                    <div className="bg-green-50 p-3 rounded-lg">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Mother Name</label>
-                      <p className="text-gray-900 font-medium">{lead.motherName || '-'}</p>
-                    </div>
+                    {lead.motherName && (
+                      <div>
+                        <label className="block text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">Mother Name</label>
+                        <p className="text-xs sm:text-sm text-gray-900 dark:text-gray-100 break-words">{lead.motherName}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Address Information */}
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="bg-purple-50 p-3 rounded-lg">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Village</label>
-                      <p className="text-gray-900 font-medium">{lead.village}</p>
+                {/* Expandable Additional Details Section */}
+                <div className="relative border-t border-gray-200 dark:border-gray-700 pt-6">
+                  {/* Vignette effect at bottom when collapsed */}
+                  {!isDetailsExpanded && (
+                    <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white via-white/60 to-transparent dark:from-slate-900 dark:via-slate-900/60 dark:to-transparent pointer-events-none z-10 rounded-b-lg"></div>
+                  )}
+                  
+                  {/* Expandable content */}
+                  {isDetailsExpanded && (
+                    <div className="space-y-6 pb-6">
+                      {/* Student Additional Details */}
+                      {(lead.rank || lead.interCollege || lead.hallTicketNumber) && (
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Additional Student Details</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {lead.rank && (
+                              <div>
+                                <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Rank</label>
+                                <p className="text-sm text-gray-900 dark:text-gray-100">{lead.rank}</p>
+                              </div>
+                            )}
+                            {lead.interCollege && (
+                              <div>
+                                <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Inter College</label>
+                                <p className="text-sm text-gray-900 dark:text-gray-100">{lead.interCollege}</p>
+                              </div>
+                            )}
+                            {lead.hallTicketNumber && (
+                              <div>
+                                <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Hall Ticket Number</label>
+                                <p className="text-sm text-gray-900 dark:text-gray-100">{lead.hallTicketNumber}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Additional Address Information */}
+                      <div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          <div>
+                            <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">State</label>
+                            <p className="text-sm text-gray-900 dark:text-gray-100">{lead.state || '-'}</p>
+                          </div>
+                          <div>
+                            <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Quota</label>
+                            <p className="text-sm text-gray-900 dark:text-gray-100">{lead.quota || '-'}</p>
+                          </div>
+                          {lead.applicationStatus && (
+                            <div>
+                              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Application Status</label>
+                              <p className="text-sm text-gray-900 dark:text-gray-100">{lead.applicationStatus}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Additional Information */}
+                      {(lead.assignedTo || lead.utmSource || lead.utmMedium || lead.utmCampaign) && (
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Additional Information</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {lead.assignedTo && (
+                              <div>
+                                <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Assigned To</label>
+                                <p className="text-sm text-gray-900 dark:text-gray-100">
+                                  {typeof lead.assignedTo === 'object' ? lead.assignedTo.name : '-'}
+                                </p>
+                              </div>
+                            )}
+                            {lead.utmSource && (
+                              <div>
+                                <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">UTM Source</label>
+                                <p className="text-sm text-gray-900 dark:text-gray-100">{lead.utmSource}</p>
+                              </div>
+                            )}
+                            {lead.utmMedium && (
+                              <div>
+                                <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">UTM Medium</label>
+                                <p className="text-sm text-gray-900 dark:text-gray-100">{lead.utmMedium}</p>
+                              </div>
+                            )}
+                            {lead.utmCampaign && (
+                              <div>
+                                <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">UTM Campaign</label>
+                                <p className="text-sm text-gray-900 dark:text-gray-100">{lead.utmCampaign}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="bg-purple-50 p-3 rounded-lg">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Mandal</label>
-                      <p className="text-gray-900 font-medium">{lead.mandal}</p>
-                    </div>
-                    <div className="bg-purple-50 p-3 rounded-lg">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">District</label>
-                      <p className="text-gray-900 font-medium">{lead.district}</p>
-                    </div>
-                    <div className="bg-purple-50 p-3 rounded-lg">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">State</label>
-                      <p className="text-gray-900 font-medium">{lead.state}</p>
-                    </div>
-                    <div className="bg-purple-50 p-3 rounded-lg">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Quota</label>
-                      <p className="text-gray-900 font-medium">{lead.quota}</p>
-                    </div>
+                  )}
+
+                  {/* Expand/Collapse Button with Icon - Positioned at bottom center */}
+                  <div className="flex justify-center mt-4 sm:mt-6 relative z-20">
+                    <button
+                      onClick={() => setIsDetailsExpanded(!isDetailsExpanded)}
+                      className="flex flex-col items-center gap-1 px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-all rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800/50 group"
+                    >
+                      {isDetailsExpanded ? (
+                        <>
+                          <svg className="w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                          </svg>
+                          <span className="text-[10px] sm:text-xs">Show Less</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:scale-110 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                          <span className="text-[10px] sm:text-xs">Show More Details</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
-
-                {/* Additional Information */}
-                {(lead.assignedTo || lead.hallTicketNumber) && (
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Additional Information</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {lead.assignedTo && (
-                        <div className="bg-amber-50 p-3 rounded-lg">
-                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Assigned To</label>
-                          <p className="text-gray-900 font-medium">
-                            {typeof lead.assignedTo === 'object' ? lead.assignedTo.name : '-'}
-                          </p>
-                        </div>
-                      )}
-                      {lead.hallTicketNumber && (
-                        <div className="bg-amber-50 p-3 rounded-lg">
-                          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Hall Ticket Number</label>
-                          <p className="text-gray-900 font-medium">{lead.hallTicketNumber}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </Card>
 
           {/* COMMUNICATION SUMMARY */}
           <Card>
-            <h2 className="text-xl font-semibold mb-4">Communication Summary</h2>
+            <h2 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-6 pb-2 border-b border-gray-200 dark:border-gray-700">Communication Summary</h2>
             {contactOptions.length === 0 ? (
               <p className="text-sm text-gray-500">No phone numbers available for this lead.</p>
             ) : (
@@ -1158,11 +1260,11 @@ export default function LeadDetailPage() {
                   return (
                     <div
                       key={option.number}
-                      className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 p-4"
+                      className="rounded-lg border border-gray-200 dark:border-slate-700 p-4"
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div>
-                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-100">
+                          <div className="text-sm font-medium text-gray-900 dark:text-slate-100">
                             {option.label}
                           </div>
                           <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
@@ -1170,11 +1272,11 @@ export default function LeadDetailPage() {
                           </div>
                         </div>
                         <div className="text-right text-sm">
-                          <div className="text-gray-600 dark:text-slate-300">
-                            Calls: <span className="font-semibold text-gray-900 dark:text-slate-100">{callCount}</span>
+                          <div className="text-gray-600 dark:text-slate-400">
+                            Calls: <span className="font-medium text-gray-900 dark:text-slate-100">{callCount}</span>
                           </div>
-                          <div className="text-gray-600 dark:text-slate-300">
-                            SMS: <span className="font-semibold text-gray-900 dark:text-slate-100">{smsCount}</span>
+                          <div className="text-gray-600 dark:text-slate-400">
+                            SMS: <span className="font-medium text-gray-900 dark:text-slate-100">{smsCount}</span>
                           </div>
                         </div>
                       </div>
@@ -1188,7 +1290,7 @@ export default function LeadDetailPage() {
                             {templateUsage.map((usage) => (
                               <span
                                 key={usage.templateId}
-                                className="px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs"
+                                className="px-2 py-1 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded text-xs"
                               >
                                 {usage.templateName || usage.templateId}: {usage.count}
                               </span>
@@ -1197,7 +1299,7 @@ export default function LeadDetailPage() {
                         </div>
                       )}
                       
-                      <div className="flex gap-2 mt-3">
+                      <div className="flex flex-col sm:flex-row gap-2 mt-3">
                         <Button
                           variant="secondary"
                           size="sm"
@@ -1205,6 +1307,7 @@ export default function LeadDetailPage() {
                             setCallData({ contactNumber: option.number, remarks: '', outcome: '', durationSeconds: 0 });
                             setShowCallNumberModal(true);
                           }}
+                          className="w-full sm:w-auto text-xs sm:text-sm"
                         >
                           Call {option.label}
                         </Button>
@@ -1219,6 +1322,7 @@ export default function LeadDetailPage() {
                             });
                             setShowSmsModal(true);
                           }}
+                          className="w-full sm:w-auto text-xs sm:text-sm"
                         >
                           Send Message
                         </Button>
@@ -1233,7 +1337,7 @@ export default function LeadDetailPage() {
           {/* SECTION 2: HISTORY & REMARKS */}
           <Card>
             <div className="mb-6">
-              <h2 className="text-xl font-semibold mb-4">History & Remarks</h2>
+              <h2 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">History & Remarks</h2>
               {/* Last Follow Up & Created On Info */}
               <div className="flex flex-wrap gap-4 text-sm">
                 {lead.lastFollowUp && (
@@ -1273,13 +1377,13 @@ export default function LeadDetailPage() {
                     const borderColor = isCall ? 'border-green-500' : isSms ? 'border-purple-500' : 'border-blue-500';
                     
                     return (
-                      <div key={item.id} className="relative pl-8 pb-6 last:pb-0">
+                      <div key={item.id} className="relative pl-6 sm:pl-8 pb-4 sm:pb-6 last:pb-0">
                         {/* Timeline line */}
                         {index !== timelineItems.length - 1 && (
-                          <div className="absolute left-3 top-6 bottom-0 w-0.5 bg-gray-300 dark:bg-slate-700"></div>
+                          <div className="absolute left-2.5 sm:left-3 top-5 sm:top-6 bottom-0 w-0.5 bg-gray-300 dark:bg-slate-700"></div>
                         )}
                         {/* Timeline dot */}
-                        <div className={`absolute left-0 top-1 w-6 h-6 rounded-full ${dotColor} border-2 border-white shadow-md flex items-center justify-center`}>
+                        <div className={`absolute left-0 top-0.5 sm:top-1 w-5 h-5 sm:w-6 sm:h-6 rounded-full ${dotColor} border-2 border-white shadow-md flex items-center justify-center`}>
                           {isCall ? (
                             <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -1293,10 +1397,10 @@ export default function LeadDetailPage() {
                           )}
                         </div>
                         {/* Content */}
-                        <div className={`bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4 border-l-2 ${borderColor}`}>
+                        <div className={`rounded-lg p-4 border-l-2 ${borderColor} bg-white dark:bg-slate-900/50`}>
                           <div className="flex justify-between items-start mb-2">
                             <div>
-                              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                              <h3 className="text-sm font-medium text-gray-900 dark:text-slate-100">
                                 {item.title}
                               </h3>
                               <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
@@ -1772,7 +1876,15 @@ export default function LeadDetailPage() {
                   <span className="font-semibold">Enquiry Number:</span> {lead.enquiryNumber || 'N/A'}
                 </p>
                 <p className="text-sm text-gray-600">
-                  <span className="font-semibold">Name:</span> {lead.name}
+                  <span className="font-semibold">Name:</span>{' '}
+                  <span className="flex items-center gap-2 inline-flex">
+                    <span>{lead.name}</span>
+                    {lead.isNRI && (
+                      <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded">
+                        NRI
+                      </span>
+                    )}
+                  </span>
                 </p>
               </div>
               <div className="flex gap-2">

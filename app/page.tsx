@@ -9,25 +9,31 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function Home() {
   const router = useRouter();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
-    const user = auth.getUser();
-    if (user) {
-      setIsAuthenticated(true);
-      // Redirect based on role
-      if (user.roleName === 'Super Admin' || user.roleName === 'Sub Super Admin') {
-        router.push('/superadmin/dashboard');
+    // Use a small delay to avoid synchronous setState
+    const checkAuth = () => {
+      const user = auth.getUser();
+      if (user) {
+        // Prevent logged-in users from accessing home - redirect to dashboard
+        if (user.roleName === 'Super Admin' || user.roleName === 'Sub Super Admin') {
+          router.replace('/superadmin/dashboard');
+        } else {
+          router.replace('/user/dashboard');
+        }
       } else {
-        router.push('/user/dashboard');
+        setIsChecking(false);
       }
-    } else {
-      setIsAuthenticated(false);
-    }
+    };
+    
+    // Use setTimeout to avoid synchronous setState in effect
+    const timer = setTimeout(checkAuth, 0);
+    return () => clearTimeout(timer);
   }, [router]);
 
   // Show loading state while checking auth
-  if (isAuthenticated) {
+  if (isChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-purple-50 dark:bg-slate-950">
         <p className="text-purple-900 dark:text-slate-100">Redirecting...</p>

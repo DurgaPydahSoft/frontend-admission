@@ -63,9 +63,10 @@ export default function LeadFormPage() {
     village: '',
     district: '',
     mandal: '',
-    state: 'Andhra Pradesh',
+    state: '',
     quota: 'Not Applicable',
     applicationStatus: '',
+    isNRI: false,
   });
 
   // Get all states
@@ -403,7 +404,7 @@ export default function LeadFormPage() {
                   {/* Mandal */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Mandal *
+                      Mandal/Tehsil *
                     </label>
                     <select
                       name="mandal"
@@ -414,7 +415,7 @@ export default function LeadFormPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
                       <option value="">
-                        {formData.district ? 'Select Mandal' : 'Select District first'}
+                        {formData.district ? 'Select Mandal/Tehsil' : 'Select District first'}
                       </option>
                       {mandals && mandals.length > 0 ? (
                         mandals.map((mandal) => (
@@ -423,23 +424,28 @@ export default function LeadFormPage() {
                           </option>
                         ))
                       ) : formData.district ? (
-                        <option value="" disabled>No mandals found for this district</option>
+                        <option value="" disabled>No mandals/tehsils found for this district</option>
                       ) : null}
                     </select>
                   </div>
 
-                  {/* State */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      State
+                  {/* NRI Checkbox */}
+                  <div className="md:col-span-2">
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        name="isNRI"
+                        checked={formData.isNRI}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, isNRI: e.target.checked }))}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 transition-all group-hover:border-blue-400"
+                      />
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-blue-600 transition-colors">
+                        Non-Resident Indian (NRI)
+                      </span>
                     </label>
-                    <input
-                      type="text"
-                      name="state"
-                      value={formData.state}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm"
-                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
+                      Check this if you are a Non-Resident Indian
+                    </p>
                   </div>
 
                   {/* Course Interested */}

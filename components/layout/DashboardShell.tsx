@@ -54,6 +54,8 @@ export const CurrencyIcon = createIcon('M7 5h10M7 9h7a3 3 0 1 1-3 3m3 7-5-5');
 export const SettingsIcon = createIcon(
   'M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0-5.5v2m0 15v2m8-9h-2m-15 0H3m14.07-7.07-1.41 1.41M7.34 16.66l-1.41 1.41m0-12.73 1.41 1.41m9.32 9.32 1.41 1.41'
 );
+export const LogoutIcon = createIcon('M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1');
+export const BackIcon = createIcon('M10 19l-7-7m0 0l7-7m-7 7h18');
 export const ReportIcon = createIcon(
   'M3 3h18v18H3V3zm2 2v14h14V5H5zm2 2h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z'
 );
@@ -269,8 +271,33 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   }, []);
 
   const handleLogout = () => {
-    auth.logout();
-    router.push('/auth/login');
+    if (typeof window !== 'undefined' && window.confirm('Are you sure you want to logout?')) {
+      auth.logout();
+      router.push('/auth/login');
+    }
+  };
+
+  const handleBack = () => {
+    // Smart back navigation based on current route
+    if (pathname.includes('/superadmin/leads/')) {
+      // If on lead detail page, go to leads list
+      router.push('/superadmin/leads');
+    } else if (pathname.includes('/user/leads/')) {
+      // If on user lead detail page, go to user leads list
+      router.push('/user/leads');
+    } else if (pathname.includes('/superadmin/joining/')) {
+      // If on joining detail page, go to joining list
+      router.push('/superadmin/joining');
+    } else if (pathname.includes('/superadmin/payments/')) {
+      // If on payments detail page, go to payments list
+      router.push('/superadmin/payments');
+    } else if (pathname.includes('/superadmin/users/')) {
+      // If on user detail page, go to users list
+      router.push('/superadmin/users');
+    } else {
+      // Default: go back in history
+      router.back();
+    }
   };
 
   const renderNavItems = useCallback(
@@ -374,17 +401,12 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       )}
     >
       <div className="flex items-center gap-3 px-4 py-4">
-        <Link href="/" className="flex items-center gap-3">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-500 via-violet-500 to-pink-500 text-white shadow-lg shadow-blue-200/40">
-            A
-          </span>
-          {!isCollapsed && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">Admission</p>
-              <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">Command Center</p>
-            </div>
-          )}
-        </Link>
+        {!isCollapsed && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">Admission</p>
+            <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">Command Center</p>
+          </div>
+        )}
       </div>
 
       <nav
@@ -449,7 +471,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
             <div className="flex flex-1 flex-col">
               <header className="px-4 pt-4 sm:px-6 lg:px-10">
                 <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white/95 px-4 py-3 shadow-[0_8px_26px_rgba(30,64,175,0.08)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-none sm:px-5 lg:px-6">
-                  <div className="flex items-center gap-4">
+                  {/* Left Section: Mobile Menu, Back Icon, Header Content */}
+                  <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
                     <button
                       type="button"
                       className="inline-flex rounded-xl border border-slate-200 bg-white p-2 text-slate-500 shadow-sm transition hover:border-blue-200 hover:text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 lg:hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-500"
@@ -458,22 +481,23 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                     >
                       <MenuIcon className="h-5 w-5" />
                     </button>
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.35em] text-blue-500 dark:text-blue-300">
-                        {role ? `${role} Space` : 'Workspace'}
-                      </p>
-                      <div className="flex items-center gap-3">
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 text-xs font-semibold uppercase text-white">
-                          {(userName || 'SA').slice(0, 2)}
-                        </span>
-                        <Button variant="outline" size="sm" onClick={handleLogout}>
-                          Logout
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-1 justify-end items-center gap-4">
-                    <div className="flex flex-col items-end gap-2 text-right">
+                    
+                    {/* Back Icon */}
+                    <button
+                      type="button"
+                      onClick={handleBack}
+                      className="group relative inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white p-2 text-slate-500 shadow-sm transition hover:border-blue-200 hover:text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-500 flex-shrink-0"
+                      aria-label="Go back"
+                      title="Back"
+                    >
+                      <BackIcon className="h-5 w-5" />
+                      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 group-hover:block dark:bg-slate-700">
+                        Back
+                      </span>
+                    </button>
+
+                    {/* Header Content (Lead Details, etc.) */}
+                    <div className="flex flex-col gap-2 text-left min-w-0 flex-1">
                       {headerContent ? (
                         headerContent
                       ) : (
@@ -485,9 +509,42 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                         </>
                       )}
                     </div>
+                  </div>
+
+                  {/* Right Section: Workspace Logo, Workspace Title, Notification Bell, Logout Icon */}
+                  <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+                    {/* Workspace Logo */}
+                    <Link href="/" className="flex items-center gap-2">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 text-xs font-semibold uppercase text-white shadow-sm">
+                        {(userName || 'SA').slice(0, 2)}
+                      </span>
+                    </Link>
+
+                    {/* Workspace Title */}
+                    <div className="hidden sm:block">
+                      <p className="text-xs font-semibold uppercase tracking-[0.35em] text-blue-500 dark:text-blue-300">
+                        {role ? `${role} Space` : 'Workspace'}
+                      </p>
+                    </div>
+                    
+                    {/* Notification Bell */}
                     <div className="flex-shrink-0">
                       <NotificationBell />
                     </div>
+
+                    {/* Logout Icon */}
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="group relative inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white p-2 text-slate-500 shadow-sm transition hover:border-red-200 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-red-500"
+                      aria-label="Logout"
+                      title="Logout"
+                    >
+                      <LogoutIcon className="h-5 w-5" />
+                      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 group-hover:block dark:bg-slate-700">
+                        Logout
+                      </span>
+                    </button>
                   </div>
                 </div>
               </header>

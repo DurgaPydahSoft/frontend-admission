@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { showToast } from '@/lib/toast';
 import { Skeleton, TableSkeleton, CardSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { exportToExcel, exportToCSV } from '@/lib/export';
+// import { exportToExcel, exportToCSV } from '@/lib/export'; // Temporarily removed for future redesign
 import { useDashboardHeader } from '@/components/layout/DashboardShell';
 
 // Debounce hook for search
@@ -267,54 +267,14 @@ export default function LeadsPage() {
 
   const headerNode = useMemo(
     () => (
-      <div className="flex flex-col items-end gap-2 text-right">
-        <div className="flex items-center justify-between w-full">
-          <div className="text-left">
-            <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Leads Management</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Monitor enquiries, qualify prospects, and trigger communications from a single, streamlined workspace.
-            </p>
-          </div>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button
-              variant="primary"
-              onClick={() => router.push('/superadmin/leads/individual')}
-            >
-              Add New Enquiry
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => router.push('/superadmin/leads/upload')}
-            >
-              Add Bulk data
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => router.push('/superadmin/leads/assign')}
-            >
-              Assign Leads
-            </Button>
-          </div>
-        </div>
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button
-            variant="outline"
-            onClick={() => exportToExcel(leads, `leads-${new Date().toISOString().split('T')[0]}`)}
-            disabled={!leads.length}
-          >
-            Export Excel
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => exportToCSV(leads, `leads-${new Date().toISOString().split('T')[0]}`)}
-            disabled={!leads.length}
-          >
-            Export CSV
-          </Button>
-        </div>
+      <div className="text-left">
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Leads Management</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Monitor enquiries, qualify prospects, and trigger communications from a single, streamlined workspace.
+        </p>
       </div>
     ),
-    [leads, router]
+    []
   );
 
   useEffect(() => {
@@ -764,110 +724,150 @@ export default function LeadsPage() {
 
   return (
     <div className="mx-auto w-full max-w-[95%] space-y-6">
-      <Card className="mb-6 space-y-4">
-          {/* Search and Filters Bar */}
-          <div className="space-y-4">
-              {/* Search Row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-200 mb-1">
-                    Search by Enquiry Number
-                  </label>
-                  <Input
-                    type="text"
-                    placeholder="ENQ24000001 or 24000001 or 000001"
-                    value={enquiryNumber}
-                    onChange={(e) => setEnquiryNumber(e.target.value)}
-                    onFocus={() => setShowEnquirySuggestions(true)}
-                    onBlur={() => setTimeout(() => setShowEnquirySuggestions(false), 150)}
-                    className="w-full"
-                  />
-                  {showEnquirySuggestions && enquirySuggestions.length > 0 && (
-                    <div className="absolute z-20 mt-2 w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden">
-                      {enquirySuggestions.map((suggestion) => (
-                        <button
-                          key={`enquiry-suggestion-${suggestion._id}`}
-                          type="button"
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800/60 flex justify-between gap-3"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            if (suggestion.enquiryNumber) {
-                              setEnquiryNumber(suggestion.enquiryNumber);
-                              setPage(1);
-                            }
-                            setShowEnquirySuggestions(false);
-                          }}
-                        >
-                          <span className="font-medium">{suggestion.enquiryNumber || '—'}</span>
-                          <span className="text-xs text-gray-500 dark:text-slate-400">{suggestion.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-200 mb-1">
-                    Search by Name/Phone/Email
-                  </label>
-                  <Input
-                    type="text"
-                    placeholder="Search leads..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    onFocus={() => setShowSearchSuggestions(true)}
-                    onBlur={() => setTimeout(() => setShowSearchSuggestions(false), 150)}
-                    className="w-full"
-                  />
-                  {showSearchSuggestions && searchSuggestions.length > 0 && (
-                    <div className="absolute z-20 mt-2 w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden">
-                      {searchSuggestions.map((suggestion) => (
-                        <button
-                          key={`search-suggestion-${suggestion._id}`}
-                          type="button"
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800/60 flex flex-col gap-1"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            const value = suggestion.name || suggestion.phone || suggestion.email || '';
-                            if (value) {
-                              setSearch(value);
-                              setPage(1);
-                            }
-                            setShowSearchSuggestions(false);
-                          }}
-                        >
-                          <span className="font-medium">{suggestion.name || suggestion.phone || 'Untitled Lead'}</span>
-                          <span className="text-xs text-gray-500 dark:text-slate-400 flex gap-2">
-                            {suggestion.phone && <span>{suggestion.phone}</span>}
-                            {suggestion.email && <span>{suggestion.email}</span>}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-end gap-2">
+      <div className="mb-2">
+          {/* Search, Filters, and Action Bar - All in One Row */}
+          <div className="flex flex-wrap gap-3">
+              {/* Search by Enquiry Number */}
+              <div className="relative flex-1 min-w-[200px]">
+                <Input
+                  type="text"
+                  placeholder="Search by Enquiry Number (e.g., ENQ24000001, 24000001, 000001)"
+                  value={enquiryNumber}
+                  onChange={(e) => setEnquiryNumber(e.target.value)}
+                  onFocus={() => setShowEnquirySuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowEnquirySuggestions(false), 150)}
+                  className="w-full py-2 text-sm"
+                />
+                {showEnquirySuggestions && enquirySuggestions.length > 0 && (
+                  <div className="absolute z-20 mt-2 w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden">
+                    {enquirySuggestions.map((suggestion) => (
+                      <button
+                        key={`enquiry-suggestion-${suggestion._id}`}
+                        type="button"
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800/60 flex justify-between gap-3"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          if (suggestion.enquiryNumber) {
+                            setEnquiryNumber(suggestion.enquiryNumber);
+                            setPage(1);
+                          }
+                          setShowEnquirySuggestions(false);
+                        }}
+                      >
+                        <span className="font-medium">{suggestion.enquiryNumber || '—'}</span>
+                        <span className="text-xs text-gray-500 dark:text-slate-400">{suggestion.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Search by Name/Phone/Email */}
+              <div className="relative flex-1 min-w-[200px]">
+                <Input
+                  type="text"
+                  placeholder="Search by Name, Phone, or Email"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onFocus={() => setShowSearchSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSearchSuggestions(false), 150)}
+                  className="w-full py-2 text-sm"
+                />
+                {showSearchSuggestions && searchSuggestions.length > 0 && (
+                  <div className="absolute z-20 mt-2 w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden">
+                    {searchSuggestions.map((suggestion) => (
+                      <button
+                        key={`search-suggestion-${suggestion._id}`}
+                        type="button"
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800/60 flex flex-col gap-1"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          const value = suggestion.name || suggestion.phone || suggestion.email || '';
+                          if (value) {
+                            setSearch(value);
+                            setPage(1);
+                          }
+                          setShowSearchSuggestions(false);
+                        }}
+                      >
+                        <span className="font-medium">{suggestion.name || suggestion.phone || 'Untitled Lead'}</span>
+                        <span className="text-xs text-gray-500 dark:text-slate-400 flex gap-2">
+                          {suggestion.phone && <span>{suggestion.phone}</span>}
+                          {suggestion.email && <span>{suggestion.email}</span>}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Filter Buttons */}
+              <div className="flex items-center gap-2 self-end mb-0.5">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="flex items-center gap-1.5 h-10"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                  {showFilters ? 'Hide' : 'Show'} Filters
+                </Button>
+                {(Object.keys(filters).length > 0 || search || enquiryNumber) && (
                   <Button
                     variant="outline"
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="w-full"
+                    onClick={clearFilters}
+                    className="flex items-center gap-1.5 h-10"
                   >
-                    {showFilters ? 'Hide' : 'Show'} Filters
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Clear
                   </Button>
-                  {(Object.keys(filters).length > 0 || search || enquiryNumber) && (
-                    <Button
-                      variant="outline"
-                      onClick={clearFilters}
-                      className="w-full"
-                    >
-                      Clear
-                    </Button>
-                  )}
-                </div>
+                )}
               </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 self-end mb-0.5">
+                <Button
+                  variant="primary"
+                  onClick={() => router.push('/superadmin/leads/individual')}
+                  className="flex items-center gap-1.5 h-10"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add New Enquiry
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => router.push('/superadmin/leads/upload')}
+                  className="flex items-center gap-1.5 h-10"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  Add Bulk data
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => router.push('/superadmin/leads/assign')}
+                  className="flex items-center gap-1.5 h-10"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                  Assign Leads
+                </Button>
+              </div>
+          </div>
+
+          {/* Filters Section */}
+          <div className="mt-2">
 
               {/* Filter Row */}
               {showFilters && (
-                <div className="grid grid-cols-2 md:grid-cols-6 gap-4 pt-4 border-t border-gray-200">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-4 pt-2 border-t border-gray-200 mt-2">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-slate-200 mb-1">
                       Mandal
@@ -972,8 +972,8 @@ export default function LeadsPage() {
                   </div>
                 </div>
               )}
-            </div>
-          </Card>
+          </div>
+      </div>
 
           <section className="space-y-6">
             {/* Results Summary */}
@@ -1086,9 +1086,16 @@ export default function LeadsPage() {
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Student Name</p>
-                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">
-                              {lead.name}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                                {lead.name}
+                              </p>
+                              {lead.isNRI && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded">
+                                  NRI
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <input
                             type="checkbox"

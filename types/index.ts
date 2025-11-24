@@ -180,6 +180,12 @@ export interface Lead {
   assignedAt?: string;
   assignedBy?: User | string;
   source?: string;
+  isNRI?: boolean;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmTerm?: string;
+  utmContent?: string;
   lastFollowUp?: string;
   notes?: string;
   uploadedBy?: User | string;

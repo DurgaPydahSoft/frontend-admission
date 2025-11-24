@@ -119,7 +119,9 @@ export const leadAPI = {
       });
     }
     const response = await api.get(`/leads?${params.toString()}`);
-    return response.data;
+    // Backend returns { success: true, data: { leads: [...], pagination: {...} }, message: "..." }
+    // Extract the nested data property for consistency
+    return response.data?.data || response.data;
   },
   getById: async (id: string) => {
     const response = await api.get(`/leads/${id}`);
@@ -276,11 +278,19 @@ export const leadAPI = {
     }
     const suffix = query.toString() ? `?${query.toString()}` : '';
     const response = await api.get(`/leads/analytics/overview${suffix}`);
-    return response.data;
+    // Backend returns { success: true, data: { ... }, message: "..." }
+    // Extract the nested data property for consistency
+    return response.data?.data || response.data;
   },
-  getUserAnalytics: async () => {
-    const response = await api.get('/leads/analytics/users');
-    return response.data;
+  getUserAnalytics: async (params?: { startDate?: string; endDate?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    const query = queryParams.toString();
+    const response = await api.get(`/leads/analytics/users${query ? `?${query}` : ''}`);
+    // Backend returns { success: true, data: { users: [...] }, message: "..." }
+    // Extract the nested data property for consistency
+    return response.data?.data || response.data;
   },
   // Public lead submission (no auth required)
   submitPublicLead: async (data: {
@@ -303,6 +313,12 @@ export const leadAPI = {
     interCollege?: string;
     dynamicFields?: Record<string, any>;
     source?: string;
+    isNRI?: boolean;
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    utmTerm?: string;
+    utmContent?: string;
   }) => {
     // Create a separate axios instance without auth interceptor for public submission
     const publicApi = axios.create({
@@ -755,7 +771,9 @@ export const reportAPI = {
     if (params?.userId) queryParams.append('userId', params.userId);
     const query = queryParams.toString();
     const response = await api.get(`/reports/calls/daily${query ? `?${query}` : ''}`);
-    return response.data;
+    // Backend returns { success: true, data: { reports: [...], summary: [...] }, message: "..." }
+    // Extract the nested data property for consistency
+    return response.data?.data || response.data;
   },
   getConversionReports: async (params?: {
     startDate?: string;
@@ -770,7 +788,9 @@ export const reportAPI = {
     if (params?.period) queryParams.append('period', params.period);
     const query = queryParams.toString();
     const response = await api.get(`/reports/conversions${query ? `?${query}` : ''}`);
-    return response.data;
+    // Backend returns { success: true, data: { reports: [...], summary: [...] }, message: "..." }
+    // Extract the nested data property for consistency
+    return response.data?.data || response.data;
   },
 };
 

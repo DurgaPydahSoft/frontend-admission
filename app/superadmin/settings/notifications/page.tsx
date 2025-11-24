@@ -37,10 +37,12 @@ export default function NotificationSettingsPage() {
       return;
     }
 
-    setHeaderContent({
-      title: 'Notification Settings',
-      subtitle: 'Configure email, SMS, and push notification channels',
-    });
+    setHeaderContent(
+      <div>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Notification Settings</h1>
+        <p className="text-sm text-gray-600 dark:text-gray-400">Configure email, SMS, and push notification channels</p>
+      </div>
+    );
 
     return () => clearHeaderContent();
   }, [setHeaderContent, clearHeaderContent]);
