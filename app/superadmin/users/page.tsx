@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { showToast } from '@/lib/toast';
 import { useDashboardHeader, useModulePermission } from '@/components/layout/DashboardShell';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { PERMISSION_MODULES, PermissionModuleKey } from '@/constants/permissions';
 
 const UserManagementPage = () => {
@@ -733,18 +734,19 @@ const ManagerTeamCard = ({ manager }: { manager: User }) => {
   const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
 
   return (
-    <Card className="p-4 border-2 border-blue-200 dark:border-blue-800">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            {manager.name}
-          </h3>
-          <p className="text-sm text-slate-600 dark:text-slate-400">{manager.email}</p>
+    <Link href={`/superadmin/users/team/${manager._id}`}>
+      <Card className="p-4 border-2 border-blue-200 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-600 transition-colors cursor-pointer">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              {manager.name}
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400">{manager.email}</p>
+          </div>
+          <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-200">
+            Manager
+          </span>
         </div>
-        <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-200">
-          Manager
-        </span>
-      </div>
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -786,7 +788,13 @@ const ManagerTeamCard = ({ manager }: { manager: User }) => {
           </div>
         )}
       </div>
+      <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium text-center">
+          Click to view team analytics →
+        </p>
+      </div>
     </Card>
+    </Link>
   );
 };
 

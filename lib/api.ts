@@ -894,6 +894,13 @@ export const managerAPI = {
     const response = await api.get(`/manager/unfollowed-leads?${params.toString()}`);
     return response.data?.data || response.data;
   },
+  getTeamAnalytics: async (managerId: string, filters?: { startDate?: string; endDate?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.startDate) params.append('startDate', filters.startDate);
+    if (filters?.endDate) params.append('endDate', filters.endDate);
+    const response = await api.get(`/manager/team-analytics/${managerId}?${params.toString()}`);
+    return response.data?.data || response.data;
+  },
   notifyTeam: async (data: {
     userIds: string[];
     message: string;
