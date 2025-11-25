@@ -54,9 +54,12 @@ export const TableSkeleton: React.FC<{ rows?: number; cols?: number }> = ({
 };
 
 // Card Skeleton
-export const CardSkeleton: React.FC = () => {
+export const CardSkeleton: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
+  className,
+  ...props
+}) => {
   return (
-    <div className="p-6 space-y-4">
+    <div className={cn("p-6 space-y-4", className)} {...props}>
       <Skeleton variant="text" width="60%" height="24px" />
       <Skeleton variant="text" width="40%" height="20px" />
       <Skeleton variant="text" width="80%" height="20px" />

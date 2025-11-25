@@ -159,7 +159,8 @@ export default function TeamMemberDetailPage() {
         endDate: format(new Date(customEndDate), 'yyyy-MM-dd'),
       };
     }
-    const preset = datePresets[dateRange];
+    // TypeScript assertion: dateRange is not 'custom' here, so it's a valid key
+    const preset = datePresets[dateRange as Exclude<typeof dateRange, 'custom'>];
     return {
       startDate: format(preset.start, 'yyyy-MM-dd'),
       endDate: format(preset.end, 'yyyy-MM-dd'),
@@ -172,7 +173,8 @@ export default function TeamMemberDetailPage() {
       router.push('/auth/login');
       return;
     }
-    if (!currentUser.isManager) {
+    // Check if user is a manager - explicitly check for true
+    if (currentUser.isManager !== true) {
       if (currentUser.roleName === 'Super Admin' || currentUser.roleName === 'Sub Super Admin') {
         router.push('/superadmin/dashboard');
       } else {
@@ -183,13 +185,23 @@ export default function TeamMemberDetailPage() {
     setUser(currentUser);
   }, [router]);
 
-  const { data: memberData, isLoading: isLoadingMember } = useQuery({
+  const { data: memberData, isLoading: isLoadingMember, error: memberError } = useQuery({
     queryKey: ['user', memberId],
     queryFn: async () => {
-      const response = await userAPI.getById(memberId);
-      return response.data || response;
+      try {
+        const response = await userAPI.getById(memberId);
+        // Backend returns { success: true, data: {...}, message: "..." }
+        return response.data || response;
+      } catch (error: any) {
+        // If 403 or 404, return null so we can show appropriate message
+        if (error?.response?.status === 403 || error?.response?.status === 404) {
+          return null;
+        }
+        throw error;
+      }
     },
     enabled: !!memberId && !!user,
+    retry: false, // Don't retry on 403/404 errors
   });
 
   const dateRangeParams = getDateRange();
@@ -208,15 +220,19 @@ export default function TeamMemberDetailPage() {
       const response = await leadAPI.getUserAnalytics({
         startDate: dateRangeParams.startDate,
         endDate: dateRangeParams.endDate,
+        userId: memberId, // Pass userId to get analytics for this specific user
       });
-      // Response structure: { users: [...] } or array
-      const data = response.data || response;
-      const users = Array.isArray(data) ? data : (data?.users || []);
-      // Find user by matching _id or userId field
-      return users.find((u: any) => {
-        const userId = u.userId?.toString() || u._id?.toString() || '';
-        return userId === memberId;
-      }) || null;
+      // API client already extracts data, so response is { users: [...] } or array
+      const users = Array.isArray(response) ? response : (response?.users || []);
+      // If userId was passed, the backend should return only that user, so take the first one
+      // Otherwise, find user by matching _id or userId field
+      if (users.length > 0) {
+        return users.find((u: any) => {
+          const userId = u.userId?.toString() || u._id?.toString() || '';
+          return userId === memberId;
+        }) || users[0] || null;
+      }
+      return null;
     },
     enabled: !!memberId && !!user,
   });
@@ -228,13 +244,18 @@ export default function TeamMemberDetailPage() {
       const response = await leadAPI.getUserAnalytics({
         startDate: todayParams.startDate,
         endDate: todayParams.endDate,
+        userId: memberId, // Pass userId to get analytics for this specific user
       });
-      const data = response.data || response;
-      const users = Array.isArray(data) ? data : (data?.users || []);
-      return users.find((u: any) => {
-        const userId = u.userId?.toString() || u._id?.toString() || '';
-        return userId === memberId;
-      }) || null;
+      // API client already extracts data, so response is { users: [...] } or array
+      const users = Array.isArray(response) ? response : (response?.users || []);
+      // If userId was passed, the backend should return only that user, so take the first one
+      if (users.length > 0) {
+        return users.find((u: any) => {
+          const userId = u.userId?.toString() || u._id?.toString() || '';
+          return userId === memberId;
+        }) || users[0] || null;
+      }
+      return null;
     },
     enabled: !!memberId && !!user,
   });
@@ -253,7 +274,7 @@ export default function TeamMemberDetailPage() {
   const { data: unfollowedData, isLoading: isLoadingUnfollowed } = useQuery({
     queryKey: ['unfollowed-leads', memberId],
     queryFn: async () => {
-      const response = await managerAPI.getUnfollowedLeads({ days: 7 });
+      const response = await managerAPI.getUnfollowedLeads(7);
       const data = response.data || response;
       const leads = data?.leads || [];
       // Filter to only this user's leads
@@ -266,10 +287,25 @@ export default function TeamMemberDetailPage() {
   });
 
   const member = memberData as User | undefined;
-  const leads = (leadsData?.leads || []) as Lead[];
+  // Extract leads from response - handle different response structures
+  const leads = useMemo(() => {
+    if (!leadsData) return [];
+    // Response could be { leads: [...], pagination: {...} } or just [...]
+    if (Array.isArray(leadsData)) {
+      return leadsData as Lead[];
+    }
+    // Filter to ensure we only have leads assigned to this member
+    const allLeads = (leadsData.leads || []) as Lead[];
+    return allLeads.filter((lead: Lead) => {
+      const assignedTo = typeof lead.assignedTo === 'object' 
+        ? lead.assignedTo?._id?.toString() 
+        : lead.assignedTo?.toString();
+      return assignedTo === memberId;
+    });
+  }, [leadsData, memberId]) as Lead[];
   const unfollowedLeads = (unfollowedData || []) as Lead[];
 
-  // Calculate today's KPIs
+  // Calculate today's KPIs from communication and activity logs
   const todayKPIs = useMemo(() => {
     if (!todayAnalytics) {
       return {
@@ -280,36 +316,52 @@ export default function TeamMemberDetailPage() {
       };
     }
     
-    // Today's confirmed leads (count status conversions to Confirmed)
+    // Today's confirmed leads - count status conversions to Confirmed or Admitted
+    // Check statusConversions breakdown from activity logs
     let confirmedLeads = 0;
     if (todayAnalytics.statusConversions?.breakdown) {
-      // statusConversions.breakdown is an object like { "New → Confirmed": 2, ... }
-      Object.keys(todayAnalytics.statusConversions.breakdown).forEach((key) => {
-        if (key.includes('→ Confirmed') || key.includes('→Confirmed')) {
-          confirmedLeads += todayAnalytics.statusConversions.breakdown[key] || 0;
+      // statusConversions.breakdown is an object like { "New → Confirmed": 2, "Interested → Admitted": 1, ... }
+      Object.entries(todayAnalytics.statusConversions.breakdown).forEach(([key, count]: [string, any]) => {
+        const normalizedKey = key.toLowerCase();
+        // Check for conversions to Confirmed or Admitted status
+        if (normalizedKey.includes('→ confirmed') || 
+            normalizedKey.includes('→confirmed') ||
+            normalizedKey.includes('→ admitted') ||
+            normalizedKey.includes('→admitted')) {
+          confirmedLeads += Number(count) || 0;
         }
       });
     }
     
-    // Today's followed leads (unique leads with calls or SMS today)
+    // Today's followed leads - unique leads with calls or SMS today (from communication logs)
     const followedLeadIds = new Set<string>();
-    if (todayAnalytics.calls?.byLead) {
+    if (todayAnalytics.calls?.byLead && Array.isArray(todayAnalytics.calls.byLead)) {
       todayAnalytics.calls.byLead.forEach((callData: any) => {
-        if (callData.leadId) followedLeadIds.add(callData.leadId);
+        if (callData.leadId) {
+          followedLeadIds.add(String(callData.leadId));
+        }
       });
     }
-    if (todayAnalytics.sms?.byLead) {
+    if (todayAnalytics.sms?.byLead && Array.isArray(todayAnalytics.sms.byLead)) {
       todayAnalytics.sms.byLead.forEach((smsData: any) => {
-        if (smsData.leadId) followedLeadIds.add(smsData.leadId);
+        if (smsData.leadId) {
+          followedLeadIds.add(String(smsData.leadId));
+        }
       });
     }
     const followedLeads = followedLeadIds.size;
     
+    // Today's calls made - from communication logs
+    const callsMade = Number(todayAnalytics.calls?.total) || 0;
+    
+    // Today's messages sent - from communication logs
+    const messagesSent = Number(todayAnalytics.sms?.total) || 0;
+    
     return {
       confirmedLeads,
       followedLeads,
-      callsMade: todayAnalytics.calls?.total || 0,
-      messagesSent: todayAnalytics.sms?.total || 0,
+      callsMade,
+      messagesSent,
     };
   }, [todayAnalytics]);
 
@@ -363,20 +415,10 @@ export default function TeamMemberDetailPage() {
   useEffect(() => {
     if (member) {
       setHeaderContent(
-        <div className="flex items-center gap-4">
-          <Link href="/manager/team">
-            <Button size="sm" variant="outline">
-              ← Back to Team
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-              {member.name}
-            </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {member.email} · {member.roleName}
-            </p>
-          </div>
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            Team Member Details
+          </h1>
         </div>
       );
     }
@@ -395,23 +437,26 @@ export default function TeamMemberDetailPage() {
     );
   }
 
-  if (!member) {
+  if (!member && !isLoadingMember) {
+    // Check if error is an axios error with response
+    const axiosError = memberError as any;
+    const errorMessage = axiosError?.response?.status === 403
+      ? 'Access denied. This user is not in your team.'
+      : 'Team member not found';
+    
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Card className="p-8 text-center">
-          <p className="text-red-600 dark:text-red-400 mb-4">Team member not found</p>
-          <Link href="/manager/team">
-            <Button variant="primary">Back to Team</Button>
-          </Link>
+          <p className="text-red-600 dark:text-red-400 mb-4">{errorMessage}</p>
         </Card>
       </div>
     );
   }
 
   // Verify this member is actually in the manager's team
-  const isTeamMember = typeof member.managedBy === 'object'
+  const isTeamMember = member && (typeof member.managedBy === 'object'
     ? member.managedBy?._id === user?._id
-    : member.managedBy === user?._id;
+    : member.managedBy === user?._id);
 
   if (!isTeamMember) {
     return (
@@ -420,9 +465,6 @@ export default function TeamMemberDetailPage() {
           <p className="text-red-600 dark:text-red-400 mb-4">
             This user is not part of your team
           </p>
-          <Link href="/manager/team">
-            <Button variant="primary">Back to Team</Button>
-          </Link>
         </Card>
       </div>
     );
@@ -430,54 +472,83 @@ export default function TeamMemberDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Member Information */}
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          Team Member Information
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Name
-            </label>
-            <p className="text-sm text-gray-900 dark:text-gray-100">{member.name}</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Email
-            </label>
-            <p className="text-sm text-gray-900 dark:text-gray-100">{member.email}</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Role
-            </label>
-            <p className="text-sm text-gray-900 dark:text-gray-100">{member.roleName}</p>
-          </div>
-          {member.designation && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Designation
-              </label>
-              <p className="text-sm text-gray-900 dark:text-gray-100">{member.designation}</p>
+      {/* Team Member Information and Period Selector - Same Row */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        {/* Member Information - Left Side */}
+        <Card className="p-4 flex-1 min-w-0">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Name:</span>
+              <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{member.name}</span>
             </div>
-          )}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Status
-            </label>
-            <span
-              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                member.isActive
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-200'
-                  : 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-200'
-              }`}
-            >
-              {member.isActive ? 'Active' : 'Inactive'}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Role:</span>
+              <span className="text-lg font-semibold text-purple-600 dark:text-purple-400">{member.roleName}</span>
+            </div>
+            {member.designation && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Designation:</span>
+                <span className="text-sm text-gray-900 dark:text-gray-100">{member.designation}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Email:</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">{member.email}</span>
+            </div>
+            <div className="ml-auto">
+              <span
+                className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                  member.isActive
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-200'
+                    : 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-200'
+                }`}
+              >
+                {member.isActive ? 'Active' : 'Inactive'}
+              </span>
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+
+        {/* Period Selector - Right Side */}
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+              Period:
+            </label>
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value as any)}
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="last7Days">Last 7 Days</option>
+              <option value="last30Days">Last 30 Days</option>
+              <option value="thisWeek">This Week</option>
+              <option value="thisMonth">This Month</option>
+              <option value="lastMonth">Last Month</option>
+              <option value="custom">Custom</option>
+            </select>
+            {dateRange === 'custom' && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-gray-500">to</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
 
       {/* Today's KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -544,46 +615,6 @@ export default function TeamMemberDetailPage() {
         </Card>
       </div>
 
-      {/* Date Range Selector */}
-      <Card className="p-6">
-        <div className="flex flex-wrap items-center gap-4">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Period:
-          </label>
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value as any)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm"
-          >
-            <option value="today">Today</option>
-            <option value="yesterday">Yesterday</option>
-            <option value="last7Days">Last 7 Days</option>
-            <option value="last30Days">Last 30 Days</option>
-            <option value="thisWeek">This Week</option>
-            <option value="thisMonth">This Month</option>
-            <option value="lastMonth">Last Month</option>
-            <option value="custom">Custom Range</option>
-          </select>
-          {dateRange === 'custom' && (
-            <>
-              <input
-                type="date"
-                value={customStartDate}
-                onChange={(e) => setCustomStartDate(e.target.value)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm"
-              />
-              <span className="text-gray-600 dark:text-gray-400">to</span>
-              <input
-                type="date"
-                value={customEndDate}
-                onChange={(e) => setCustomEndDate(e.target.value)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm"
-              />
-            </>
-          )}
-        </div>
-      </Card>
-
       {/* Period Performance Summary */}
       {analyticsData && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -614,135 +645,140 @@ export default function TeamMemberDetailPage() {
         </div>
       )}
 
-      {/* Call Analytics */}
-      {analyticsData && analyticsData.calls && (
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            Call Analytics
-          </h2>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Total Calls</p>
-                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                  {formatNumber(analyticsData.calls.total || 0)}
-                </p>
+      {/* Call and SMS Analytics - Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Call Analytics */}
+        {analyticsData && analyticsData.calls && (
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+              Call Analytics
+            </h2>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Total Calls</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                    {formatNumber(analyticsData.calls.total || 0)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Total Duration</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                    {formatNumber(Math.floor((analyticsData.calls.totalDuration || 0) / 60))} min
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Total Duration</p>
-                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                  {formatNumber(Math.floor((analyticsData.calls.totalDuration || 0) / 60))} min
-                </p>
-              </div>
+              {analyticsData.calls.byLead && analyticsData.calls.byLead.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Calls by Lead ({analyticsData.calls.byLead.length} leads)
+                  </p>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {analyticsData.calls.byLead.slice(0, 10).map((callData: any, idx: number) => (
+                      <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {callData.leadName} ({callData.enquiryNumber || callData.leadPhone})
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                          {callData.callCount} call(s) · {Math.floor((callData.totalDuration || 0) / 60)} min
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-            {analyticsData.calls.byLead && analyticsData.calls.byLead.length > 0 && (
-              <div className="mt-4">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Calls by Lead ({analyticsData.calls.byLead.length} leads)
-                </p>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {analyticsData.calls.byLead.slice(0, 10).map((callData: any, idx: number) => (
-                    <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {callData.leadName} ({callData.enquiryNumber || callData.leadPhone})
-                      </p>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        {callData.callCount} call(s) · {Math.floor((callData.totalDuration || 0) / 60)} min
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
-
-      {/* SMS Analytics */}
-      {analyticsData && analyticsData.sms && (
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            SMS Analytics
-          </h2>
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Total SMS</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                {formatNumber(analyticsData.sms.total || 0)}
-              </p>
-            </div>
-            {analyticsData.sms.byLead && analyticsData.sms.byLead.length > 0 && (
-              <div className="mt-4">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  SMS by Lead ({analyticsData.sms.byLead.length} leads)
-                </p>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {analyticsData.sms.byLead.slice(0, 10).map((smsData: any, idx: number) => (
-                    <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {smsData.leadName} ({smsData.enquiryNumber || smsData.leadPhone})
-                      </p>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        {smsData.smsCount} message(s)
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {analyticsData.sms.templateUsage && analyticsData.sms.templateUsage.length > 0 && (
-              <div className="mt-4">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Template Usage
-                </p>
-                <div className="space-y-2">
-                  {analyticsData.sms.templateUsage.slice(0, 5).map((template: any, idx: number) => (
-                    <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {template.name}
-                      </p>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        {template.count} message(s) · {template.uniqueLeads} lead(s)
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
-
-      {/* Status Breakdown (Clickable) */}
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          Lead Status Breakdown
-        </h2>
-        {isLoadingLeads ? (
-          <TableSkeleton />
-        ) : Object.keys(statusBreakdown).length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">No leads assigned yet</p>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(statusBreakdown).map(([status, data]) => (
-              <button
-                key={status}
-                onClick={() => handleStatusClick(status)}
-                className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left cursor-pointer"
-              >
-                <p className="text-sm text-gray-600 dark:text-gray-400">{status}</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">
-                  {formatNumber(data.count)}
-                </p>
-                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Click to view →</p>
-              </button>
-            ))}
-          </div>
+          </Card>
         )}
-      </Card>
 
-      {/* Unfollowed Leads */}
-      <Card className="p-6">
+        {/* SMS Analytics */}
+        {analyticsData && analyticsData.sms && (
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+              SMS Analytics
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Total SMS</p>
+                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                  {formatNumber(analyticsData.sms.total || 0)}
+                </p>
+              </div>
+              {analyticsData.sms.byLead && analyticsData.sms.byLead.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    SMS by Lead ({analyticsData.sms.byLead.length} leads)
+                  </p>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {analyticsData.sms.byLead.slice(0, 10).map((smsData: any, idx: number) => (
+                      <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {smsData.leadName} ({smsData.enquiryNumber || smsData.leadPhone})
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                          {smsData.smsCount} message(s)
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {analyticsData.sms.templateUsage && analyticsData.sms.templateUsage.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Template Usage
+                  </p>
+                  <div className="space-y-2">
+                    {analyticsData.sms.templateUsage.slice(0, 5).map((template: any, idx: number) => (
+                      <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {template.name}
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                          {template.count} message(s) · {template.uniqueLeads} lead(s)
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+      </div>
+
+      {/* Status Breakdown and Unfollowed Leads - 2 Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Status Breakdown (Clickable) */}
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            Lead Status Breakdown
+          </h2>
+          {isLoadingLeads ? (
+            <TableSkeleton />
+          ) : Object.keys(statusBreakdown).length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">No leads assigned yet</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              {Object.entries(statusBreakdown).map(([status, data]) => (
+                <button
+                  key={status}
+                  onClick={() => handleStatusClick(status)}
+                  className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left cursor-pointer"
+                >
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{status}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">
+                    {formatNumber(data.count)}
+                  </p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Click to view →</p>
+                </button>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Unfollowed Leads */}
+        <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -825,7 +861,8 @@ export default function TeamMemberDetailPage() {
             )}
           </div>
         )}
-      </Card>
+        </Card>
+      </div>
 
       {/* Status Leads Modal */}
       <LeadStatusModal

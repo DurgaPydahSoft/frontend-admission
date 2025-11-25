@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { auth } from '@/lib/auth';
 import { leadAPI, communicationAPI, userAPI } from '@/lib/api';
@@ -90,8 +91,16 @@ export default function LeadDetailPage() {
   
   const quotaOptions = ['Not Applicable', 'Management', 'Convenor'];
   const isSuperAdmin = user?.roleName === 'Super Admin' || user?.roleName === 'Sub Super Admin';
+  const isManager = user?.isManager === true;
+  
+  // Get the appropriate leads page URL based on user role
+  const getLeadsPageUrl = () => {
+    if (isSuperAdmin) return '/superadmin/leads';
+    if (isManager) return '/manager/leads';
+    return '/user/dashboard'; // Regular users don't have a leads list page, redirect to dashboard
+  };
 
-  // Check authentication
+  // Check authentication - allow all authenticated users (Super Admin, Manager, User)
   useEffect(() => {
     setIsMounted(true);
     const currentUser = auth.getUser();
@@ -99,10 +108,7 @@ export default function LeadDetailPage() {
       router.push('/auth/login');
       return;
     }
-    if (currentUser.roleName !== 'Super Admin' && currentUser.roleName !== 'Sub Super Admin') {
-      router.push('/user/dashboard');
-      return;
-    }
+    // Allow all authenticated users to view leads (access control is handled by backend)
     setUser(currentUser);
   }, [router]);
 
@@ -438,27 +444,34 @@ export default function LeadDetailPage() {
 
     setHeaderContent(
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            Lead Details
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            <span className="flex items-center gap-2">
-              <span>{lead.name}</span>
-              {lead.isNRI && (
-                <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded">
-                  NRI
-                </span>
-              )}
-            </span>
-            {lead.enquiryNumber ? ` · Enquiry #${lead.enquiryNumber}` : ''}
-          </p>
+        <div className="flex items-center gap-3">
+          <Link href={getLeadsPageUrl()}>
+            <Button size="sm" variant="outline">
+              ← Back to Leads
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              Lead Details
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-2">
+                <span>{lead.name}</span>
+                {lead.isNRI && (
+                  <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded">
+                    NRI
+                  </span>
+                )}
+              </span>
+              {lead.enquiryNumber ? ` · Enquiry #${lead.enquiryNumber}` : ''}
+            </p>
+          </div>
         </div>
       </div>
     );
 
     return () => clearHeaderContent();
-  }, [lead, router, setHeaderContent, clearHeaderContent]);
+  }, [lead, user, isSuperAdmin, isManager, router, setHeaderContent, clearHeaderContent]);
 
   // Initialize form data
   useEffect(() => {
@@ -524,7 +537,7 @@ export default function LeadDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       showToast.success('Lead deleted successfully!');
-      router.push('/superadmin/leads');
+      router.push(getLeadsPageUrl());
     },
     onError: (error: any) => {
       showToast.error(error.response?.data?.message || 'Failed to delete lead');
@@ -1251,7 +1264,7 @@ export default function LeadDetailPage() {
               <p className="text-sm text-gray-500">No phone numbers available for this lead.</p>
             ) : (
               <div className="space-y-4">
-                {contactOptions.map((option) => {
+                {contactOptions.map((option, index) => {
                   const stats = communicationStatsMap.get(option.number);
                   const callCount = stats?.callCount || 0;
                   const smsCount = stats?.smsCount || 0;
@@ -1259,7 +1272,7 @@ export default function LeadDetailPage() {
                   
                   return (
                     <div
-                      key={option.number}
+                      key={`${option.label}-${option.number}-${index}`}
                       className="rounded-lg border border-gray-200 dark:border-slate-700 p-4"
                     >
                       <div className="flex items-center justify-between mb-3">
@@ -1954,13 +1967,13 @@ export default function LeadDetailPage() {
           <Card className="max-w-md w-full">
             <h2 className="text-xl font-semibold mb-4">Select Number to Call</h2>
             <div className="space-y-3">
-              {contactOptions.map((option) => {
+              {contactOptions.map((option, index) => {
                 const stats = communicationStatsMap.get(option.number);
                 const callCount = stats?.callCount || 0;
                 
                 return (
                   <button
-                    key={option.number}
+                    key={`${option.label}-${option.number}-${index}`}
                     onClick={() => {
                       setSelectedCallNumber(option.number);
                       setShowCallNumberModal(false);
@@ -2126,14 +2139,14 @@ export default function LeadDetailPage() {
                     <p className="text-sm text-gray-500">No phone numbers available.</p>
                   ) : (
                     <div className="space-y-2">
-                      {contactOptions.map((option) => {
+                      {contactOptions.map((option, index) => {
                         const stats = communicationStatsMap.get(option.number);
                         const smsCount = stats?.smsCount || 0;
                         const isSelected = smsData.selectedNumbers.includes(option.number);
                         
                         return (
                           <label
-                            key={option.number}
+                            key={`${option.label}-${option.number}-${index}`}
                             className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-all ${
                               isSelected
                                 ? 'bg-blue-50 border-blue-300 dark:bg-blue-900/20 dark:border-blue-600'

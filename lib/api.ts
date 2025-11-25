@@ -67,7 +67,9 @@ export const authAPI = {
   },
   getCurrentUser: async () => {
     const response = await api.get('/auth/me');
-    return response.data;
+    // Backend returns { success: true, data: {...}, message: "..." }
+    // Extract the nested data property for consistency
+    return response.data?.data || response.data;
   },
 };
 
@@ -125,7 +127,9 @@ export const leadAPI = {
   },
   getById: async (id: string) => {
     const response = await api.get(`/leads/${id}`);
-    return response.data;
+    // Backend returns { success: true, data: {...}, message: "..." }
+    // Extract the nested data property for consistency
+    return response.data?.data || response.data;
   },
   create: async (data: {
     hallTicketNumber?: string;
@@ -282,10 +286,11 @@ export const leadAPI = {
     // Extract the nested data property for consistency
     return response.data?.data || response.data;
   },
-  getUserAnalytics: async (params?: { startDate?: string; endDate?: string }) => {
+  getUserAnalytics: async (params?: { startDate?: string; endDate?: string; userId?: string }) => {
     const queryParams = new URLSearchParams();
     if (params?.startDate) queryParams.append('startDate', params.startDate);
     if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.userId) queryParams.append('userId', params.userId);
     const query = queryParams.toString();
     const response = await api.get(`/leads/analytics/users${query ? `?${query}` : ''}`);
     // Backend returns { success: true, data: { users: [...] }, message: "..." }

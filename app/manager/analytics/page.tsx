@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { auth } from '@/lib/auth';
-import { managerAPI } from '@/lib/api';
+import { managerAPI, authAPI } from '@/lib/api';
 import { User } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -45,20 +45,51 @@ export default function ManagerAnalyticsPage() {
   });
 
   useEffect(() => {
-    const currentUser = auth.getUser();
-    if (!currentUser) {
-      router.push('/auth/login');
-      return;
-    }
-    if (!currentUser.isManager) {
-      if (currentUser.roleName === 'Super Admin' || currentUser.roleName === 'Sub Super Admin') {
-        router.push('/superadmin/dashboard');
-      } else {
-        router.push('/user/dashboard');
+    const checkAuth = async () => {
+      let currentUser = auth.getUser();
+      if (!currentUser) {
+        router.push('/auth/login');
+        return;
       }
-      return;
-    }
-    setUser(currentUser);
+      
+      // If isManager is undefined, fetch latest user data from backend
+      if (currentUser.isManager === undefined) {
+        try {
+          const userData = await authAPI.getCurrentUser();
+          // API client already extracts data, so userData is the user object
+          if (userData && userData._id) {
+            // Update stored user data
+            const token = auth.getToken();
+            if (token) {
+              auth.setAuth(token, userData);
+            }
+            currentUser = userData;
+          }
+        } catch (error) {
+          console.error('Failed to fetch current user:', error);
+          // Continue with existing user data
+        }
+      }
+      
+      // Ensure currentUser is still valid after async operations
+      if (!currentUser) {
+        router.push('/auth/login');
+        return;
+      }
+      
+      // Check if user is a manager - explicitly check for true
+      if (currentUser.isManager !== true) {
+        if (currentUser.roleName === 'Super Admin' || currentUser.roleName === 'Sub Super Admin') {
+          router.push('/superadmin/dashboard');
+        } else {
+          router.push('/user/dashboard');
+        }
+        return;
+      }
+      setUser(currentUser);
+    };
+    
+    checkAuth();
   }, [router]);
 
   // Date preset handler

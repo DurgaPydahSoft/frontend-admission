@@ -44,7 +44,8 @@ export default function ManagerDashboard() {
       router.push('/auth/login');
       return;
     }
-    if (!currentUser.isManager) {
+    // Check if user is a manager - explicitly check for true
+    if (currentUser.isManager !== true) {
       if (currentUser.roleName === 'Super Admin' || currentUser.roleName === 'Sub Super Admin') {
         router.push('/superadmin/dashboard');
       } else {
@@ -75,7 +76,8 @@ export default function ManagerDashboard() {
     queryKey: ['manager-analytics'],
     queryFn: async () => {
       const response = await managerAPI.getAnalytics();
-      return response.data || response;
+      // API client already extracts data, so response is the analytics object
+      return response;
     },
   });
 

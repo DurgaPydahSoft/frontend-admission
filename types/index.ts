@@ -17,6 +17,7 @@ export interface User {
   permissions?: Record<string, ModulePermission>;
   managedBy?: string | User;
   previousRoleName?: string;
+  isManager?: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -48,6 +49,8 @@ export interface UpdateUserData {
   designation?: string;
   permissions?: Record<string, ModulePermission>;
   isActive?: boolean;
+  isManager?: boolean;
+  managedBy?: string | null;
 }
 
 // Course & Branch Types

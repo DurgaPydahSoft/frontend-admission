@@ -24,7 +24,8 @@ export default function ManagerTeamPage() {
       router.push('/auth/login');
       return;
     }
-    if (!currentUser.isManager) {
+    // Check if user is a manager - explicitly check for true
+    if (currentUser.isManager !== true) {
       if (currentUser.roleName === 'Super Admin' || currentUser.roleName === 'Sub Super Admin') {
         router.push('/superadmin/dashboard');
       } else {
