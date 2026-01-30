@@ -271,6 +271,8 @@ export const andhraPradeshDistricts: DistrictMandal[] = [
       'Amalapuram',
       'Atreyapuram',
       'I.Polavaram',
+      'Kakinada (rural)',
+      'Kakinada (urban)',
       'Kapileswarapuram',
       'Katrenikona',
       'Kothapeta',
