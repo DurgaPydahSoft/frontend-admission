@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { DashboardShell, DashboardNavItem, HomeIcon, ListIcon, ChartBarIcon, SettingsIcon } from '@/components/layout/DashboardShell';
 import { auth } from '@/lib/auth';
 import type { User } from '@/types';
+import { Loading } from '@/components/Loading';
 
 const navItems: (DashboardNavItem & { isActivity?: boolean })[] = [
   { href: '/user/dashboard', label: 'Dashboard', icon: HomeIcon },
@@ -62,7 +63,7 @@ export default function UserLayout({ children }: { children: ReactNode }) {
   }, [currentUser, isReady, pathname, router]);
 
   if (!isReady) {
-    return <div className="flex min-h-screen items-center justify-center bg-white dark:bg-slate-950">Loading workspace…</div>;
+    return <Loading />;
   }
 
   const timeTrackingEnabled = currentUser?.timeTrackingEnabled !== false;

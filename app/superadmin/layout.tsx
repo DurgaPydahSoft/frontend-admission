@@ -23,6 +23,7 @@ import {
   PermissionModuleKey,
 } from '@/constants/permissions';
 import { TestNotificationsButton } from '@/components/TestNotificationsButton';
+import { Loading } from '@/components/Loading';
 
 const BASE_NAV_ITEMS: DashboardNavItem[] = [
   { href: '/superadmin/dashboard', label: 'Overview', icon: HomeIcon, permissionKey: DASHBOARD_PERMISSION_KEY },
@@ -194,7 +195,7 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
         : 'Command Center';
 
   if (!isAuthorised) {
-    return <div className="flex min-h-screen items-center justify-center bg-white dark:bg-slate-950">Preparing workspace…</div>;
+    return <Loading />;
   }
 
   return (
