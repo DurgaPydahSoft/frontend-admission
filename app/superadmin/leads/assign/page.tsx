@@ -353,10 +353,14 @@ export default function AssignLeadsPage() {
     return () => { cancelled = true; };
   }, [statsState, statsDistrict]);
 
-  // Which location filters to use for stats: stats tab uses its own, others use bulk form's
-  const statsQueryState = mode === 'stats' ? statsState : state;
-  const statsQueryDistrict = mode === 'stats' ? statsDistrict : district;
-  const statsQueryMandal = mode === 'stats' ? statsMandal : mandal;
+  // Which location/filter context to use for stats: stats tab uses its own, others use bulk form's or institution's
+  const statsQueryState = mode === 'stats' ? statsState : mode === 'institution' ? '' : state;
+  const statsQueryDistrict = mode === 'stats' ? statsDistrict : mode === 'institution' ? '' : district;
+  const statsQueryMandal = mode === 'stats' ? statsMandal : mode === 'institution' ? '' : mandal;
+
+  const statsQueryAcademicYear = mode === 'stats' ? statsAcademicYear : mode === 'institution' ? institutionAcademicYear : academicYear;
+  const statsQueryStudentGroup = mode === 'stats' ? statsStudentGroup : mode === 'institution' ? institutionStudentGroup : studentGroup;
+  const statsQueryCycleNumber = mode === 'stats' ? statsCycleNumber : mode === 'institution' ? '' : cycleNumber;
 
   // Fetch assignment statistics (scoped by academic year, student group, and location)
   const {
@@ -365,15 +369,15 @@ export default function AssignLeadsPage() {
     isLoading: isStatsLoading,
     isFetching: isStatsFetching
   } = useQuery<{ data: AssignmentStats }>({
-    queryKey: ['assignmentStats', statsQueryMandal, statsQueryDistrict, statsQueryState, statsAcademicYear, statsStudentGroup, statsCycleNumber],
+    queryKey: ['assignmentStats', statsQueryMandal, statsQueryDistrict, statsQueryState, statsQueryAcademicYear, statsQueryStudentGroup, statsQueryCycleNumber],
     queryFn: async () => {
       const response = await leadAPI.getAssignmentStats({
         mandal: statsQueryMandal || undefined,
         district: statsQueryDistrict || undefined,
         state: statsQueryState || undefined,
-        academicYear: statsAcademicYear !== '' ? statsAcademicYear : undefined,
-        studentGroup: statsStudentGroup || undefined,
-        cycleNumber: statsCycleNumber !== '' ? statsCycleNumber : undefined,
+        academicYear: statsQueryAcademicYear !== '' ? statsQueryAcademicYear : undefined,
+        studentGroup: statsQueryStudentGroup || undefined,
+        cycleNumber: statsQueryCycleNumber !== '' ? statsQueryCycleNumber : undefined,
       });
       // Backend returns { success, data: { totalLeads, assignedCount, ... }, message }
       const payload = response?.data ?? response ?? {};
