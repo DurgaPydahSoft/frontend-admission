@@ -75,6 +75,8 @@ const UserManagementPage = () => {
     password: '',
     roleName: 'Student Counselor' as RoleName,
     designation: '',
+    hrms_id: '',
+    emp_no: '',
   });
   const createEmptyPermissions = () =>
     PERMISSION_MODULES.reduce(
@@ -97,6 +99,8 @@ const UserManagementPage = () => {
     roleName: RoleName;
     designation: string;
     password?: string;
+    hrms_id?: string;
+    emp_no?: string;
   }>({
     name: '',
     email: '',
@@ -104,11 +108,16 @@ const UserManagementPage = () => {
     roleName: 'Student Counselor',
     designation: '',
     password: '',
+    hrms_id: '',
+    emp_no: '',
   });
   const [editPermissionState, setEditPermissionState] = useState<
     Record<PermissionModuleKey, ModulePermission>
   >(createEmptyPermissions());
   const [searchTerm, setSearchTerm] = useState('');
+  const [hrmsSearchTerm, setHrmsSearchTerm] = useState('');
+  const [hrmsResults, setHrmsResults] = useState<any[]>([]);
+  const [isSearchingHrms, setIsSearchingHrms] = useState(false);
   const [showTeamAssignmentModal, setShowTeamAssignmentModal] = useState(false);
   const [selectedUserForAssignment, setSelectedUserForAssignment] = useState<User | null>(null);
   const [selectedManagerId, setSelectedManagerId] = useState('');
@@ -211,9 +220,11 @@ const UserManagementPage = () => {
     mutationFn: async (payload: Parameters<typeof userAPI.create>[0]) => userAPI.create(payload),
     onSuccess: () => {
       showToast.success('User created successfully');
-      setFormState({ name: '', email: '', mobileNumber: '', password: '', roleName: 'Student Counselor', designation: '' });
+      setFormState({ name: '', email: '', mobileNumber: '', password: '', roleName: 'Student Counselor', designation: '', hrms_id: '', emp_no: '' });
       setPermissionState(createEmptyPermissions());
       setShowCreateUser(false);
+      setHrmsSearchTerm('');
+      setHrmsResults([]);
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (error: any) => {
@@ -281,6 +292,8 @@ const UserManagementPage = () => {
       setEditingUser(null);
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setShowUserDetail(false);
+      setHrmsSearchTerm('');
+      setHrmsResults([]);
     },
     onError: (error: any) => {
       showToast.error(error.response?.data?.message || 'Failed to update user');
@@ -337,18 +350,64 @@ const UserManagementPage = () => {
     });
   };
 
+  const handleSearchHrms = async (term: string) => {
+    setHrmsSearchTerm(term);
+    if (term.length < 2) {
+      setHrmsResults([]);
+      return;
+    }
+    setIsSearchingHrms(true);
+    try {
+      const response = await userAPI.searchHrmsEmployees(term);
+      setHrmsResults(response.data || []);
+    } catch (error) {
+      console.error('HRMS Search error:', error);
+    } finally {
+      setIsSearchingHrms(false);
+    }
+  };
+
+  const handleSelectHrmsEmployee = (emp: any, isEdit: boolean = false) => {
+    if (isEdit) {
+      setEditFormState(prev => ({
+        ...prev,
+        name: emp.name,
+        email: emp.email || prev.email,
+        mobileNumber: emp.mobileNumber || prev.mobileNumber,
+        emp_no: emp.emp_no,
+        hrms_id: emp.id || emp._id,
+      }));
+    } else {
+      setFormState(prev => ({
+        ...prev,
+        name: emp.name,
+        email: emp.email || prev.email,
+        mobileNumber: emp.mobileNumber || prev.mobileNumber,
+        emp_no: emp.emp_no,
+        hrms_id: emp.id || emp._id,
+      }));
+    }
+    setHrmsResults([]);
+    setHrmsSearchTerm('');
+  };
+
   const handleCreateUser = (event: React.FormEvent) => {
     event.preventDefault();
     if (!canManageUsers) {
       showToast.error('You do not have permission to create users');
       return;
     }
-    if (!formState.name || !formState.email || !formState.password) {
-      showToast.error('Please fill in name, email, and password');
+    if (!formState.name || (!formState.email && !formState.mobileNumber && !formState.emp_no)) {
+      showToast.error('Full Name and at least one identifier (Email, Mobile, or Emp No) are required');
       return;
     }
 
-    if (formState.password.length < 6) {
+    if (!formState.emp_no && !formState.password) {
+      showToast.error('Password is required for non-HRMS users');
+      return;
+    }
+
+    if (!formState.emp_no && formState.password.length < 6) {
       showToast.error('Password must be at least 6 characters long');
       return;
     }
@@ -359,6 +418,8 @@ const UserManagementPage = () => {
       mobileNumber: formState.mobileNumber.trim() || undefined,
       password: formState.password,
       roleName: formState.roleName,
+      hrms_id: formState.hrms_id || undefined,
+      emp_no: formState.emp_no || undefined,
     } as Parameters<typeof userAPI.create>[0];
 
     // Designation logic removed
@@ -535,7 +596,16 @@ const UserManagementPage = () => {
                         onClick={() => handleRowClick(user)}
                       >
                         <td className="px-3 py-2.5 align-middle text-sm font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                          {user.name}
+                          <div className="flex items-center gap-2">
+                            {user.name}
+                            {user.emp_no && (
+                              <span title={`HRMS Linked: ${user.emp_no}`}>
+                                <svg className="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2.5 align-middle text-sm text-slate-600 dark:text-slate-300">
                           <span className="truncate max-w-[180px] inline-block" title={user.email}>{user.email}</span>
@@ -608,8 +678,15 @@ const UserManagementPage = () => {
                         {user.name.slice(0, 1).toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <div className="truncate font-semibold text-slate-900 dark:text-slate-100">
+                        <div className="truncate font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                           {user.name}
+                          {user.emp_no && (
+                            <span title={`HRMS Linked: ${user.emp_no}`}>
+                              <svg className="w-3 h-3 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                              </svg>
+                            </span>
+                          )}
                         </div>
                         <div className="truncate text-xs text-slate-500 dark:text-slate-400">
                           {displayRole(user)}
@@ -785,6 +862,8 @@ const UserManagementPage = () => {
                         roleName: selectedUserDetail.roleName,
                         designation: selectedUserDetail.designation || '',
                         password: '',
+                        hrms_id: selectedUserDetail.hrms_id || '',
+                        emp_no: selectedUserDetail.emp_no || '',
                       });
                       if (selectedUserDetail.roleName === 'Sub Super Admin') {
                         const base = createEmptyPermissions();
@@ -904,9 +983,74 @@ const UserManagementPage = () => {
             </div>
             <form onSubmit={handleCreateUser} className="space-y-6">
               <div
-                className={isSubSuperAdmin ? 'grid gap-6 lg:grid-cols-[minmax(0,0.55fr)_minmax(0,0.45fr)]' : 'space-y-4'}
+                className={formState.roleName === 'Sub Super Admin' ? 'grid gap-6 lg:grid-cols-[minmax(0,0.55fr)_minmax(0,0.45fr)]' : 'space-y-6'}
               >
-                <div className={isSubSuperAdmin ? 'grid grid-cols-1 gap-4 sm:grid-cols-2' : 'grid grid-cols-1 gap-4 sm:grid-cols-2'}>
+                <div className={formState.roleName === 'Sub Super Admin' ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 content-start' : 'grid grid-cols-1 gap-4 sm:grid-cols-2'}>
+                  {/* Inline HRMS Search instead of component to prevent focus loss */}
+                  <div className="col-span-full space-y-3 rounded-xl border border-blue-100 bg-blue-50/30 p-4 dark:border-blue-900/30 dark:bg-blue-900/10">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        Link with HRMS Employee
+                      </h3>
+                      {formState.emp_no && (
+                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                          Linked: {formState.emp_no}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormState(prev => ({ ...prev, emp_no: '', hrms_id: '' }));
+                            }}
+                            className="ml-1.5 hover:text-emerald-900 dark:hover:text-emerald-100"
+                          >
+                            <IconX className="w-3 h-3" />
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <Input
+                        placeholder="Search by Employee Name..."
+                        value={hrmsSearchTerm}
+                        onChange={(e) => handleSearchHrms(e.target.value)}
+                        className="bg-white dark:bg-slate-900 border-blue-200 focus:border-blue-500"
+                      />
+                      {isSearchingHrms && (
+                        <div className="absolute right-3 top-3">
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+                        </div>
+                      )}
+                      {hrmsResults.length > 0 && (
+                        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                          <div className="max-h-48 overflow-y-auto">
+                            {hrmsResults.map((emp) => (
+                              <button
+                                key={emp.emp_no}
+                                type="button"
+                                onClick={() => handleSelectHrmsEmployee(emp, false)}
+                                className="flex w-full flex-col px-4 py-2 text-left transition hover:bg-slate-50 dark:hover:bg-slate-700"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{emp.name}</span>
+                                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">{emp.emp_no}</span>
+                                </div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400">
+                                  {emp.designation} • {emp.email}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {!formState.emp_no && (
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                        Search and select an employee to auto-fill details and enable HRMS authentication.
+                      </p>
+                    )}
+                  </div>
                   <Input
                     label="Full Name"
                     name="name"
@@ -915,7 +1059,7 @@ const UserManagementPage = () => {
                     placeholder="Counsellor name"
                   />
                   <Input
-                    label="Email Address"
+                    label="Email Address (Optional)"
                     name="email"
                     type="email"
                     value={formState.email}
@@ -930,14 +1074,23 @@ const UserManagementPage = () => {
                     onChange={(event) => setFormState((prev) => ({ ...prev, mobileNumber: event.target.value }))}
                     placeholder="9876543210 (Optional)"
                   />
-                  <Input
-                    label="Password"
-                    name="password"
-                    type="password"
-                    value={formState.password}
-                    onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
-                    placeholder="Temporary password"
-                  />
+                  {formState.emp_no ? (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3 dark:border-blue-900/30 dark:bg-blue-900/20">
+                      <p className="text-xs font-medium text-blue-800 dark:text-blue-300 flex items-center gap-2">
+                        <IconBadge className="w-3.5 h-3.5" />
+                        Password managed by HRMS
+                      </p>
+                    </div>
+                  ) : (
+                    <Input
+                      label="Password"
+                      name="password"
+                      type="password"
+                      value={formState.password}
+                      onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
+                      placeholder="Temporary password"
+                    />
+                  )}
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">Role</label>
                     <select
@@ -956,7 +1109,7 @@ const UserManagementPage = () => {
                   {/* Designation field removed as per requirement */}
                 </div>
 
-                {isSubSuperAdmin && (
+                {formState.roleName === 'Sub Super Admin' && (
                   <div className="flex h-full flex-col gap-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-4 dark:border-blue-900/40 dark:bg-blue-900/20 sm:col-span-2 lg:col-span-1">
                     <div className="space-y-1">
                       <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
@@ -1036,7 +1189,7 @@ const UserManagementPage = () => {
                   onClick={() => {
                     setShowCreateUser(false);
                     setPermissionState(createEmptyPermissions());
-                    setFormState({ name: '', email: '', mobileNumber: '', password: '', roleName: 'Student Counselor', designation: '' });
+                    setFormState({ name: '', email: '', mobileNumber: '', password: '', roleName: 'Student Counselor', designation: '', hrms_id: '', emp_no: '' });
                   }}
                   disabled={createMutation.isPending}
                 >
@@ -1084,6 +1237,8 @@ const UserManagementPage = () => {
                   email: editFormState.email.trim(),
                   mobileNumber: editFormState.mobileNumber?.trim() || undefined,
                   roleName: editFormState.roleName,
+                  hrms_id: editFormState.hrms_id || undefined,
+                  emp_no: editFormState.emp_no || undefined,
                 };
 
                 if (editFormState.password) {
@@ -1130,9 +1285,73 @@ const UserManagementPage = () => {
               >
                 <div
                   className={
-                    editFormState.roleName === 'Sub Super Admin' ? 'grid grid-cols-1 gap-4 sm:grid-cols-2' : 'grid grid-cols-1 gap-4 sm:grid-cols-2'
+                    editFormState.roleName === 'Sub Super Admin' ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 content-start' : 'grid grid-cols-1 gap-4 sm:grid-cols-2'
                   }
                 >
+                  <div className="col-span-full space-y-3 rounded-xl border border-blue-100 bg-blue-50/30 p-4 dark:border-blue-900/30 dark:bg-blue-900/10">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        Link with HRMS Employee
+                      </h3>
+                      {editFormState.emp_no && (
+                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                          Linked: {editFormState.emp_no}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditFormState(prev => ({ ...prev, emp_no: '', hrms_id: '' }));
+                            }}
+                            className="ml-1.5 hover:text-emerald-900 dark:hover:text-emerald-100"
+                          >
+                            <IconX className="w-3 h-3" />
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <Input
+                        placeholder="Search by Employee Name..."
+                        value={hrmsSearchTerm}
+                        onChange={(e) => handleSearchHrms(e.target.value)}
+                        className="bg-white dark:bg-slate-900 border-blue-200 focus:border-blue-500"
+                      />
+                      {isSearchingHrms && (
+                        <div className="absolute right-3 top-3">
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+                        </div>
+                      )}
+                      {hrmsResults.length > 0 && (
+                        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                          <div className="max-h-48 overflow-y-auto">
+                            {hrmsResults.map((emp) => (
+                              <button
+                                key={emp.emp_no}
+                                type="button"
+                                onClick={() => handleSelectHrmsEmployee(emp, true)}
+                                className="flex w-full flex-col px-4 py-2 text-left transition hover:bg-slate-50 dark:hover:bg-slate-700"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{emp.name}</span>
+                                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">{emp.emp_no}</span>
+                                </div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400">
+                                  {emp.designation} • {emp.email}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {!editFormState.emp_no && (
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                        Search and select an employee to auto-fill details and enable HRMS authentication.
+                      </p>
+                    )}
+                  </div>
                   <Input
                     label="Full Name"
                     name="name"
@@ -1143,7 +1362,7 @@ const UserManagementPage = () => {
                     placeholder="Counsellor name"
                   />
                   <Input
-                    label="Email Address"
+                    label="Email Address (Optional)"
                     name="email"
                     type="email"
                     value={editFormState.email}
@@ -1162,16 +1381,25 @@ const UserManagementPage = () => {
                     }
                     placeholder="mobile number"
                   />
-                  <Input
-                    label="New Password"
-                    name="password"
-                    type="password"
-                    value={editFormState.password || ''}
-                    onChange={(event) =>
-                      setEditFormState((prev) => ({ ...prev, password: event.target.value }))
-                    }
-                    placeholder="Leave blank to keep current"
-                  />
+                  {editFormState.emp_no ? (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3 dark:border-blue-900/30 dark:bg-blue-900/20">
+                      <p className="text-xs font-medium text-blue-800 dark:text-blue-300 flex items-center gap-2">
+                        <IconBadge className="w-3.5 h-3.5" />
+                        Password managed by HRMS
+                      </p>
+                    </div>
+                  ) : (
+                    <Input
+                      label="New Password"
+                      name="password"
+                      type="password"
+                      value={editFormState.password || ''}
+                      onChange={(event) =>
+                        setEditFormState((prev) => ({ ...prev, password: event.target.value }))
+                      }
+                      placeholder="Leave blank to keep current"
+                    />
+                  )}
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
                       Role

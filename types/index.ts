@@ -14,6 +14,8 @@ export interface User {
   name: string;
   email: string;
   mobileNumber?: string;
+  hrms_id?: string;
+  emp_no?: string;
   roleName: RoleName;
   designation?: string;
   permissions?: Record<string, ModulePermission>;
@@ -46,6 +48,8 @@ export interface CreateUserData {
   roleName: RoleName;
   designation?: string;
   permissions?: Record<string, ModulePermission>;
+  hrms_id?: string;
+  emp_no?: string;
 }
 
 export interface UpdateUserData {
@@ -60,6 +64,8 @@ export interface UpdateUserData {
   isManager?: boolean;
   managedBy?: string | null;
   unassignLeads?: boolean;
+  hrms_id?: string;
+  emp_no?: string;
 }
 
 // Course & Branch Types

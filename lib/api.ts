@@ -164,6 +164,10 @@ export const userAPI = {
     const response = await api.delete(`/users/${id}`);
     return response.data;
   },
+  searchHrmsEmployees: async (name: string) => {
+    const response = await api.get(`/users/hrms/search?name=${encodeURIComponent(name)}`);
+    return response.data;
+  },
 };
 
 // User Settings API (current user only)
