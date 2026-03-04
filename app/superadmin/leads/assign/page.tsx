@@ -355,6 +355,7 @@ export default function AssignLeadsPage() {
 
   // Which location filters to use for stats: stats tab uses its own, others use bulk form's
   const statsQueryState = mode === 'stats' ? statsState : state;
+  const statsQueryDistrict = mode === 'stats' ? statsDistrict : district;
   const statsQueryMandal = mode === 'stats' ? statsMandal : mandal;
 
   // Fetch assignment statistics (scoped by academic year, student group, and location)
@@ -364,10 +365,11 @@ export default function AssignLeadsPage() {
     isLoading: isStatsLoading,
     isFetching: isStatsFetching
   } = useQuery<{ data: AssignmentStats }>({
-    queryKey: ['assignmentStats', statsQueryMandal, statsQueryState, statsAcademicYear, statsStudentGroup, statsCycleNumber],
+    queryKey: ['assignmentStats', statsQueryMandal, statsQueryDistrict, statsQueryState, statsAcademicYear, statsStudentGroup, statsCycleNumber],
     queryFn: async () => {
       const response = await leadAPI.getAssignmentStats({
         mandal: statsQueryMandal || undefined,
+        district: statsQueryDistrict || undefined,
         state: statsQueryState || undefined,
         academicYear: statsAcademicYear !== '' ? statsAcademicYear : undefined,
         studentGroup: statsStudentGroup || undefined,
@@ -424,12 +426,13 @@ export default function AssignLeadsPage() {
 
   // Assigned count for selected user (for remove-assignment tab)
   const { data: assignedCountData } = useQuery<{ data?: { count?: number } }>({
-    queryKey: ['assignedCountForUser', removeUserId, removeMandal, removeState, removeAcademicYear, removeStudentGroup, removeCycleNumber],
+    queryKey: ['assignedCountForUser', removeUserId, removeMandal, removeDistrict, removeState, removeAcademicYear, removeStudentGroup, removeCycleNumber],
     queryFn: async () => {
       if (!removeUserId) return { data: { count: 0 } };
       const response = await leadAPI.getAssignedCountForUser({
         userId: removeUserId,
         mandal: removeMandal || undefined,
+        district: removeDistrict || undefined,
         state: removeState || undefined,
         academicYear: removeAcademicYear !== '' ? removeAcademicYear : undefined,
         studentGroup: removeStudentGroup || undefined,
@@ -486,6 +489,7 @@ export default function AssignLeadsPage() {
     mutationFn: async (payload: {
       userId: string;
       mandal?: string;
+      district?: string;
       state?: string;
       academicYear?: number | string;
       studentGroup?: string;
@@ -545,6 +549,7 @@ export default function AssignLeadsPage() {
     mutationFn: async (payload: {
       userId: string;
       mandal?: string;
+      district?: string;
       state?: string;
       academicYear?: number | string;
       studentGroup?: string;
@@ -591,6 +596,7 @@ export default function AssignLeadsPage() {
     assignMutation.mutate({
       userId: selectedUserId,
       mandal: mandal || undefined,
+      district: district || undefined,
       state: state || undefined,
       academicYear,
       studentGroup: studentGroup || undefined,
@@ -665,6 +671,7 @@ export default function AssignLeadsPage() {
     removeAssignmentsMutation.mutate({
       userId: removeUserId,
       mandal: removeMandal || undefined,
+      district: removeDistrict || undefined,
       state: removeState || undefined,
       academicYear: removeAcademicYear !== '' ? removeAcademicYear : undefined,
       studentGroup: removeStudentGroup || undefined,
