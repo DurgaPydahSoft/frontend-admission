@@ -154,7 +154,7 @@ export default function UserSettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-6 px-0 sm:px-2 pb-20 sm:pb-0">
-      <div className="space-y-0.5 sm:space-y-1">
+      <div className="lg:hidden space-y-0.5 sm:space-y-1">
         <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100">Settings</h1>
         <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
           Manage your account preferences and time tracking.

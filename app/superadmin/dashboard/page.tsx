@@ -84,17 +84,9 @@ const STUDENT_GROUP_OPTIONS = ['10th', 'Inter', 'Inter-MPC', 'Inter-BIPC', 'Degr
 export default function SuperAdminDashboard() {
   const router = useRouter();
   const { theme } = useTheme();
-  const [team, setTeam] = useState<User[]>([]);
-  const [isTeamLoading, setIsTeamLoading] = useState(true);
   const [dashboardAcademicYear, setDashboardAcademicYear] = useState<number | ''>('');
   const [dashboardStudentGroup, setDashboardStudentGroup] = useState<string>('');
   const [showAllCalls, setShowAllCalls] = useState(false);
-  const [userCounts, setUserCounts] = useState({
-    counselors: 0,
-    pros: 0,
-    dataEntry: 0,
-    subAdmins: 0,
-  });
 
   useEffect(() => {
     const currentUser = auth.getUser();
@@ -106,35 +98,6 @@ export default function SuperAdminDashboard() {
       router.push('/user/dashboard');
       return;
     }
-
-    const loadTeam = async () => {
-      try {
-        const response = await userAPI.getAll();
-        const allUsers = response.data || response;
-
-        // Calculate counts for various roles
-        const counts = {
-          counselors: allUsers.filter((u: User) => u.roleName === 'Student Counselor').length,
-          pros: allUsers.filter((u: User) => u.roleName === 'PRO').length,
-          dataEntry: allUsers.filter((u: User) => u.roleName === 'Data Entry User').length,
-          subAdmins: allUsers.filter((u: User) => u.roleName === 'Sub Super Admin').length,
-        };
-        setUserCounts(counts);
-
-        // Filter out Super Admin and Sub Super Admin users for the performance table/cards
-        const filteredUsers = allUsers.filter(
-          (user: User) => user.roleName !== 'Super Admin' && user.roleName !== 'Sub Super Admin'
-        );
-        setTeam(filteredUsers);
-      } catch (error) {
-        console.error('Failed to load team roster', error);
-        showToast.error('Unable to load team roster right now');
-      } finally {
-        setIsTeamLoading(false);
-      }
-    };
-
-    loadTeam();
   }, [router]);
 
   const {
@@ -335,9 +298,10 @@ export default function SuperAdminDashboard() {
   ]), [overviewAnalytics]);
 
   const userAnalytics = userAnalyticsData?.users || [];
+  const userCounts = overviewAnalytics?.totals.userRoleCounts || { counselors: 0, pros: 0, dataEntry: 0, subAdmins: 0 };
 
   const isInitialLoad = !overviewData && isLoadingOverview;
-  if (isTeamLoading || isLoadingUserAnalytics || isInitialLoad) {
+  if (isLoadingUserAnalytics || isInitialLoad) {
     return <SuperAdminDashboardSkeleton />;
   }
 

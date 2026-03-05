@@ -638,7 +638,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   'flex-shrink-0 px-4 z-10',
                   isCompactPage ? 'pt-2 pb-0 lg:hidden' : (isReducedSpacingPage ? 'pt-6 pb-0' : 'pt-6 pb-4'),
                   'sm:px-6 lg:px-8',
-                  useMobileBottomNav && 'hidden lg:block'
+                  useMobileBottomNav && 'hidden'
                 )}
               >
                 <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-5 lg:px-6 transition-all duration-300">
@@ -654,7 +654,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                     </button>
 
                     {/* Back Icon - Hide on Dashboard and Leads root pages */}
-                    {!['/superadmin/dashboard', '/superadmin/leads', '/superadmin/reports', '/superadmin/users'].includes(pathname) && (
+                    {!['/superadmin/dashboard', '/superadmin/leads', '/superadmin/reports', '/superadmin/users', '/superadmin/visitors'].includes(pathname) && (
                       <button
                         type="button"
                         onClick={handleBack}
@@ -694,6 +694,14 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   useMobileBottomNav && 'pb-20 pt-[calc(2.75rem+env(safe-area-inset-top))] lg:pt-6 lg:pb-8'
                 )}
               >
+                {/* Desktop-only simple heading for Counselor pages */}
+                {useMobileBottomNav && (
+                  <div className="hidden lg:block mb-8 px-1">
+                    <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+                      {mobileTopBar?.title || title}
+                    </h1>
+                  </div>
+                )}
                 <div className={cn(
                   "mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500",
                   isFullWidthPage ? "w-full" : "max-w-[1600px]"

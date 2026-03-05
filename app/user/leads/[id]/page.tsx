@@ -677,6 +677,11 @@ export default function UserLeadDetailPage() {
     return () => clearHeaderContent();
   }, [lead, user, router, setHeaderContent, clearHeaderContent]);
 
+  useEffect(() => {
+    setMobileTopBar({ title: 'Lead Details', iconKey: 'leads' });
+    return () => clearMobileTopBar();
+  }, [setMobileTopBar, clearMobileTopBar]);
+
   // Reset cancelled state when lead changes
   useEffect(() => {
     setAutoCallCancelled(false);

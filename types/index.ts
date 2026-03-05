@@ -491,6 +491,12 @@ export interface OverviewAnalyticsTotals {
     approved: number;
   };
   admissions: number;
+  userRoleCounts?: {
+    counselors: number;
+    pros: number;
+    dataEntry: number;
+    subAdmins: number;
+  };
 }
 
 export interface OverviewAnalyticsDailyCount {
@@ -743,6 +749,12 @@ export interface OverviewAnalytics {
       approved: number;
     };
     admissions: number;
+    userRoleCounts?: {
+      counselors: number;
+      pros: number;
+      dataEntry: number;
+      subAdmins: number;
+    };
   };
   leadStatusBreakdown: Record<string, number>;
   joiningStatusBreakdown: Record<string, number>;
