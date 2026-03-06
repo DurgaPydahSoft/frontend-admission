@@ -53,9 +53,14 @@ export const auth = {
   clearAuth: () => {
     Cookies.remove(TOKEN_KEY, { path: '/' });
     Cookies.remove(USER_KEY, { path: '/' });
+    Cookies.remove('accessToken', { path: '/' });
+    Cookies.remove('refreshToken', { path: '/' });
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(TOKEN_KEY);
       window.localStorage.removeItem(USER_KEY);
+      window.localStorage.removeItem('accessToken');
+      window.localStorage.removeItem('refreshToken');
+      window.localStorage.removeItem('user'); // Also common key
       window.sessionStorage.clear();
     }
   },

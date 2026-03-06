@@ -18,6 +18,8 @@ export const viewport: Viewport = {
 };
 
 import PwaInstallPrompt from "@/components/PwaInstallPrompt";
+import { SSOHandler } from "@/components/SSOHandler";
+import { Suspense } from "react";
 
 export default function RootLayout({
   children,
@@ -32,6 +34,9 @@ export default function RootLayout({
       </head>
       <body className="font-sans antialiased">
         <Providers>
+          <Suspense fallback={null}>
+            <SSOHandler />
+          </Suspense>
           {children}
           <PwaInstallPrompt />
         </Providers>
