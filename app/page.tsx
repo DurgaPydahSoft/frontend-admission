@@ -54,6 +54,7 @@ export default function Home() {
           fill
           priority
           className="object-cover"
+          style={{ filter: 'brightness(0.9)' }}
         />
         {/* Cinematic Gradient Overlay - Darker in the middle for depth */}
         <div className="absolute inset-0 bg-gradient-to-b from-amber-50/10 via-white/10 to-amber-100/10" />
@@ -85,7 +86,7 @@ export default function Home() {
           </p>
 
           {/* Headline */}
-          <h1 className="text-3xl font-bold tracking-tight text-white/90 sm:text-5xl md:text-6xl lg:text-7xl">
+          <h1 className="text-3xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
             <span className=" block sm:inline">
               Admissions &amp; Enquiry Portal
             </span>
