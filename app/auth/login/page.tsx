@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Home } from 'lucide-react';
 import { authAPI, CRM_FRONTEND_URL } from '@/lib/api';
 import { auth } from '@/lib/auth';
@@ -203,89 +204,90 @@ function LoginPageContent() {
     );
   }
 
-  // Show normal login form: two-column layout (Lottie | Form) on large screens
+  // Show normal login form: Centered card layout with warm palette matching the image
   return (
-    <div style={{ backgroundColor: '#f9fafb' }} className="min-h-screen grid lg:grid-cols-2 relative overflow-hidden gap-0 lg:gap-6">
-      {/* Left: Lottie — larger size, reduced padding */}
-      <div className="relative flex flex-col items-center justify-center pt-20 pb-0 lg:py-12 border-b lg:border-b-0 lg:border-r border-gray-200 bg-white/50 lg:bg-transparent">
-        <div className="w-full max-w-[280px] sm:max-w-sm lg:max-w-xl flex items-center justify-center">
-          <LoginLottie className="w-full h-auto object-contain" />
-        </div>
-        <p className="hidden lg:block mt-8 text-center text-sm font-medium text-gray-600 max-w-xs">
-          Manage leads and track admissions in one place
-        </p>
+    <div className="min-h-screen flex items-center justify-center lg:justify-end relative overflow-hidden bg-[#fdfcfb] px-4 sm:px-12 lg:px-24">
+      {/* Background Image with Warm Overlay */}
+      <div className="absolute inset-0 z-0">
+        <Image
+          src="/Admission-cell-login.png"
+          alt="Background"
+          fill
+          priority
+          className="object-cover"
+        />
+        {/* Warm Overlay to match wood and cream tones */}
+        <div className="absolute inset-0 bg-gradient-to-b from-amber-50/10 via-white/10 to-amber-100/10" />
+        <div className="absolute inset-0 bg-black/10" />
       </div>
 
-      {/* Right: Login form — compact padding */}
-      <div className="relative flex flex-col items-center justify-start lg:justify-center pt-4 pb-8 px-4 sm:px-6 lg:px-12 bg-white lg:bg-transparent">
-        <div className="w-full max-w-md">
-          <Card className="relative bg-white border-0 lg:border border-gray-200 shadow-none lg:shadow-xl p-0 lg:p-6">
-            <Link
-              href="/"
-              className="absolute top-9 left-6 hidden lg:inline-flex p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-[#ea580c] transition-colors duration-200 ease-in-out group z-10"
-              title="Go to Home"
-            >
-              <Home className="w-5 h-5 lg:w-6 lg:h-6 transform group-hover:scale-110 transition-transform" />
-            </Link>
+      <div className="relative z-10 w-full max-w-md">
+        <Card className="bg-white/70 backdrop-blur-xl border border-white/40 shadow-2xl p-6 sm:p-8">
+          <Link
+            href="/"
+            className="absolute top-6 left-6 inline-flex p-2 rounded-full hover:bg-black/5 text-slate-400 hover:text-orange-600 transition-all duration-200 ease-in-out group z-10"
+            title="Go to Home"
+          >
+            <Home className="w-5 h-5 transform group-hover:scale-110" />
+          </Link>
 
-            <div className="text-center mb-4 lg:mb-8 pt-2 lg:pt-4">
-              <h2 className="text-2xl lg:text-3xl font-bold text-gray-900 tracking-tight">Lead Tracker</h2>
-              <p className="mt-1 lg:mt-2 text-sm text-gray-600">Sign in to your account</p>
+          <div className="text-center mb-8 pt-4">
+            <h2 className="text-3xl font-bold tracking-tight">
+              <span className="text-orange-600">Admissions</span> <span className="text-black">Portal</span>
+            </h2>
+            <p className="mt-2 text-sm text-slate-600 font-medium">Sign in to your account</p>
+          </div>
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+              <p className="text-sm text-red-600 font-medium">{error}</p>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            <Input
+              label="Email or Mobile Number"
+              type="text"
+              placeholder="Enter email or mobile number"
+              error={errors.email?.message}
+              {...register('email')}
+              className="bg-white/50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-orange-500/50"
+            />
+
+            <Input
+              label="Password"
+              type="password"
+              placeholder="Enter your password"
+              error={errors.password?.message}
+              {...register('password')}
+              className="bg-white/50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-orange-500/50"
+            />
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-sm font-semibold text-orange-600 hover:text-orange-700 hover:underline transition-colors"
+              >
+                Forgot Password?
+              </button>
             </div>
 
-            {error && (
-              <div className="mb-4 p-4 bg-linear-to-r from-red-50 to-red-100/50 border-2 border-red-200 rounded-xl shadow-sm animate-pulse">
-                <p className="text-sm text-red-700 font-medium">{error}</p>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 lg:space-y-5">
-              <Input
-                label="Email or Mobile Number"
-                type="text"
-                placeholder="Enter email or mobile number"
-                error={errors.email?.message}
-                {...register('email')}
-                className="py-2 lg:py-2.5"
-              />
-
-              <Input
-                label="Password"
-                type="password"
-                placeholder="Enter your password"
-                error={errors.password?.message}
-                {...register('password')}
-                className="py-2 lg:py-2.5"
-              />
-
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowForgotPassword(true)}
-                  className="text-sm font-medium text-[#ea580c] hover:text-[#f97316] hover:underline"
-                >
-                  Forgot Password?
-                </button>
-              </div>
-
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                isLoading={isLoading}
-                className="w-full group mt-2 py-3 lg:py-4 text-sm lg:text-base"
-              >
-                <span className="group-hover:scale-105 transition-transform inline-block">
-                  {isLoading ? 'Signing In...' : 'Sign In'}
-                </span>
-              </Button>
-            </form>
-          </Card>
-        </div>
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              isLoading={isLoading}
+              className="w-full bg-orange-600 hover:bg-orange-700 shadow-lg shadow-orange-200 transition-all py-4 text-base font-bold text-white border-none"
+            >
+              {isLoading ? 'Signing In...' : 'Sign In'}
+            </Button>
+          </form>
+        </Card>
       </div>
 
-      {/* Bottom accent line */}
-      <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#f97316] opacity-60" />
+      {/* Bottom accent line - Warm Gradient */}
+      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-orange-400 to-transparent opacity-60" />
 
       {/* Forgot Password Modal */}
       <ForgotPasswordModal

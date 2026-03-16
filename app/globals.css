@@ -88,6 +88,35 @@ html.dark ::-webkit-scrollbar-thumb:hover {
   animation: shimmer 2s infinite;
 }
 
+@keyframes text-shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.shimmer-text {
+  color: white;
+  background: linear-gradient(
+    90deg,
+    white 0%,
+    white 35%,
+    #f97316 45%,
+    #fb923c 50%,
+    #f97316 55%,
+    white 65%,
+    white 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: text-shimmer 10s linear infinite;
+  /* Standard way to achieve text clipping effect */
+  -webkit-text-fill-color: transparent;
+}
+
 @keyframes float {
   0% {
     transform: translateY(0) translateX(0);
