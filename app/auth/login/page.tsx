@@ -210,7 +210,7 @@ function LoginPageContent() {
       {/* Background Image with Warm Overlay */}
       <div className="absolute inset-0 z-0">
         <Image
-          src="/Admission-cell-login.png"
+          src="/Admission-cell-login-background.jpg"
           alt="Background"
           fill
           priority

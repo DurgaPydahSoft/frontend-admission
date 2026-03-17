@@ -49,7 +49,7 @@ export default function Home() {
       {/* Background Image with Overlay */}
       <div className="absolute inset-0 z-0">
         <Image
-          src="/Admission-cell.png"
+          src="/Admission-cell-background.jpg"
           alt="Admission Cell Background"
           fill
           priority
