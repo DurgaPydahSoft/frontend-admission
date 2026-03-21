@@ -234,7 +234,7 @@ export default function LeadFormPage() {
         isNRI: getFieldValue(['isNRI', 'nri']) === true || getFieldValue(['isNRI', 'nri']) === 'true' || false,
         quota: 'Not Applicable',
         applicationStatus: 'Not Provided',
-        source: 'Public Form',
+        source: utmParams.utm_source || 'Public Form',
         utmSource: utmParams.utm_source || undefined,
         utmMedium: utmParams.utm_medium || undefined,
         utmCampaign: utmParams.utm_campaign || undefined,
