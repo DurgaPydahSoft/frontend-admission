@@ -1157,6 +1157,10 @@ export default function LeadsPage() {
                         <span className="font-medium text-gray-900 dark:text-slate-100">{lead.source || '—'}</span>
                       </div>
                       <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-slate-400">Group</span>
+                        <span className="font-medium text-gray-900 dark:text-slate-100">{lead.studentGroup || '—'}</span>
+                      </div>
+                      <div className="flex justify-between">
                         <span className="text-gray-500 dark:text-slate-400">District</span>
                         <span className="font-medium text-gray-900 dark:text-slate-100">{lead.district || '—'}</span>
                       </div>
@@ -1247,6 +1251,19 @@ export default function LeadsPage() {
                         <div className="flex items-center gap-1">
                           Student Name
                           {sortField === 'name' && (
+                            <span className="text-blue-600 dark:text-blue-300">
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                        onClick={() => handleSort('studentGroup')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Group
+                          {sortField === 'studentGroup' && (
                             <span className="text-blue-600 dark:text-blue-300">
                               {sortOrder === 'asc' ? '↑' : '↓'}
                             </span>
@@ -1364,6 +1381,9 @@ export default function LeadsPage() {
                                 </span>
                               )}
                             </div>
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300" title={lead.studentGroup || '—'}>
+                            {lead.studentGroup || '—'}
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300" title={lead.source || '—'}>
                             {lead.source || '—'}
