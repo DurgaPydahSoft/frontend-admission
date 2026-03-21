@@ -33,27 +33,47 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
+const STORAGE_KEY = 'leads_management_state';
+
 export default function LeadsPage() {
   const router = useRouter();
   const { setHeaderContent, clearHeaderContent } = useDashboardHeader();
   const [user, setUser] = useState(auth.getUser());
   const pageSizeOptions = [50, 100, 200, 300];
   const defaultPageSize = 50;
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(() => {
+
+  // Initialize state from localStorage if available
+  const getInitialState = () => {
+    if (typeof window !== 'undefined') {
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch (e) {
+          console.error('Error parsing stored state:', e);
+        }
+      }
+    }
+    return null;
+  };
+
+  const persistedState = getInitialState();
+
+  const [page, setPage] = useState<number>(persistedState?.page || 1);
+  const [limit, setLimit] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       const stored = window.localStorage.getItem('leadTablePageSize');
-      const parsed = stored ? parseInt(stored, 10) : defaultPageSize;
+      const parsed = stored ? parseInt(stored, 10) : (persistedState?.limit || defaultPageSize);
       if (!Number.isNaN(parsed) && pageSizeOptions.includes(parsed)) {
         return parsed;
       }
     }
-    return defaultPageSize;
+    return persistedState?.limit || (defaultPageSize as number);
   });
-  const [search, setSearch] = useState('');
-  const [enquiryNumber, setEnquiryNumber] = useState('');
-  const [filters, setFilters] = useState<LeadFilters>({});
-  const [showFilters, setShowFilters] = useState(false);
+  const [search, setSearch] = useState<string>(persistedState?.search || '');
+  const [enquiryNumber, setEnquiryNumber] = useState<string>(persistedState?.enquiryNumber || '');
+  const [filters, setFilters] = useState<LeadFilters>(persistedState?.filters || {});
+  const [showFilters, setShowFilters] = useState<boolean>(persistedState?.showFilters || false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -69,8 +89,8 @@ export default function LeadsPage() {
   const [assignableUsers, setAssignableUsers] = useState<User[]>([]);
   const [isSelectingAll, setIsSelectingAll] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  const [sortField, setSortField] = useState<string>('');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortField, setSortField] = useState<string>(persistedState?.sortField || '');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(persistedState?.sortOrder || 'asc');
   const [searchSuggestions, setSearchSuggestions] = useState<Lead[]>([]);
   const [enquirySuggestions, setEnquirySuggestions] = useState<Lead[]>([]);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
@@ -84,13 +104,35 @@ export default function LeadsPage() {
   const deleteJobCompletedRef = useRef<boolean>(false);
   const queryClient = useQueryClient();
 
+  // Save state to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && isMounted) {
+      const stateToStore = {
+        page,
+        limit,
+        search,
+        enquiryNumber,
+        filters,
+        showFilters,
+        sortField,
+        sortOrder,
+      };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToStore));
+    }
+  }, [page, limit, search, enquiryNumber, filters, showFilters, sortField, sortOrder, isMounted]);
+
   // Debounce search inputs
   const debouncedSearch = useDebounce(search, 500);
   const debouncedEnquiryNumber = useDebounce(enquiryNumber, 500);
 
-  // Track previous search values to detect actual changes
-  const prevSearchRef = useRef<string>('');
-  const prevEnquiryRef = useRef<string>('');
+  // Track previous values to detect actual changes and prevent resets on mount
+  const prevSearchRef = useRef<string>(persistedState?.search || '');
+  const prevEnquiryRef = useRef<string>(persistedState?.enquiryNumber || '');
+  const prevLimitRef = useRef<number>(persistedState?.limit || (
+    typeof window !== 'undefined' ? 
+    (parseInt(window.localStorage.getItem('leadTablePageSize') || '', 10) || defaultPageSize) : 
+    defaultPageSize
+  ));
 
   // Reset to page 1 when search or enquiry number changes
   useEffect(() => {
@@ -121,7 +163,11 @@ export default function LeadsPage() {
   }, [router]);
 
   useEffect(() => {
-    setPage(1);
+    // Only reset page if limit actually changed from its previous/restored value
+    if (limit !== prevLimitRef.current) {
+      setPage(1);
+      prevLimitRef.current = limit;
+    }
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('leadTablePageSize', String(limit));
     }
@@ -999,6 +1045,30 @@ export default function LeadsPage() {
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-200 mb-1">
+                  Manual Update
+                </label>
+                <div className="flex items-center h-10">
+                  <button
+                    type="button"
+                    onClick={() => handleFilterChange('needsUpdate', filters.needsUpdate ? undefined : true)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
+                      filters.needsUpdate 
+                        ? 'bg-amber-50 border-amber-300 text-amber-800 shadow-sm' 
+                        : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50 dark:bg-slate-900/50 dark:border-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${filters.needsUpdate ? 'bg-amber-500' : 'bg-gray-300 dark:bg-slate-600'}`}></span>
+                    <span className="text-[11px] font-bold uppercase tracking-tight">Needs Update</span>
+                    {needsUpdateCount > 0 && (
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filters.needsUpdate ? 'bg-amber-200' : 'bg-gray-100 dark:bg-slate-800'}`}>
+                        {needsUpdateCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1445,7 +1515,7 @@ export default function LeadsPage() {
               {/* Previous Page Button (Icon Only) */}
               <Button
                 variant="outline"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => setPage((p: number) => Math.max(1, p - 1))}
                 disabled={page === 1 || isLoading}
                 size="sm"
                 className="p-2"
@@ -1487,7 +1557,7 @@ export default function LeadsPage() {
               {/* Next Page Button (Icon Only) */}
               <Button
                 variant="outline"
-                onClick={() => setPage((p) => Math.min(pagination.pages, p + 1))}
+                onClick={() => setPage((p: number) => Math.min(pagination.pages, p + 1))}
                 disabled={page === pagination.pages || isLoading}
                 size="sm"
                 className="p-2"

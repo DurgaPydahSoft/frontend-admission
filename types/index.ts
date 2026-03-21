@@ -693,6 +693,7 @@ export interface LeadFilters {
   limit?: number;
   /** When true, only leads with at least one comment or status update today */
   touchedToday?: boolean;
+  needsUpdate?: boolean;
   cycleNumber?: number | string;
   targetDate?: string;
 }
