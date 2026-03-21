@@ -1157,6 +1157,14 @@ export default function LeadsPage() {
                         <span className="font-medium text-gray-900 dark:text-slate-100">{lead.source || '—'}</span>
                       </div>
                       <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-slate-400">District</span>
+                        <span className="font-medium text-gray-900 dark:text-slate-100">{lead.district || '—'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-slate-400">Mandal</span>
+                        <span className="font-medium text-gray-900 dark:text-slate-100">{lead.mandal || '—'}</span>
+                      </div>
+                      <div className="flex justify-between">
                         <span className="text-gray-500 dark:text-slate-400">Counsellor Assigned</span>
                         <span className="font-medium text-gray-900 dark:text-slate-100">{assignedUserName}</span>
                       </div>
@@ -1258,6 +1266,32 @@ export default function LeadsPage() {
                           )}
                         </div>
                       </th>
+                      <th
+                        className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                        onClick={() => handleSort('district')}
+                      >
+                        <div className="flex items-center gap-1">
+                          District
+                          {sortField === 'district' && (
+                            <span className="text-blue-600 dark:text-blue-300">
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                        onClick={() => handleSort('mandal')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Mandal
+                          {sortField === 'mandal' && (
+                            <span className="text-blue-600 dark:text-blue-300">
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </div>
+                      </th>
                       <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider dark:text-slate-200">
                         Counsellor Assigned
                       </th>
@@ -1333,6 +1367,12 @@ export default function LeadsPage() {
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300" title={lead.source || '—'}>
                             {lead.source || '—'}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 truncate max-w-[100px]" title={lead.district || '—'}>
+                            {lead.district || '—'}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 truncate max-w-[100px]" title={lead.mandal || '—'}>
+                            {lead.mandal || '—'}
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300" title={assignedUserName}>
                             {assignedUserName}

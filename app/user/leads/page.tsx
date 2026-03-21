@@ -769,10 +769,10 @@ export default function UserLeadsPage() {
                     <td className="px-6 py-3 text-slate-600 dark:text-slate-300">
                       {lead.studentGroup || '—'}
                     </td>
-                    <td className="px-6 py-3 text-slate-600 dark:text-slate-300">
+                    <td className="px-6 py-3 text-slate-600 dark:text-slate-300 truncate max-w-[120px]" title={lead.district || '—'}>
                       {lead.district || '—'}
                     </td>
-                    <td className="px-6 py-3 text-slate-600 dark:text-slate-300">
+                    <td className="px-6 py-3 text-slate-600 dark:text-slate-300 truncate max-w-[120px]" title={lead.mandal || '—'}>
                       {lead.mandal || '—'}
                     </td>
                     <td className="px-6 py-3">
@@ -861,7 +861,7 @@ export default function UserLeadsPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
-                            <span className="truncate">{[lead.village, lead.mandal].filter(Boolean).join(', ')}</span>
+                            <span className="truncate">{[lead.village, lead.mandal, lead.district].filter(Boolean).join(', ')}</span>
                           </div>
                         </>
                       )}
