@@ -365,7 +365,7 @@ export default function AssignLeadsPage() {
   // Fetch assignment statistics (scoped by academic year, student group, and location)
   const activeUserId = mode === 'institution' ? institutionUserId : selectedUserId;
   const targetUser = users.find(u => (u.id || u._id) === activeUserId);
-  const targetRole = targetUser?.roleName;
+  const targetRole = targetUser?.roleName?.trim().toUpperCase();
 
   const {
     data: statsData,
