@@ -1417,7 +1417,7 @@ export default function AssignLeadsPage() {
                     ))}
                   </select>
                   <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                    Only unassigned leads for this academic year will be assigned.
+                    {targetRole === 'PRO' ? 'Available leads for this academic year will be assigned.' : 'Only unassigned leads for this academic year will be assigned.'}
                   </p>
                 </div>
                 <div>
