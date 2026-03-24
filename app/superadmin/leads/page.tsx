@@ -1445,9 +1445,14 @@ export default function LeadsPage() {
                                   NRI
                                 </span>
                               )}
-                              {lead.needsManualUpdate && (
+                              {lead.needsManualUpdate === 1 && (
                                 <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 rounded" title="District or mandal may not match master data. Update manually.">
                                   Needs update
+                                </span>
+                              )}
+                              {lead.needsManualUpdate === 2 && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 rounded" title="District is valid, but Mandal misspelling detected. Update manually.">
+                                  Mandal need to be updated
                                 </span>
                               )}
                             </div>
