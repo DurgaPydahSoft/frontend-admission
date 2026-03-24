@@ -363,13 +363,17 @@ export default function AssignLeadsPage() {
   const statsQueryCycleNumber = mode === 'stats' ? statsCycleNumber : mode === 'institution' ? '' : cycleNumber;
 
   // Fetch assignment statistics (scoped by academic year, student group, and location)
+  const activeUserId = mode === 'institution' ? institutionUserId : selectedUserId;
+  const targetUser = users.find(u => (u.id || u._id) === activeUserId);
+  const targetRole = targetUser?.roleName;
+
   const {
     data: statsData,
     refetch: refetchStats,
     isLoading: isStatsLoading,
     isFetching: isStatsFetching
   } = useQuery<{ data: AssignmentStats }>({
-    queryKey: ['assignmentStats', statsQueryMandal, statsQueryDistrict, statsQueryState, statsQueryAcademicYear, statsQueryStudentGroup, statsQueryCycleNumber],
+    queryKey: ['assignmentStats', statsQueryMandal, statsQueryDistrict, statsQueryState, statsQueryAcademicYear, statsQueryStudentGroup, statsQueryCycleNumber, targetRole],
     queryFn: async () => {
       const response = await leadAPI.getAssignmentStats({
         mandal: statsQueryMandal || undefined,
@@ -378,6 +382,7 @@ export default function AssignLeadsPage() {
         academicYear: statsQueryAcademicYear !== '' ? statsQueryAcademicYear : undefined,
         studentGroup: statsQueryStudentGroup || undefined,
         cycleNumber: statsQueryCycleNumber !== '' ? statsQueryCycleNumber : undefined,
+        targetRole: targetRole || undefined,
       });
       // Backend returns { success, data: { totalLeads, assignedCount, ... }, message }
       const payload = response?.data ?? response ?? {};
@@ -394,12 +399,13 @@ export default function AssignLeadsPage() {
 
   // Fetch institution breakdown (school or college wise unassigned counts) when in institution mode
   const { data: institutionStatsData, refetch: refetchInstitutionStats } = useQuery<{ data: AssignmentStats }>({
-    queryKey: ['assignmentStatsInstitution', institutionAcademicYear, institutionStudentGroup, institutionForBreakdown],
+    queryKey: ['assignmentStatsInstitution', institutionAcademicYear, institutionStudentGroup, institutionForBreakdown, targetRole],
     queryFn: async () => {
       const response = await leadAPI.getAssignmentStats({
         academicYear: institutionAcademicYear !== '' ? institutionAcademicYear : undefined,
         studentGroup: institutionStudentGroup || undefined,
         forBreakdown: institutionForBreakdown,
+        targetRole: targetRole || undefined,
       });
       const payload = response?.data ?? response ?? {};
       return { data: payload };
@@ -815,11 +821,11 @@ export default function AssignLeadsPage() {
             <div className="mt-1 text-2xl font-bold text-[#ffffff]">{stats.totalLeads.toLocaleString()}</div>
           </Card>
           <Card className="p-4 bg-[#10b981] text-[#ffffff] border-none shadow-md dark:bg-[#059669]">
-            <div className="text-sm font-medium text-[#f1f5f9]">Assigned Leads</div>
+            <div className="text-sm font-medium text-[#f1f5f9]">{targetRole === 'PRO' ? 'Assigned to PROs' : 'Assigned Leads'}</div>
             <div className="mt-1 text-2xl font-bold text-[#ffffff]">{stats.assignedCount.toLocaleString()}</div>
           </Card>
           <Card className="p-4 bg-[#f97316] text-[#ffffff] border-none shadow-md dark:bg-[#ea580c]">
-            <div className="text-sm font-medium text-[#f1f5f9]">Unassigned Leads</div>
+            <div className="text-sm font-medium text-[#f1f5f9]">{targetRole === 'PRO' ? 'Available for Assignment' : 'Unassigned Leads'}</div>
             <div className="mt-1 text-2xl font-bold text-[#ffffff]">{stats.unassignedCount.toLocaleString()}</div>
           </Card>
         </div>
@@ -1103,7 +1109,7 @@ export default function AssignLeadsPage() {
                   required
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                  Unassigned for this {institutionUseSchools ? 'school' : 'college'}: {(institutionName && institutionStats?.institutionBreakdown?.find((b) => b.name === institutionName)?.count) ?? 0}
+                  {targetRole === 'PRO' ? 'Available' : 'Unassigned'} for this {institutionUseSchools ? 'school' : 'college'}: {(institutionName && institutionStats?.institutionBreakdown?.find((b) => b.name === institutionName)?.count) ?? 0}
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -1541,7 +1547,7 @@ export default function AssignLeadsPage() {
                   required
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                  Number of unassigned leads to assign. Available: {stats?.unassignedCount.toLocaleString() || 0} leads
+                  Number of {targetRole === 'PRO' ? 'available' : 'unassigned'} leads to assign. Available: {stats?.unassignedCount.toLocaleString() || 0} leads
                   {academicYear !== '' && ` for ${academicYear}`}
                   {studentGroup && `, ${studentGroup}`}
                   {mandal && ` in ${mandal}`}

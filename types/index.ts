@@ -212,7 +212,7 @@ export interface Lead {
   nextScheduledCall?: string;
   academicYear?: number;
   studentGroup?: string;
-  needsManualUpdate?: boolean;
+  needsManualUpdate?: number;
   notes?: string;
   uploadedBy?: User | string;
   uploadBatchId?: string;
@@ -693,7 +693,7 @@ export interface LeadFilters {
   limit?: number;
   /** When true, only leads with at least one comment or status update today */
   touchedToday?: boolean;
-  needsUpdate?: boolean;
+  needsUpdate?: boolean | number;
   cycleNumber?: number | string;
   targetDate?: string;
 }
