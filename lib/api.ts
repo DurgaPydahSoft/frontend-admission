@@ -307,6 +307,28 @@ export const leadAPI = {
     });
     return response.data?.data;
   },
+  bulkUpdateLeadGroups: async (formData: FormData) => {
+    const response = await api.post('/leads/bulk-group-update', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
+    return response.data?.data || response.data;
+  },
+  executeGroupSync: async (limit: number, offset: number) => {
+    const response = await api.post('/leads/execute-group-sync', { limit, offset });
+    return response.data?.data || response.data;
+  },
+  getStagedCount: async () => {
+    const response = await api.get('/leads/staged-count');
+    return response.data?.data || response.data;
+  },
+  revertGroupSyncFlag: async () => {
+    const response = await api.post('/leads/revert-group-sync-flag');
+    return response.data;
+  },
   getFilterOptions: async () => {
     const response = await api.get('/leads/filters/options');
     return response.data;
