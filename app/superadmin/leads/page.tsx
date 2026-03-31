@@ -71,7 +71,6 @@ export default function LeadsPage() {
     return persistedState?.limit || (defaultPageSize as number);
   });
   const [search, setSearch] = useState<string>(persistedState?.search || '');
-  const [enquiryNumber, setEnquiryNumber] = useState<string>(persistedState?.enquiryNumber || '');
   const [filters, setFilters] = useState<LeadFilters>(persistedState?.filters || {});
   const [showFilters, setShowFilters] = useState<boolean>(persistedState?.showFilters || false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
@@ -92,9 +91,7 @@ export default function LeadsPage() {
   const [sortField, setSortField] = useState<string>(persistedState?.sortField || '');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(persistedState?.sortOrder || 'asc');
   const [searchSuggestions, setSearchSuggestions] = useState<Lead[]>([]);
-  const [enquirySuggestions, setEnquirySuggestions] = useState<Lead[]>([]);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
-  const [showEnquirySuggestions, setShowEnquirySuggestions] = useState(false);
   const [bulkDeleteProgress, setBulkDeleteProgress] = useState(0);
   const bulkDeleteProgressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const bulkDeleteProgressResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -112,7 +109,6 @@ export default function LeadsPage() {
         page,
         limit,
         search,
-        enquiryNumber,
         filters,
         showFilters,
         sortField,
@@ -120,15 +116,13 @@ export default function LeadsPage() {
       };
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToStore));
     }
-  }, [page, limit, search, enquiryNumber, filters, showFilters, sortField, sortOrder, isMounted]);
+  }, [page, limit, search, filters, showFilters, sortField, sortOrder, isMounted]);
 
   // Debounce search inputs
   const debouncedSearch = useDebounce(search, 500);
-  const debouncedEnquiryNumber = useDebounce(enquiryNumber, 500);
 
   // Track previous values to detect actual changes and prevent resets on mount
   const prevSearchRef = useRef<string>(persistedState?.search || '');
-  const prevEnquiryRef = useRef<string>(persistedState?.enquiryNumber || '');
   const prevLimitRef = useRef<number>(persistedState?.limit || (
     typeof window !== 'undefined' ? 
     (parseInt(window.localStorage.getItem('leadTablePageSize') || '', 10) || defaultPageSize) : 
@@ -139,14 +133,12 @@ export default function LeadsPage() {
   useEffect(() => {
     // Only reset if search or enquiry number actually changed (not just on initial mount)
     const searchChanged = debouncedSearch !== prevSearchRef.current;
-    const enquiryChanged = debouncedEnquiryNumber !== prevEnquiryRef.current;
 
-    if (searchChanged || enquiryChanged) {
+    if (searchChanged) {
       setPage(1);
       prevSearchRef.current = debouncedSearch;
-      prevEnquiryRef.current = debouncedEnquiryNumber;
     }
-  }, [debouncedSearch, debouncedEnquiryNumber]);
+  }, [debouncedSearch]);
 
   // Check authentication and mount state
   useEffect(() => {
@@ -216,7 +208,7 @@ export default function LeadsPage() {
     }
   }, [user]);
 
-  // Search suggestions for general search
+  // Consolidated search suggestions (Name, Phone, Email, or Enquiry Number)
   useEffect(() => {
     let active = true;
 
@@ -226,7 +218,7 @@ export default function LeadsPage() {
           ...filters,
           search: debouncedSearch,
           page: 1,
-          limit: 5,
+          limit: 10,
         });
         if (!active) return;
         const results = response.data?.leads || response.leads || [];
@@ -248,38 +240,6 @@ export default function LeadsPage() {
     };
   }, [debouncedSearch, filters]);
 
-  // Suggestions for enquiry number search
-  useEffect(() => {
-    let active = true;
-
-    const fetchSuggestions = async () => {
-      try {
-        const response = await leadAPI.getAll({
-          ...filters,
-          enquiryNumber: debouncedEnquiryNumber,
-          page: 1,
-          limit: 5,
-        });
-        if (!active) return;
-        const results = response.data?.leads || response.leads || [];
-        setEnquirySuggestions(results);
-      } catch (error) {
-        if (!active) return;
-        setEnquirySuggestions([]);
-      }
-    };
-
-    if (debouncedEnquiryNumber && debouncedEnquiryNumber.length >= 2) {
-      fetchSuggestions();
-    } else {
-      setEnquirySuggestions([]);
-    }
-
-    return () => {
-      active = false;
-    };
-  }, [debouncedEnquiryNumber, filters]);
-
   // Build query filters
   const queryFilters = useMemo(() => {
     const query: LeadFilters = {
@@ -290,11 +250,8 @@ export default function LeadsPage() {
     if (debouncedSearch) {
       query.search = debouncedSearch;
     }
-    if (debouncedEnquiryNumber) {
-      query.enquiryNumber = debouncedEnquiryNumber;
-    }
     return query;
-  }, [page, limit, filters, debouncedSearch, debouncedEnquiryNumber]);
+  }, [page, limit, filters, debouncedSearch]);
 
   // Fetch leads with React Query for caching and performance
   const {
@@ -385,7 +342,6 @@ export default function LeadsPage() {
   const clearFilters = () => {
     setFilters({});
     setSearch('');
-    setEnquiryNumber('');
     setPage(1);
   };
 
@@ -746,9 +702,6 @@ export default function LeadsPage() {
       if (debouncedSearch) {
         filtersForIds.search = debouncedSearch;
       }
-      if (debouncedEnquiryNumber) {
-        filtersForIds.enquiryNumber = debouncedEnquiryNumber;
-      }
 
       // Fetch all lead IDs matching current filters
       const response = await leadAPI.getAllIds(filtersForIds);
@@ -775,9 +728,6 @@ export default function LeadsPage() {
       };
       if (debouncedSearch) {
         exportFilters.search = debouncedSearch;
-      }
-      if (debouncedEnquiryNumber) {
-        exportFilters.enquiryNumber = debouncedEnquiryNumber;
       }
 
       const blob = await leadAPI.exportLeads(exportFilters);
@@ -826,62 +776,35 @@ export default function LeadsPage() {
       <div className="mb-2">
         {/* Search, Filters, and Action Bar - All in One Row */}
         <div className="flex flex-wrap gap-3">
-          {/* Search by Enquiry Number */}
-          <div className="relative flex-1 min-w-[200px]">
+          {/* Global Search box (Name, Phone, Email, or Enquiry Number) */}
+          <div className="relative flex-[2] min-w-[300px]">
             <Input
               type="text"
-              placeholder="Search by Enquiry Number (e.g., ENQ24000001, 24000001, 000001)"
-              value={enquiryNumber}
-              onChange={(e) => setEnquiryNumber(e.target.value)}
-              onFocus={() => setShowEnquirySuggestions(true)}
-              onBlur={() => setTimeout(() => setShowEnquirySuggestions(false), 150)}
-              className="w-full py-2 text-sm"
-            />
-            {showEnquirySuggestions && enquirySuggestions.length > 0 && (
-              <div className="absolute z-20 mt-2 w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden">
-                {enquirySuggestions.map((suggestion) => (
-                  <button
-                    key={`enquiry-suggestion-${suggestion._id}`}
-                    type="button"
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800/60 flex justify-between gap-3"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      if (suggestion.enquiryNumber) {
-                        setEnquiryNumber(suggestion.enquiryNumber);
-                        setPage(1);
-                      }
-                      setShowEnquirySuggestions(false);
-                    }}
-                  >
-                    <span className="font-medium">{suggestion.enquiryNumber || '—'}</span>
-                    <span className="text-xs text-gray-500 dark:text-slate-400">{suggestion.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Search by Name/Phone/Email */}
-          <div className="relative flex-1 min-w-[200px]">
-            <Input
-              type="text"
-              placeholder="Search by Name, Phone, or Email"
+              placeholder="Search by Name, Phone, Email, or Enquiry # (e.g. ENQ24...)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onFocus={() => setShowSearchSuggestions(true)}
               onBlur={() => setTimeout(() => setShowSearchSuggestions(false), 150)}
-              className="w-full py-2 text-sm"
+              className="w-full py-2 text-sm pl-10"
             />
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
             {showSearchSuggestions && searchSuggestions.length > 0 && (
               <div className="absolute z-20 mt-2 w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden">
+                <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50/50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-800">
+                  Quick Results
+                </div>
                 {searchSuggestions.map((suggestion) => (
                   <button
                     key={`search-suggestion-${suggestion._id}`}
                     type="button"
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800/60 flex flex-col gap-1"
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800/60 flex flex-col gap-0.5 border-b last:border-0 border-gray-50 dark:border-slate-800"
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      const value = suggestion.name || suggestion.phone || suggestion.email || '';
+                      const value = suggestion.name || suggestion.enquiryNumber || suggestion.phone || '';
                       if (value) {
                         setSearch(value);
                         setPage(1);
@@ -889,11 +812,33 @@ export default function LeadsPage() {
                       setShowSearchSuggestions(false);
                     }}
                   >
-                    <span className="font-medium">{suggestion.name || suggestion.phone || 'Untitled Lead'}</span>
-                    <span className="text-xs text-gray-500 dark:text-slate-400 flex gap-2">
-                      {suggestion.phone && <span>{suggestion.phone}</span>}
-                      {suggestion.email && <span>{suggestion.email}</span>}
-                    </span>
+                    <div className="flex items-center justify-between gap-2">
+                       <span className="font-semibold text-slate-800 dark:text-slate-100">{suggestion.name || 'Untitled Lead'}</span>
+                       {suggestion.enquiryNumber && (
+                         <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded font-mono uppercase tracking-tight">
+                           {suggestion.enquiryNumber}
+                         </span>
+                       )}
+                    </div>
+                    <div className="flex gap-4 text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
+                      {suggestion.phone && (
+                        <span className="flex items-center gap-1">
+                          <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                          </svg>
+                          {suggestion.phone}
+                        </span>
+                      )}
+                      {suggestion.mandal && (
+                        <span className="flex items-center gap-1 uppercase tracking-tighter opacity-80">
+                          <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          {suggestion.mandal}
+                        </span>
+                      )}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -912,7 +857,7 @@ export default function LeadsPage() {
               </svg>
               {showFilters ? 'Hide' : 'Show'} Filters
             </Button>
-            {(Object.keys(filters).length > 0 || search || enquiryNumber) && (
+            {(Object.keys(filters).length > 0 || search) && (
               <Button
                 variant="outline"
                 onClick={clearFilters}
@@ -1477,8 +1422,7 @@ export default function LeadsPage() {
                       return (
                         <tr
                           key={lead._id}
-                          className={`cursor-pointer transition-colors duration-200 ${isEven ? 'bg-white dark:bg-slate-900/40' : 'bg-slate-50 dark:bg-slate-800/50'
-                            } hover:bg-slate-100 dark:hover:bg-slate-800/70`}
+                          className={`cursor-pointer transition-colors duration-200 ${isEven ? 'bg-white dark:bg-slate-900/40' : 'bg-slate-50 dark:bg-slate-800/50'} hover:bg-slate-100 dark:hover:bg-slate-800/70`}
                           onClick={() => router.push(`/superadmin/leads/${lead._id}`)}
                         >
                           <td className="px-3 py-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
