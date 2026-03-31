@@ -236,6 +236,39 @@ export const leadAPI = {
     // Extract the nested data property for consistency
     return response.data?.data || response.data;
   },
+  exportLeads: async (filters?: {
+    mandal?: string;
+    district?: string;
+    state?: string;
+    quota?: string;
+    leadStatus?: string;
+    applicationStatus?: string;
+    assignedTo?: string;
+    academicYear?: number | string;
+    studentGroup?: string;
+    search?: string;
+    enquiryNumber?: string;
+    scheduledOn?: string;
+    touchedToday?: boolean;
+    cycleNumber?: number | string;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (key === 'touchedToday') {
+          if (value === true) params.append(key, 'true');
+          return;
+        }
+        if (value !== undefined && value !== null && value !== '') {
+          params.append(key, String(value));
+        }
+      });
+    }
+    const response = await api.get(`/leads/export?${params.toString()}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
   getById: async (id: string) => {
     const response = await api.get(`/leads/${id}`);
     // Backend returns { success: true, data: {...}, message: "..." }

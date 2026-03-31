@@ -102,6 +102,7 @@ export default function LeadsPage() {
   const deleteJobPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [deleteJobStatus, setDeleteJobStatus] = useState<DeleteJobStatusResponse | null>(null);
   const deleteJobCompletedRef = useRef<boolean>(false);
+  const [isExporting, setIsExporting] = useState(false);
   const queryClient = useQueryClient();
 
   // Save state to localStorage whenever it changes
@@ -763,6 +764,48 @@ export default function LeadsPage() {
     }
   };
 
+  // Handle export to Excel
+  const handleExportExcel = async () => {
+    try {
+      setIsExporting(true);
+      
+      // Build filters matching current view
+      const exportFilters: any = {
+        ...filters,
+      };
+      if (debouncedSearch) {
+        exportFilters.search = debouncedSearch;
+      }
+      if (debouncedEnquiryNumber) {
+        exportFilters.enquiryNumber = debouncedEnquiryNumber;
+      }
+
+      const blob = await leadAPI.exportLeads(exportFilters);
+      
+      // Create a URL for the blob
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Generate filename with date
+      const date = new Date().toISOString().split('T')[0];
+      link.setAttribute('download', `leads_export_${date}.xlsx`);
+      
+      // Append to document, click and cleanup
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      showToast.success('Excel export started successfully');
+    } catch (error) {
+      console.error('Error exporting leads:', error);
+      showToast.error('Failed to export leads. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // Prevent hydration mismatch by not rendering until mounted
   if (!isMounted || !user) {
     return (
@@ -914,6 +957,21 @@ export default function LeadsPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
               </svg>
               Assign Leads
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleExportExcel}
+              disabled={isExporting}
+              className="flex items-center gap-1.5 h-10 border-green-600 text-green-600 hover:bg-green-50 dark:border-green-500 dark:text-green-500 dark:hover:bg-green-900/20"
+            >
+              {isExporting ? (
+                <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              )}
+              {isExporting ? 'Exporting...' : 'Export Excel'}
             </Button>
           </div>
         </div>

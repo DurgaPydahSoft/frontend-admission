@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { auth } from '@/lib/auth';
-import { managerAPI } from '@/lib/api';
+import { managerAPI, leadAPI } from '@/lib/api';
+import { showToast } from '@/lib/toast';
 import { Lead, User } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -44,6 +45,7 @@ export default function ManagerLeadsPage() {
   const [assignedTo, setAssignedTo] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [teamMembers, setTeamMembers] = useState<User[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Debounce search inputs
   const debouncedSearch = useDebounce(search, 500);
@@ -186,6 +188,45 @@ export default function ManagerLeadsPage() {
 
   const hasActiveFilters = search || enquiryNumber || leadStatus || assignedTo;
 
+  // Handle export to Excel
+  const handleExportExcel = async () => {
+    try {
+      setIsExporting(true);
+      
+      // Build filters matching current view
+      const exportFilters: any = {
+        ...queryFilters,
+      };
+      // remove pagination from export
+      delete exportFilters.page;
+      delete exportFilters.limit;
+
+      const blob = await leadAPI.exportLeads(exportFilters);
+      
+      // Create a URL for the blob
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Generate filename with date
+      const date = new Date().toISOString().split('T')[0];
+      link.setAttribute('download', `team_leads_export_${date}.xlsx`);
+      
+      // Append to document, click and cleanup
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      showToast.success('Excel export started successfully');
+    } catch (error) {
+      console.error('Error exporting leads:', error);
+      showToast.error('Failed to export leads. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Search and Filters */}
@@ -242,6 +283,20 @@ export default function ManagerLeadsPage() {
                 Clear
               </Button>
             )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleExportExcel}
+              disabled={isExporting}
+              className="h-10 border-green-600 text-green-600 hover:bg-green-50 dark:border-green-500 dark:text-green-500 dark:hover:bg-green-900/20"
+            >
+              {isExporting ? (
+                <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin mr-2"></div>
+              ) : (
+                <span className="mr-2">📥</span>
+              )}
+              {isExporting ? 'Exporting...' : 'Export Excel'}
+            </Button>
           </div>
         </div>
 
