@@ -14,8 +14,21 @@ import type {
   DeleteJobStatusResponse,
 } from '@/types';
 
-// API Base URL - Update this with your backend URL
+// API Base URL - MUST be set on the host (e.g. Vercel → Environment Variables).
+// If unset in production, the bundle defaults to localhost and API calls fail from real users' browsers.
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
+if (typeof window !== 'undefined') {
+  const host = window.location.hostname;
+  const isLocalPage = host === 'localhost' || host === '127.0.0.1';
+  const apiPointsToLocal =
+    API_BASE_URL.includes('localhost') || API_BASE_URL.includes('127.0.0.1');
+  if (!isLocalPage && apiPointsToLocal) {
+    console.error(
+      '[Admissions API] NEXT_PUBLIC_API_URL is missing or still localhost. Set it on your hosting provider to your public backend base URL (e.g. https://api.example.com/api). Until then, stats and data will not load.'
+    );
+  }
+}
 
 // CRM Backend URL for SSO token verification
 export const CRM_BACKEND_URL = process.env.NEXT_PUBLIC_CRM_BACKEND_URL || 'http://localhost:3000';
