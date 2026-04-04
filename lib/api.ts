@@ -462,7 +462,15 @@ export const leadAPI = {
     const response = await api.get(`/leads/assign/stats${query ? `?${query}` : ''}`);
     return response.data;
   },
-  getAssignedCountForUser: async (params: { userId: string; mandal?: string; district?: string; state?: string; academicYear?: number | string; studentGroup?: string; cycleNumber?: number | string }) => {
+  getAssignedCountForUser: async (params: {
+    userId: string;
+    mandal?: string;
+    district?: string;
+    state?: string;
+    academicYear?: number | string;
+    studentGroup?: string;
+    cycleNumber?: number | string;
+  }) => {
     const queryParams = new URLSearchParams();
     queryParams.append('userId', params.userId);
     if (params.mandal) queryParams.append('mandal', params.mandal);
@@ -481,6 +489,7 @@ export const leadAPI = {
     academicYear?: number | string;
     studentGroup?: string;
     district?: string;
+    cycleNumber?: number | string;
     count: number;
   }) => {
     const response = await api.post('/leads/assign/remove', data);

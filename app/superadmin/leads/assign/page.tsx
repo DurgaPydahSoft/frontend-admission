@@ -353,14 +353,17 @@ export default function AssignLeadsPage() {
     return () => { cancelled = true; };
   }, [statsState, statsDistrict]);
 
-  // Which location/filter context to use for stats: stats tab uses its own, others use bulk form's or institution's
+  // Location context: "Unassigned by Location" tab uses its own dropdowns; bulk/single/remove use bulk form; institution has no geo on cards
   const statsQueryState = mode === 'stats' ? statsState : mode === 'institution' ? '' : state;
   const statsQueryDistrict = mode === 'stats' ? statsDistrict : mode === 'institution' ? '' : district;
   const statsQueryMandal = mode === 'stats' ? statsMandal : mode === 'institution' ? '' : mandal;
 
-  const statsQueryAcademicYear = mode === 'stats' ? statsAcademicYear : mode === 'institution' ? institutionAcademicYear : academicYear;
-  const statsQueryStudentGroup = mode === 'stats' ? statsStudentGroup : mode === 'institution' ? institutionStudentGroup : studentGroup;
-  const statsQueryCycleNumber = mode === 'stats' ? statsCycleNumber : mode === 'institution' ? '' : cycleNumber;
+  // Top stats cards always follow the header filters (and institution form when on that tab) — not the bulk-assign form defaults
+  const statsQueryAcademicYear =
+    mode === 'institution' ? institutionAcademicYear : statsAcademicYear;
+  const statsQueryStudentGroup =
+    mode === 'institution' ? institutionStudentGroup : statsStudentGroup;
+  const statsQueryCycleNumber = mode === 'institution' ? '' : statsCycleNumber;
 
   // Fetch assignment statistics (scoped by academic year, student group, and location)
   const activeUserId = mode === 'institution' ? institutionUserId : selectedUserId;
@@ -388,7 +391,7 @@ export default function AssignLeadsPage() {
       const payload = response?.data ?? response ?? {};
       return { data: payload };
     },
-    enabled: isReady && !!currentUser,
+    enabled: isReady && !!currentUser && mode !== 'remove',
   });
 
   const stats = statsData?.data;
@@ -434,8 +437,12 @@ export default function AssignLeadsPage() {
     return () => { cancelled = true; };
   }, [currentUser]);
 
-  // Assigned count for selected user (for remove-assignment tab)
-  const { data: assignedCountData } = useQuery<{ data?: { count?: number } }>({
+  // Assigned count for selected user (remove tab only — drives top cards there)
+  const {
+    data: assignedCountData,
+    isLoading: isRemoveUserCountLoading,
+    isFetching: isRemoveUserCountFetching,
+  } = useQuery<{ data?: { count?: number } }>({
     queryKey: ['assignedCountForUser', removeUserId, removeMandal, removeDistrict, removeState, removeAcademicYear, removeStudentGroup, removeCycleNumber],
     queryFn: async () => {
       if (!removeUserId) return { data: { count: 0 } };
@@ -450,9 +457,11 @@ export default function AssignLeadsPage() {
       });
       return { data: response.data ?? response };
     },
-    enabled: isReady && !!removeUserId,
+    enabled: isReady && mode === 'remove' && !!removeUserId,
   });
   const assignedToUserCount = assignedCountData?.data?.count ?? 0;
+  const removeTargetUser = users.find((u) => (u.id || u._id) === removeUserId);
+  const removeTargetRoleLabel = removeTargetUser?.roleName?.trim() || 'User';
 
   // Search leads for single assignment
   useEffect(() => {
@@ -569,6 +578,7 @@ export default function AssignLeadsPage() {
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: ['assignmentStats'] });
+      queryClient.invalidateQueries({ queryKey: ['assignedCountForUser'] });
       refetchStats();
       const removed = response.data?.removed ?? response.removed ?? 0;
       const userName = response.data?.userName ?? response.userName ?? 'user';
@@ -685,6 +695,7 @@ export default function AssignLeadsPage() {
       state: removeState || undefined,
       academicYear: removeAcademicYear !== '' ? removeAcademicYear : undefined,
       studentGroup: removeStudentGroup || undefined,
+      cycleNumber: removeCycleNumber !== '' ? removeCycleNumber : undefined,
       count: removeCount,
     });
   };
@@ -803,9 +814,46 @@ export default function AssignLeadsPage() {
         </div>
       </div>
 
-      {/* Statistics Cards */}
-      {/* Show skeleton if fetching or loading. Show real data if available. */}
-      {(isStatsLoading || isStatsFetching) ? (
+      {/* Statistics Cards — Remove tab: only the user selected below + filters in that form (not global header totals) */}
+      {mode === 'remove' ? (
+        !removeUserId ? (
+          <Card className="border border-dashed border-slate-300 bg-slate-50/80 p-5 dark:border-slate-600 dark:bg-slate-900/40">
+            <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Remove Assignment</p>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              Choose a user in the tab below. The summary cards will show how many leads are assigned to them for the filters you set there (academic year, group, cycle, location).
+            </p>
+          </Card>
+        ) : isRemoveUserCountLoading || isRemoveUserCountFetching ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="p-4 space-y-2">
+                <Skeleton variant="text" width="40%" height="20px" />
+                <Skeleton variant="text" width="60%" height="32px" />
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <Card className="p-4 bg-[#3b82f6] text-[#ffffff] border-none shadow-md dark:bg-[#2563eb]">
+              <div className="text-sm font-medium text-[#f1f5f9]">Selected user</div>
+              <div className="mt-1 text-lg font-bold leading-tight text-[#ffffff]">{removeTargetUser?.name ?? '—'}</div>
+              <div className="mt-1 text-xs text-[#e2e8f0]">{removeTargetUser?.email ?? ''}</div>
+            </Card>
+            <Card className="p-4 bg-[#10b981] text-[#ffffff] border-none shadow-md dark:bg-[#059669]">
+              <div className="text-sm font-medium text-[#f1f5f9]">Assigned (matches tab filters)</div>
+              <div className="mt-1 text-2xl font-bold text-[#ffffff]">{assignedToUserCount.toLocaleString()}</div>
+              <div className="mt-1 text-xs text-[#d1fae5]">Maximum you can remove in one action (subject to the count you enter).</div>
+            </Card>
+            <Card className="p-4 bg-[#f97316] text-[#ffffff] border-none shadow-md dark:bg-[#ea580c]">
+              <div className="text-sm font-medium text-[#f1f5f9]">Role</div>
+              <div className="mt-1 text-xl font-bold text-[#ffffff]">{removeTargetRoleLabel}</div>
+              <div className="mt-1 text-xs text-[#ffedd5]">
+                {removeTargetRoleLabel === 'PRO' ? 'Uses PRO assignment field.' : 'Uses counsellor assignment field.'}
+              </div>
+            </Card>
+          </div>
+        )
+      ) : (isStatsLoading || isStatsFetching) ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Card key={i} className="p-4 space-y-2">
@@ -1195,7 +1243,7 @@ export default function AssignLeadsPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
                     Academic Year (optional)
@@ -1232,6 +1280,26 @@ export default function AssignLeadsPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                    Cycle (optional)
+                  </label>
+                  <select
+                    className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
+                    value={removeCycleNumber === '' ? '' : removeCycleNumber}
+                    onChange={(e) => setRemoveCycleNumber(e.target.value === '' ? '' : Number(e.target.value))}
+                  >
+                    <option value="">All cycles</option>
+                    {[1, 2, 3, 4, 5].map((c) => (
+                      <option key={c} value={c}>
+                        Cycle {c}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                    Match bulk assignment cycle filter when counting and removing.
+                  </p>
                 </div>
               </div>
 
@@ -1307,6 +1375,7 @@ export default function AssignLeadsPage() {
                   Assigned to this user: {assignedToUserCount.toLocaleString()} leads
                   {removeAcademicYear !== '' && ` for ${removeAcademicYear}`}
                   {removeStudentGroup && `, ${removeStudentGroup}`}
+                  {removeCycleNumber !== '' && `, cycle ${removeCycleNumber}`}
                   {removeMandal && ` in ${removeMandal}`}
                   {removeState && `, ${removeState}`}
                 </p>
@@ -1334,6 +1403,9 @@ export default function AssignLeadsPage() {
                     setRemoveMandal('');
                     setRemoveState('');
                     setRemoveDistrict('');
+                    setRemoveAcademicYear('');
+                    setRemoveStudentGroup('');
+                    setRemoveCycleNumber('');
                     setRemoveCount(100);
                   }}
                   disabled={removeAssignmentsMutation.isPending}
