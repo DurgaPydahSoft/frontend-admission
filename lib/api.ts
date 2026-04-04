@@ -483,9 +483,9 @@ export const leadAPI = {
     academicYear?: number | string;
     studentGroup?: string;
     cycleNumber?: number | string;
-  }) => {
+  }): Promise<{ count: number }> => {
     const queryParams = new URLSearchParams();
-    queryParams.append('userId', params.userId);
+    queryParams.append('userId', String(params.userId).trim());
     if (params.mandal) queryParams.append('mandal', params.mandal);
     if (params.district) queryParams.append('district', params.district);
     if (params.state) queryParams.append('state', params.state);
@@ -493,7 +493,17 @@ export const leadAPI = {
     if (params.studentGroup) queryParams.append('studentGroup', params.studentGroup);
     if (params.cycleNumber != null && params.cycleNumber !== '') queryParams.append('cycleNumber', String(params.cycleNumber));
     const response = await api.get(`/leads/assign/assigned-count?${queryParams.toString()}`);
-    return response.data;
+    const body = response.data as Record<string, unknown> | undefined;
+    // Accept both { success, data: { count } } and any single nested shape (proxies / older clients)
+    const inner = body?.data as Record<string, unknown> | undefined;
+    const raw =
+      inner && typeof inner === 'object' && 'count' in inner
+        ? inner.count
+        : body && typeof body === 'object' && 'count' in body
+          ? body.count
+          : 0;
+    const n = typeof raw === 'bigint' ? Number(raw) : Number(raw);
+    return { count: Number.isFinite(n) ? n : 0 };
   },
   removeAssignments: async (data: {
     userId: string;

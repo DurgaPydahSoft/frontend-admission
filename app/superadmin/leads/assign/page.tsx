@@ -442,11 +442,12 @@ export default function AssignLeadsPage() {
     data: assignedCountData,
     isLoading: isRemoveUserCountLoading,
     isFetching: isRemoveUserCountFetching,
-  } = useQuery<{ data?: { count?: number } }>({
+    isError: isRemoveUserCountError,
+  } = useQuery<{ data: { count: number } }>({
     queryKey: ['assignedCountForUser', removeUserId, removeMandal, removeDistrict, removeState, removeAcademicYear, removeStudentGroup, removeCycleNumber],
     queryFn: async () => {
       if (!removeUserId) return { data: { count: 0 } };
-      const response = await leadAPI.getAssignedCountForUser({
+      const { count } = await leadAPI.getAssignedCountForUser({
         userId: removeUserId,
         mandal: removeMandal || undefined,
         district: removeDistrict || undefined,
@@ -455,12 +456,17 @@ export default function AssignLeadsPage() {
         studentGroup: removeStudentGroup || undefined,
         cycleNumber: removeCycleNumber !== '' ? removeCycleNumber : undefined,
       });
-      return { data: response.data ?? response };
+      return { data: { count } };
     },
     enabled: isReady && mode === 'remove' && !!removeUserId,
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
   });
   const assignedToUserCount = assignedCountData?.data?.count ?? 0;
-  const removeTargetUser = users.find((u) => (u.id || u._id) === removeUserId);
+  const removeUserIdNorm = removeUserId.trim().toLowerCase();
+  const removeTargetUser = users.find(
+    (u) => String(u.id || u._id || '').trim().toLowerCase() === removeUserIdNorm
+  );
   const removeTargetRoleLabel = removeTargetUser?.roleName?.trim() || 'User';
 
   // Search leads for single assignment
@@ -838,11 +844,20 @@ export default function AssignLeadsPage() {
               <div className="text-sm font-medium text-[#f1f5f9]">Selected user</div>
               <div className="mt-1 text-lg font-bold leading-tight text-[#ffffff]">{removeTargetUser?.name ?? '—'}</div>
               <div className="mt-1 text-xs text-[#e2e8f0]">{removeTargetUser?.email ?? ''}</div>
+              {!removeTargetUser && removeUserId ? (
+                <div className="mt-2 text-xs text-amber-200">User id does not match the loaded list — try refreshing the page.</div>
+              ) : null}
             </Card>
             <Card className="p-4 bg-[#10b981] text-[#ffffff] border-none shadow-md dark:bg-[#059669]">
               <div className="text-sm font-medium text-[#f1f5f9]">Assigned (matches tab filters)</div>
-              <div className="mt-1 text-2xl font-bold text-[#ffffff]">{assignedToUserCount.toLocaleString()}</div>
-              <div className="mt-1 text-xs text-[#d1fae5]">Maximum you can remove in one action (subject to the count you enter).</div>
+              <div className="mt-1 text-2xl font-bold text-[#ffffff]">
+                {isRemoveUserCountError ? '—' : assignedToUserCount.toLocaleString()}
+              </div>
+              <div className="mt-1 text-xs text-[#d1fae5]">
+                {isRemoveUserCountError
+                  ? 'Could not load count. Check network or try again.'
+                  : 'Maximum you can remove in one action (subject to the count you enter).'}
+              </div>
             </Card>
             <Card className="p-4 bg-[#f97316] text-[#ffffff] border-none shadow-md dark:bg-[#ea580c]">
               <div className="text-sm font-medium text-[#f1f5f9]">Role</div>
@@ -1136,7 +1151,7 @@ export default function AssignLeadsPage() {
                       roleUsers.length > 0 && (
                         <optgroup key={role} label={role === 'Sub Super Admin' ? 'Sub Super Admins' : role + 's'}>
                           {roleUsers.map((user) => (
-                            <option key={user._id} value={user._id}>
+                            <option key={user.id || user._id} value={user.id || user._id}>
                               {user.name} ({user.email})
                             </option>
                           ))}
@@ -1203,7 +1218,7 @@ export default function AssignLeadsPage() {
                   {usersByRole['Sub Super Admin'].length > 0 && (
                     <optgroup label="Sub Super Admins">
                       {usersByRole['Sub Super Admin'].map((user) => (
-                        <option key={user._id} value={user._id}>
+                        <option key={user.id || user._id} value={user.id || user._id}>
                           {user.name} ({user.email}) - Sub Admin
                         </option>
                       ))}
@@ -1213,7 +1228,7 @@ export default function AssignLeadsPage() {
                   {usersByRole['Student Counselor'].length > 0 && (
                     <optgroup label="Student Counselors">
                       {usersByRole['Student Counselor'].map((user) => (
-                        <option key={user._id} value={user._id}>
+                        <option key={user.id || user._id} value={user.id || user._id}>
                           {user.name} ({user.email})
                         </option>
                       ))}
@@ -1222,7 +1237,7 @@ export default function AssignLeadsPage() {
                   {usersByRole['Data Entry User'].length > 0 && (
                     <optgroup label="Data Entry Users">
                       {usersByRole['Data Entry User'].map((user) => (
-                        <option key={user._id} value={user._id}>
+                        <option key={user.id || user._id} value={user.id || user._id}>
                           {user.name} ({user.email})
                         </option>
                       ))}
@@ -1231,7 +1246,7 @@ export default function AssignLeadsPage() {
                   {usersByRole['PRO'].length > 0 && (
                     <optgroup label="PRO Users">
                       {usersByRole['PRO'].map((user) => (
-                        <option key={user._id} value={user._id}>
+                        <option key={user.id || user._id} value={user.id || user._id}>
                           {user.name} ({user.email})
                         </option>
                       ))}
@@ -1430,7 +1445,7 @@ export default function AssignLeadsPage() {
                   {usersByRole['Sub Super Admin'].length > 0 && (
                     <optgroup label="Sub Super Admins">
                       {usersByRole['Sub Super Admin'].map((user) => (
-                        <option key={user._id} value={user._id}>
+                        <option key={user.id || user._id} value={user.id || user._id}>
                           {user.name} ({user.email}) - Sub Admin
                         </option>
                       ))}
@@ -1440,7 +1455,7 @@ export default function AssignLeadsPage() {
                   {usersByRole['Student Counselor'].length > 0 && (
                     <optgroup label="Student Counselors">
                       {usersByRole['Student Counselor'].map((user) => (
-                        <option key={user._id} value={user._id}>
+                        <option key={user.id || user._id} value={user.id || user._id}>
                           {user.name} ({user.email})
                         </option>
                       ))}
@@ -1449,7 +1464,7 @@ export default function AssignLeadsPage() {
                   {usersByRole['Data Entry User'].length > 0 && (
                     <optgroup label="Data Entry Users">
                       {usersByRole['Data Entry User'].map((user) => (
-                        <option key={user._id} value={user._id}>
+                        <option key={user.id || user._id} value={user.id || user._id}>
                           {user.name} ({user.email})
                         </option>
                       ))}
@@ -1458,7 +1473,7 @@ export default function AssignLeadsPage() {
                   {usersByRole['PRO'].length > 0 && (
                     <optgroup label="PRO Users">
                       {usersByRole['PRO'].map((user) => (
-                        <option key={user._id} value={user._id}>
+                        <option key={user.id || user._id} value={user.id || user._id}>
                           {user.name} ({user.email})
                         </option>
                       ))}
@@ -1665,7 +1680,7 @@ export default function AssignLeadsPage() {
                   {usersByRole['Sub Super Admin'].length > 0 && (
                     <optgroup label="Sub Super Admins">
                       {usersByRole['Sub Super Admin'].map((user) => (
-                        <option key={user._id} value={user._id}>
+                        <option key={user.id || user._id} value={user.id || user._id}>
                           {user.name} ({user.email}) - Sub Admin
                         </option>
                       ))}
@@ -1675,7 +1690,7 @@ export default function AssignLeadsPage() {
                   {usersByRole['Student Counselor'].length > 0 && (
                     <optgroup label="Student Counselors">
                       {usersByRole['Student Counselor'].map((user) => (
-                        <option key={user._id} value={user._id}>
+                        <option key={user.id || user._id} value={user.id || user._id}>
                           {user.name} ({user.email})
                         </option>
                       ))}
@@ -1684,7 +1699,7 @@ export default function AssignLeadsPage() {
                   {usersByRole['Data Entry User'].length > 0 && (
                     <optgroup label="Data Entry Users">
                       {usersByRole['Data Entry User'].map((user) => (
-                        <option key={user._id} value={user._id}>
+                        <option key={user.id || user._id} value={user.id || user._id}>
                           {user.name} ({user.email})
                         </option>
                       ))}
@@ -1693,7 +1708,7 @@ export default function AssignLeadsPage() {
                   {usersByRole['PRO'].length > 0 && (
                     <optgroup label="PRO Users">
                       {usersByRole['PRO'].map((user) => (
-                        <option key={user._id} value={user._id}>
+                        <option key={user.id || user._id} value={user.id || user._id}>
                           {user.name} ({user.email})
                         </option>
                       ))}
