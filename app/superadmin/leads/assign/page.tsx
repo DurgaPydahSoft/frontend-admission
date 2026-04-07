@@ -106,16 +106,33 @@ export default function AssignLeadsPage() {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportData, setExportData] = useState<any[]>([]);
   const [exportFileName, setExportFileName] = useState('');
+  /** Backend sends targetRole; PRO exports include district, mandal, village, full address */
+  const [exportTargetRole, setExportTargetRole] = useState<string | null>(null);
 
   const handleConfirmExport = () => {
     try {
       if (exportData.length === 0) return;
 
-      const dataToExport = exportData.map((lead: any) => ({
-        'Lead Name': lead.name,
-        'Phone Number': lead.phone,
-        'Remarks': lead.remarks || '',
-      }));
+      const isProExport = String(exportTargetRole || '').trim().toUpperCase() === 'PRO';
+
+      const dataToExport = exportData.map((lead: any) => {
+        if (isProExport) {
+          return {
+            'Lead Name': lead.name ?? '',
+            'Phone Number': lead.phone ?? '',
+            District: lead.district ?? '',
+            Mandal: lead.mandal ?? '',
+            Village: lead.village ?? '',
+            'Full Address': lead.address ?? '',
+            Remarks: lead.remarks || '',
+          };
+        }
+        return {
+          'Lead Name': lead.name ?? '',
+          'Phone Number': lead.phone ?? '',
+          Remarks: lead.remarks || '',
+        };
+      });
 
       const worksheet = XLSX.utils.json_to_sheet(dataToExport);
       const workbook = XLSX.utils.book_new();
@@ -130,6 +147,7 @@ export default function AssignLeadsPage() {
       setShowExportDialog(false);
       setExportData([]);
       setExportFileName('');
+      setExportTargetRole(null);
     }
   };
 
@@ -537,6 +555,9 @@ export default function AssignLeadsPage() {
       const assignedLeads = response.data?.assignedLeads || response.assignedLeads || [];
       if (assignedLeads.length > 0) {
         setExportData(assignedLeads);
+        setExportTargetRole(
+          (response.data?.targetRole ?? response.targetRole ?? null) as string | null
+        );
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
         setExportFileName(`Assigned_Leads_${userName}_${timestamp}.xlsx`);
         setShowExportDialog(true);
@@ -1798,27 +1819,17 @@ export default function AssignLeadsPage() {
           )}
         </div>
       </div>
-      {/* Export Confirmation Dialog */}
-      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Export Assigned Leads?</DialogTitle>
-            <DialogDescription>
-              Lead assignment was successful. Would you like to download the list of assigned leads as an Excel file?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowExportDialog(false)}>
-              No, Skip
-            </Button>
-            <Button onClick={handleConfirmExport}>
-              Yes, Download Excel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* Export Confirmation Dialog */}
-      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+      <Dialog
+        open={showExportDialog}
+        onOpenChange={(open) => {
+          setShowExportDialog(open);
+          if (!open) {
+            setExportData([]);
+            setExportFileName('');
+            setExportTargetRole(null);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Export Assigned Leads?</DialogTitle>

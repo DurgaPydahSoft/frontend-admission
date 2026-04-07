@@ -74,6 +74,7 @@ export default function UserLayout({ children }: { children: ReactNode }) {
       title="Admissions Team"
       description="Stay on top of your leads, follow-ups, and conversions."
       role={currentUser?.designation || 'Counsellor'}
+      roleName={currentUser?.roleName}
       userName={currentUser?.name || 'Team Member'}
       useMobileBottomNav
     >

@@ -297,8 +297,18 @@ export default function LeadsPage() {
   const displayedLeads = useMemo(() => {
     if (!sortField) return leads;
     const sorted = [...leads].sort((a: Lead, b: Lead) => {
-      const aValue = (a as Record<string, any>)[sortField];
-      const bValue = (b as Record<string, any>)[sortField];
+      let aValue: string | number | null | undefined;
+      let bValue: string | number | null | undefined;
+      if (sortField === 'counsellorName') {
+        aValue = typeof a.assignedTo === 'object' && a.assignedTo ? a.assignedTo.name : '';
+        bValue = typeof b.assignedTo === 'object' && b.assignedTo ? b.assignedTo.name : '';
+      } else if (sortField === 'proName') {
+        aValue = typeof a.assignedToPro === 'object' && a.assignedToPro ? a.assignedToPro.name : '';
+        bValue = typeof b.assignedToPro === 'object' && b.assignedToPro ? b.assignedToPro.name : '';
+      } else {
+        aValue = (a as unknown as Record<string, unknown>)[sortField] as string | number | null | undefined;
+        bValue = (b as unknown as Record<string, unknown>)[sortField] as string | number | null | undefined;
+      }
 
       if (aValue == null && bValue == null) return 0;
       if (aValue == null) return sortOrder === 'asc' ? 1 : -1;
@@ -1186,6 +1196,9 @@ export default function LeadsPage() {
                 const assignedUserName = typeof lead.assignedTo === 'object' && lead.assignedTo !== null
                   ? lead.assignedTo.name
                   : '—';
+                const proUserName = typeof lead.assignedToPro === 'object' && lead.assignedToPro !== null
+                  ? lead.assignedToPro.name
+                  : '—';
                 return (
                   <Card
                     key={`mobile-${lead._id}`}
@@ -1194,7 +1207,7 @@ export default function LeadsPage() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Student Name</p>
+                        <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Lead name</p>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">
                             {lead.name}
@@ -1220,16 +1233,6 @@ export default function LeadsPage() {
 
                     <div className="mt-4 space-y-3 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-slate-400">Lead Date</span>
-                        <span className="font-medium text-gray-900 dark:text-slate-100">
-                          {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '—'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-slate-400">Source</span>
-                        <span className="font-medium text-gray-900 dark:text-slate-100">{lead.source || '—'}</span>
-                      </div>
-                      <div className="flex justify-between">
                         <span className="text-gray-500 dark:text-slate-400">Group</span>
                         <span className="font-medium text-gray-900 dark:text-slate-100">{lead.studentGroup || '—'}</span>
                       </div>
@@ -1242,15 +1245,7 @@ export default function LeadsPage() {
                         <span className="font-medium text-gray-900 dark:text-slate-100">{lead.mandal || '—'}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-slate-400">Counsellor Assigned</span>
-                        <span className="font-medium text-gray-900 dark:text-slate-100">{assignedUserName}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-slate-400">Student Mobile</span>
-                        <span className="font-medium text-blue-600 dark:text-blue-300">{lead.phone}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <span className="text-gray-500 dark:text-slate-400">Lead Status</span>
+                        <span className="text-gray-500 dark:text-slate-400">Lead status</span>
                         <span
                           className={`px-2 py-0.5 inline-flex text-[11px] leading-4 font-semibold rounded-full ${getStatusColor(lead.leadStatus)}`}
                           onClick={(e) => {
@@ -1260,6 +1255,22 @@ export default function LeadsPage() {
                         >
                           {lead.leadStatus || 'New'}
                         </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-slate-400">Counsellor</span>
+                        <span className="font-medium text-gray-900 dark:text-slate-100">{assignedUserName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-slate-400">Counsellor status</span>
+                        <span className="font-medium text-gray-900 dark:text-slate-100">{lead.callStatus || '—'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-slate-400">PRO</span>
+                        <span className="font-medium text-gray-900 dark:text-slate-100">{proUserName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-slate-400">PRO status</span>
+                        <span className="font-medium text-gray-900 dark:text-slate-100">{lead.visitStatus || '—'}</span>
                       </div>
                     </div>
 
@@ -1306,23 +1317,10 @@ export default function LeadsPage() {
                       </th>
                       <th
                         className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
-                        onClick={() => handleSort('createdAt')}
-                      >
-                        <div className="flex items-center gap-1">
-                          Lead Date
-                          {sortField === 'createdAt' && (
-                            <span className="text-blue-600 dark:text-blue-300">
-                              {sortOrder === 'asc' ? '↑' : '↓'}
-                            </span>
-                          )}
-                        </div>
-                      </th>
-                      <th
-                        className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
                         onClick={() => handleSort('name')}
                       >
                         <div className="flex items-center gap-1">
-                          Student Name
+                          Lead name
                           {sortField === 'name' && (
                             <span className="text-blue-600 dark:text-blue-300">
                               {sortOrder === 'asc' ? '↑' : '↓'}
@@ -1337,19 +1335,6 @@ export default function LeadsPage() {
                         <div className="flex items-center gap-1">
                           Group
                           {sortField === 'studentGroup' && (
-                            <span className="text-blue-600 dark:text-blue-300">
-                              {sortOrder === 'asc' ? '↑' : '↓'}
-                            </span>
-                          )}
-                        </div>
-                      </th>
-                      <th
-                        className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
-                        onClick={() => handleSort('source')}
-                      >
-                        <div className="flex items-center gap-1">
-                          Source
-                          {sortField === 'source' && (
                             <span className="text-blue-600 dark:text-blue-300">
                               {sortOrder === 'asc' ? '↑' : '↓'}
                             </span>
@@ -1382,16 +1367,13 @@ export default function LeadsPage() {
                           )}
                         </div>
                       </th>
-                      <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider dark:text-slate-200">
-                        Counsellor Assigned
-                      </th>
                       <th
                         className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
-                        onClick={() => handleSort('phone')}
+                        onClick={() => handleSort('leadStatus')}
                       >
                         <div className="flex items-center gap-1">
-                          Student Mobile
-                          {sortField === 'phone' && (
+                          Lead status
+                          {sortField === 'leadStatus' && (
                             <span className="text-blue-600 dark:text-blue-300">
                               {sortOrder === 'asc' ? '↑' : '↓'}
                             </span>
@@ -1400,11 +1382,50 @@ export default function LeadsPage() {
                       </th>
                       <th
                         className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
-                        onClick={() => handleSort('leadStatus')}
+                        onClick={() => handleSort('counsellorName')}
                       >
                         <div className="flex items-center gap-1">
-                          Lead Status
-                          {sortField === 'leadStatus' && (
+                          Counsellor
+                          {sortField === 'counsellorName' && (
+                            <span className="text-blue-600 dark:text-blue-300">
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                        onClick={() => handleSort('callStatus')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Counsellor status
+                          {sortField === 'callStatus' && (
+                            <span className="text-blue-600 dark:text-blue-300">
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                        onClick={() => handleSort('proName')}
+                      >
+                        <div className="flex items-center gap-1">
+                          PRO
+                          {sortField === 'proName' && (
+                            <span className="text-blue-600 dark:text-blue-300">
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                        onClick={() => handleSort('visitStatus')}
+                      >
+                        <div className="flex items-center gap-1">
+                          PRO status
+                          {sortField === 'visitStatus' && (
                             <span className="text-blue-600 dark:text-blue-300">
                               {sortOrder === 'asc' ? '↑' : '↓'}
                             </span>
@@ -1417,6 +1438,9 @@ export default function LeadsPage() {
                     {displayedLeads.map((lead: Lead, rowIndex: number) => {
                       const assignedUserName = typeof lead.assignedTo === 'object' && lead.assignedTo !== null
                         ? lead.assignedTo.name
+                        : '—';
+                      const proUserName = typeof lead.assignedToPro === 'object' && lead.assignedToPro !== null
+                        ? lead.assignedToPro.name
                         : '—';
                       const isEven = rowIndex % 2 === 0;
                       return (
@@ -1435,9 +1459,6 @@ export default function LeadsPage() {
                               }}
                               className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                             />
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300" title={lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-'}>
-                            {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-'}
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-900 dark:text-slate-100" title={lead.name}>
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1462,20 +1483,11 @@ export default function LeadsPage() {
                           <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300" title={lead.studentGroup || '—'}>
                             {lead.studentGroup || '—'}
                           </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300" title={lead.source || '—'}>
-                            {lead.source || '—'}
-                          </td>
                           <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 truncate max-w-[100px]" title={lead.district || '—'}>
                             {lead.district || '—'}
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 truncate max-w-[100px]" title={lead.mandal || '—'}>
                             {lead.mandal || '—'}
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300" title={assignedUserName}>
-                            {assignedUserName}
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300" title={lead.phone}>
-                            {lead.phone}
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap max-w-[112px]">
                             <span
@@ -1490,6 +1502,18 @@ export default function LeadsPage() {
                             >
                               {lead.leadStatus || 'New'}
                             </span>
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 truncate max-w-[120px]" title={assignedUserName}>
+                            {assignedUserName}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 truncate max-w-[100px]" title={lead.callStatus || '—'}>
+                            {lead.callStatus || '—'}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 truncate max-w-[120px]" title={proUserName}>
+                            {proUserName}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 truncate max-w-[100px]" title={lead.visitStatus || '—'}>
+                            {lead.visitStatus || '—'}
                           </td>
                         </tr>
                       );

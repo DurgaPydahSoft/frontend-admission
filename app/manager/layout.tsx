@@ -61,6 +61,7 @@ export default function ManagerLayout({ children }: { children: ReactNode }) {
       title="Manager Workspace"
       description="Manage your team and track performance."
       role="Manager"
+      roleName={currentUser?.roleName ?? 'Manager'}
       userName={currentUser?.name || 'Manager'}
       useMobileBottomNav
     >

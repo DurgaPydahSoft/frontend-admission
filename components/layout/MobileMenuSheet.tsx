@@ -12,7 +12,10 @@ interface MobileMenuSheetProps {
   onClose: () => void;
   navItems: DashboardNavItem[];
   userName?: string;
+  /** Workspace / designation (e.g. shown as "{role} Space" when distinct from roleName) */
   role?: string;
+  /** System role label (e.g. Student Counselor, PRO) */
+  roleName?: string;
   onLogout: () => void;
 }
 
@@ -22,6 +25,7 @@ export function MobileMenuSheet({
   navItems,
   userName,
   role,
+  roleName,
   onLogout,
 }: MobileMenuSheetProps) {
   const pathname = usePathname() || '';
@@ -88,9 +92,18 @@ export function MobileMenuSheet({
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-sm font-bold text-white">
                 {(userName || 'U').slice(0, 2)}
               </span>
-              <div className="min-w-0">
+              <div className="min-w-0 space-y-0.5">
                 <p className="truncate font-medium text-slate-900">{userName || 'User'}</p>
-                <p className="text-xs text-slate-500">{role || 'Counsellor'}</p>
+                {roleName ? (
+                  <p className="truncate text-xs font-medium text-slate-700 dark:text-slate-200">{roleName}</p>
+                ) : null}
+                {role && role !== roleName ? (
+                  <p className="truncate text-[11px] text-slate-500">{role} Space</p>
+                ) : !roleName && role ? (
+                  <p className="truncate text-xs text-slate-500">{role} Space</p>
+                ) : !roleName && !role ? (
+                  <p className="text-xs text-slate-500">Workspace</p>
+                ) : null}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">

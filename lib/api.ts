@@ -221,6 +221,8 @@ export const leadAPI = {
     state?: string;
     quota?: string;
     leadStatus?: string;
+    callStatus?: string;
+    visitStatus?: string;
     applicationStatus?: string;
     assignedTo?: string;
     academicYear?: number | string;
@@ -363,17 +365,19 @@ export const leadAPI = {
     });
     return response.data?.data || response.data;
   },
-  executeGroupSync: async (limit: number, offset: number) => {
-    const response = await api.post('/leads/execute-group-sync', { limit, offset });
+  /** Read-only: compare all staged rows to leads (enquiry + name). Does not modify leads. */
+  executeGroupSync: async () => {
+    const response = await api.post('/leads/execute-group-sync', {});
+    return response.data?.data || response.data;
+  },
+  /** Staging table only — no join to leads (fast). */
+  getStagedRows: async () => {
+    const response = await api.get('/leads/staged-rows');
     return response.data?.data || response.data;
   },
   getStagedCount: async () => {
     const response = await api.get('/leads/staged-count');
     return response.data?.data || response.data;
-  },
-  revertGroupSyncFlag: async () => {
-    const response = await api.post('/leads/revert-group-sync-flag');
-    return response.data;
   },
   getFilterOptions: async () => {
     const response = await api.get('/leads/filters/options');

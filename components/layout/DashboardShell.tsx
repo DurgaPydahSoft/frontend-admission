@@ -157,7 +157,10 @@ interface DashboardShellProps {
   navItems: DashboardNavItem[];
   title?: string;
   description?: string;
+  /** Workspace subtitle (e.g. designation) shown as "{role} Space" when distinct from roleName */
   role?: string;
+  /** System role (e.g. Student Counselor, PRO, Super Admin) — shown in the sidebar footer */
+  roleName?: string;
   userName?: string;
   permissions?: Record<string, ModulePermission>;
   /** When true, on mobile (< lg) hide top header and show bottom nav instead. Use for user/manager dashboards. */
@@ -170,6 +173,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   title = 'Workspace',
   description = 'Manage records and track outcomes with confidence.',
   role,
+  roleName,
   userName,
   permissions = {},
   useMobileBottomNav = false,
@@ -459,7 +463,12 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     [isCollapsed, openGroups, pathname, toggleGroup]
   );
 
-  const renderSidebar = (variant: 'desktop' | 'mobile' = 'desktop') => (
+  const renderSidebar = (variant: 'desktop' | 'mobile' = 'desktop') => {
+    const workspaceLine =
+      role && roleName !== role ? `${role} Space` : !roleName && role ? `${role} Space` : null;
+    const collapsedProfileTitle = [userName, roleName].filter(Boolean).join(' · ') || userName || 'User';
+
+    return (
     <aside
       className={cn(
         'relative flex flex-col overflow-hidden transition-[width] duration-300',
@@ -531,13 +540,30 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#ea580c] text-white text-sm font-bold shadow-sm">
                 {(userName || 'SA').slice(0, 1).toUpperCase()}
               </div>
-              <div className="flex flex-col min-w-0">
+              <div className="flex flex-col min-w-0 gap-0.5">
                 <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100" title={userName || 'Super Admin'}>
                   {userName || 'Super Admin'}
                 </p>
-                <p className="truncate text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400" title={role ? `${role} Space` : 'Workspace'}>
-                  {role ? `${role} Space` : 'Workspace'}
-                </p>
+                {roleName ? (
+                  <p
+                    className="truncate text-xs font-medium text-slate-600 dark:text-slate-300"
+                    title={roleName}
+                  >
+                    {roleName}
+                  </p>
+                ) : null}
+                {workspaceLine ? (
+                  <p
+                    className="truncate text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400"
+                    title={workspaceLine}
+                  >
+                    {workspaceLine}
+                  </p>
+                ) : !roleName && !role ? (
+                  <p className="truncate text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
+                    Workspace
+                  </p>
+                ) : null}
               </div>
             </div>
             <button
@@ -552,7 +578,10 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ea580c] text-white text-sm font-bold shadow-sm" title={userName || 'Super Admin'}>
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ea580c] text-white text-sm font-bold shadow-sm"
+              title={collapsedProfileTitle}
+            >
               {(userName || 'SA').slice(0, 1).toUpperCase()}
             </div>
             <button
@@ -577,7 +606,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         <CollapseIcon className={cn('h-4 w-4 transition-transform', isCollapsed ? 'rotate-180' : 'rotate-0')} />
       </button>
     </aside>
-  );
+    );
+  };
 
   const permissionContextValue = useMemo<PermissionContextValue>(
     () => ({
@@ -628,6 +658,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 navItems={filteredNavItems}
                 userName={userName}
                 role={role}
+                roleName={roleName}
                 onLogout={handleLogout}
               />
             )}

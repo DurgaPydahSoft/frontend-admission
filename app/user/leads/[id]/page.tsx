@@ -116,14 +116,14 @@ export default function UserLeadDetailPage() {
   }, []);
 
   // Status options (lead pipeline stage – only these allowed for status update)
+  /** Counsellor edits call_status; PRO edits visit_status; admins edit lead_status (pipeline) */
   const statusOptions = useMemo(() => {
     if (user?.roleName === 'Student Counselor') {
-      return ['Interested', 'Not Interested', 'Confirmed', 'Visited', 'Admitted', 'CET Applied'];
+      return ['Interested', 'Not Interested', 'Not Answered', 'Wrong Data', 'Call Back', 'Confirmed', 'CET Applied', 'No Answer'];
     }
     if (user?.roleName === 'PRO') {
-      return ['Interested', 'Not Interested', 'Not Available', 'Scheduled Revisit', 'Confirmed'];
+      return ['Assigned', 'Interested', 'Not Interested', 'Not Available', 'Scheduled Revisit', 'Confirmed'];
     }
-    // Default list for admins/other roles
     return [
       'Interested',
       'Not Interested',
@@ -134,7 +134,7 @@ export default function UserLeadDetailPage() {
       'Visited',
       'Admitted',
       'Not Available',
-      'Scheduled Revisit'
+      'Scheduled Revisit',
     ];
   }, [user?.roleName]);
 
@@ -196,10 +196,11 @@ export default function UserLeadDetailPage() {
   // Combined Status Options (Filtered for Call Logs)
   const combinedStatusOptions = useMemo(() => {
     if (user?.roleName === 'Student Counselor') {
-      return ['Interested', 'Not Interested', 'Not Answered', 'Wrong Data', 'Call Back', 'Confirmed', 'CET Applied'].sort();
+      return ['Interested', 'Not Interested', 'Not Answered', 'Wrong Data', 'Call Back', 'Confirmed', 'CET Applied', 'No Answer'].sort();
     }
-
-    // Default/Other roles
+    if (user?.roleName === 'PRO') {
+      return ['Assigned', 'Interested', 'Not Interested', 'Not Available', 'Scheduled Revisit', 'Confirmed'].sort();
+    }
     return [
       'No Answer',
       'Interested',
@@ -207,11 +208,25 @@ export default function UserLeadDetailPage() {
       'Confirmed',
       'CET Applied',
       'Wrong Data',
-      'Call Back'
+      'Call Back',
     ].sort();
   }, [user?.roleName]);
 
   const lead = (leadData?.data || leadData) as Lead | undefined;
+
+  const getCurrentChannelStatus = useCallback((l: Lead | undefined) => {
+    if (!l) return '';
+    if (user?.roleName === 'PRO') return l.visitStatus || '';
+    if (user?.roleName === 'Student Counselor') return l.callStatus || '';
+    return l.leadStatus || '';
+  }, [user?.roleName]);
+
+  const channelFieldLabel =
+    user?.roleName === 'PRO'
+      ? 'Visit status'
+      : user?.roleName === 'Student Counselor'
+        ? 'Call status'
+        : 'Pipeline status';
 
   // Fetch activity logs
   const {
@@ -657,10 +672,14 @@ export default function UserLeadDetailPage() {
     });
 
     // Sort by date (newest first)
-    return items.sort((a, b) =>
+    const sorted = items.sort((a, b) =>
       new Date(b.date).getTime() - new Date(a.date).getTime()
     );
-  }, [lead, activityLogs, communications]);
+    if (user?.roleName === 'PRO') {
+      return sorted.filter((item) => item.type !== 'call' && item.type !== 'sms');
+    }
+    return sorted;
+  }, [lead, activityLogs, communications, user?.roleName]);
 
   // Set header
   useEffect(() => {
@@ -872,15 +891,13 @@ export default function UserLeadDetailPage() {
         handleNextLead();
       } else {
         // If auto-update status is checked and we have an outcome, update status directly
-        if (autoUpdateStatus && variables.outcome) {
+        if (autoUpdateStatus && variables.outcome && user?.roleName === 'Student Counselor') {
           statusUpdateMutation.mutate({ newStatus: variables.outcome });
-          // If auto-calling is enabled, start the timer after status update
-          if (user && user.roleName !== 'PRO' && (user as any).autoCallingEnabled) {
+          if (user && (user as any).autoCallingEnabled) {
             startAutoCallTimer();
           }
         } else {
-          // Otherwise trigger status update modal manually
-          setNewStatus(lead?.leadStatus || '');
+          setNewStatus(getCurrentChannelStatus(lead));
           setStatusComment('');
           setShowStatusModal(true);
         }
@@ -1057,14 +1074,15 @@ export default function UserLeadDetailPage() {
   };
 
   const handleStatusUpdate = () => {
-    if (!newStatus || newStatus === lead?.leadStatus) {
+    const cur = getCurrentChannelStatus(lead);
+    if (!newStatus || newStatus === cur) {
       if (!statusComment.trim()) {
         showToast.error('Please select a new status or add a comment');
         return;
       }
     }
     statusUpdateMutation.mutate({
-      newStatus: newStatus && newStatus !== lead?.leadStatus ? newStatus : undefined,
+      newStatus: newStatus && newStatus !== cur ? newStatus : undefined,
       comment: statusComment.trim() || undefined,
     });
   };
@@ -1293,26 +1311,32 @@ export default function UserLeadDetailPage() {
                 </svg>
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => {
-                if (lead) {
-                  setSmsData({ selectedNumbers: contactOptions.map(o => o.number), selectedTemplates: {}, languageFilter: 'all' });
-                  setShowSmsModal(true);
-                }
-              }}
-              className="flex items-center justify-center size-10 rounded-xl bg-purple-500 hover:bg-purple-600 active:scale-95 text-white shadow-sm"
-              aria-label="SMS"
-            >
-              <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-            </button>
+            {user.roleName !== 'PRO' && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (lead) {
+                    setSmsData({ selectedNumbers: contactOptions.map(o => o.number), selectedTemplates: {}, languageFilter: 'all' });
+                    setShowSmsModal(true);
+                  }
+                }}
+                className="flex items-center justify-center size-10 rounded-xl bg-purple-500 hover:bg-purple-600 active:scale-95 text-white shadow-sm"
+                aria-label="SMS"
+              >
+                <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </button>
+            )}
 
             {/* Status Update Button - Refresh Icon */}
             <button
               type="button"
-              onClick={() => setShowStatusModal(true)}
+              onClick={() => {
+                setNewStatus(getCurrentChannelStatus(lead));
+                setStatusComment('');
+                setShowStatusModal(true);
+              }}
               className="flex items-center justify-center size-10 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 text-white shadow-sm"
               aria-label="Update Status"
             >
@@ -1321,16 +1345,18 @@ export default function UserLeadDetailPage() {
               </svg>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setShowEditModal(true)}
-              className="flex items-center justify-center size-10 rounded-xl bg-slate-600 hover:bg-slate-700 active:scale-95 text-white shadow-sm"
-              aria-label="Edit Lead"
-            >
-              <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            </button>
+            {user.roleName !== 'PRO' && (
+              <button
+                type="button"
+                onClick={() => setShowEditModal(true)}
+                className="flex items-center justify-center size-10 rounded-xl bg-slate-600 hover:bg-slate-700 active:scale-95 text-white shadow-sm"
+                aria-label="Edit Lead"
+              >
+                <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            )}
 
             <button
               type="button"
@@ -1403,10 +1429,16 @@ export default function UserLeadDetailPage() {
                         </svg>
                         {lead.phone || '—'}
                       </p>
-                      {lead.leadStatus && (
-                        <span className="inline-flex shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold bg-white/25 text-white backdrop-blur">
-                          {lead.leadStatus}
+                      {user.roleName === 'PRO' ? (
+                        <span className="inline-flex shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold bg-white/25 text-white backdrop-blur" title="Visit status">
+                          {lead.visitStatus != null && lead.visitStatus !== '' ? lead.visitStatus : '—'}
                         </span>
+                      ) : (
+                        lead.leadStatus && (
+                          <span className="inline-flex shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold bg-white/25 text-white backdrop-blur">
+                            {lead.leadStatus}
+                          </span>
+                        )
                       )}
                     </div>
                   </div>
@@ -1450,13 +1482,22 @@ export default function UserLeadDetailPage() {
                           #{lead.enquiryNumber}
                         </p>
                       )}
-                      {lead.leadStatus && (
+                      {user.roleName === 'PRO' ? (
                         <p className="flex items-center gap-2">
                           <svg className="h-4 w-4 shrink-0 text-amber-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          {lead.leadStatus}
+                          Visit: {lead.visitStatus != null && lead.visitStatus !== '' ? lead.visitStatus : '—'}
                         </p>
+                      ) : (
+                        lead.leadStatus && (
+                          <p className="flex items-center gap-2">
+                            <svg className="h-4 w-4 shrink-0 text-amber-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {lead.leadStatus}
+                          </p>
+                        )
                       )}
                       {lead.source && (
                         <p className="flex items-center gap-2">
@@ -1522,24 +1563,26 @@ export default function UserLeadDetailPage() {
                   Call
                 </button>
               )}
+              {user.roleName !== 'PRO' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (lead) {
+                      setSmsData({ selectedNumbers: contactOptions.map(o => o.number), selectedTemplates: {}, languageFilter: 'all' });
+                      setShowSmsModal(true);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-purple-50 hover:bg-purple-100 border border-purple-200 dark:bg-purple-900/20 dark:border-purple-800 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs sm:text-sm font-medium"
+                >
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  SMS
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => {
-                  if (lead) {
-                    setSmsData({ selectedNumbers: contactOptions.map(o => o.number), selectedTemplates: {}, languageFilter: 'all' });
-                    setShowSmsModal(true);
-                  }
-                }}
-                className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-purple-50 hover:bg-purple-100 border border-purple-200 dark:bg-purple-900/20 dark:border-purple-800 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs sm:text-sm font-medium"
-              >
-                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                SMS
-              </button>
-              <button
-                type="button"
-                onClick={() => { setNewStatus(lead?.leadStatus || ''); setStatusComment(''); setShowStatusModal(true); }}
+                onClick={() => { setNewStatus(getCurrentChannelStatus(lead)); setStatusComment(''); setShowStatusModal(true); }}
                 className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-orange-50 hover:bg-orange-100 border border-orange-200 dark:bg-orange-900/20 dark:border-orange-800 dark:hover:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs sm:text-sm font-medium"
               >
                 <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1547,16 +1590,18 @@ export default function UserLeadDetailPage() {
                 </svg>
                 Status
               </button>
-              <button
-                type="button"
-                onClick={() => setShowEditModal(true)}
-                className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800 dark:hover:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs sm:text-sm font-medium"
-              >
-                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                Edit
-              </button>
+              {user.roleName !== 'PRO' && (
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(true)}
+                  className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800 dark:hover:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs sm:text-sm font-medium"
+                >
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleNextLead}
@@ -1590,16 +1635,26 @@ export default function UserLeadDetailPage() {
           </div>
 
           {/* STATUS - on desktop; on mobile shown in profile card */}
-          {lead.leadStatus && (
+          {user.roleName === 'PRO' ? (
             <div className="hidden sm:block">
-              <p className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Status</p>
-              <span className={`inline-block px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium ${getStatusColor(lead.leadStatus)}`}>
-                {lead.leadStatus}
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Visit status</p>
+              <span className={`inline-block px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium ${getStatusColor(lead.visitStatus || '')}`}>
+                {lead.visitStatus != null && lead.visitStatus !== '' ? lead.visitStatus : '—'}
               </span>
             </div>
+          ) : (
+            lead.leadStatus && (
+              <div className="hidden sm:block">
+                <p className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Status</p>
+                <span className={`inline-block px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium ${getStatusColor(lead.leadStatus)}`}>
+                  {lead.leadStatus}
+                </span>
+              </div>
+            )
           )}
 
-          {/* COMMUNICATION SUMMARY: Primary & Father phone in same row; Calls / SMS on separate rows each */}
+          {/* COMMUNICATION SUMMARY: hidden for PRO (call/SMS is counsellor workflow) */}
+          {user.roleName !== 'PRO' && (
           <div>
             {contactOptions.length === 0 ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">No phone numbers</p>
@@ -1670,6 +1725,8 @@ export default function UserLeadDetailPage() {
                 })}
               </div>
             )}
+          </div>
+          )}
 
             {/* HISTORY & REMARKS */}
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 overflow-hidden">
@@ -2103,14 +2160,18 @@ export default function UserLeadDetailPage() {
         {showStatusModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
             <Card className="max-w-md w-full">
-              <h2 className="text-xl font-semibold mb-4">Update Status</h2>
+              <h2 className="text-xl font-semibold mb-4">Update {channelFieldLabel}</h2>
               <div className="space-y-4">
                 <div>
+                  <p className="text-sm text-gray-600 mb-2">
+                    Pipeline (lead): <span className="font-semibold text-gray-900">{lead.leadStatus || 'New'}</span>
+                  </p>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Current Status: <span className="font-semibold">{lead.leadStatus || 'New'}</span>
+                    Current {channelFieldLabel}:{' '}
+                    <span className="font-semibold">{getCurrentChannelStatus(lead) || '—'}</span>
                   </label>
                   <label className="block text-sm font-medium text-gray-700 mb-1 mt-3">
-                    New Status
+                    New {channelFieldLabel}
                   </label>
                   <select
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2878,7 +2939,6 @@ export default function UserLeadDetailPage() {
             </div>
           </div>
         )}
-      </div>
 
       {/* Edit Lead Modal */}
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>

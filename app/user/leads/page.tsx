@@ -209,25 +209,32 @@ export default function UserLeadsPage() {
     return query;
   }, [page, limit, filters, debouncedSearch, activeTab]);
 
-  // Combined Status Options (Lead Status + Call Outcomes)
-  const combinedStatusOptions = useMemo(() => {
-    const backendStatuses = filterOptions?.leadStatuses || [];
-    const callOutcomes = [
-      'No Answer', 'Interested', 'Not Interested',
-      'Confirmed', 'CET Applied', 'Wrong Data', 'Call Back'
-    ];
-    const defaultStatuses = [
-      'Assigned'
-    ];
-
-    const uniqueStatuses = new Set([
-      ...backendStatuses,
-      ...callOutcomes,
-      ...defaultStatuses
-    ]);
-
-    return Array.from(uniqueStatuses).filter(s => s !== 'Answered' && s !== 'New').sort();
+  /** Pipeline filter dropdown (lead_status) */
+  const pipelineStatusFilterOptions = useMemo(() => {
+    const backend = filterOptions?.leadStatuses || [];
+    return Array.from(new Set([...backend, 'Assigned', 'New'].filter(Boolean))).sort();
   }, [filterOptions]);
+
+  /** Modal + channel filter: counsellor = call, PRO = visit */
+  const channelStatusOptions = useMemo(() => {
+    const callFromDb = filterOptions?.callStatuses || [];
+    const visitFromDb = filterOptions?.visitStatuses || [];
+    const callDefaults = [
+      'Interested', 'Not Interested', 'Not Answered', 'Wrong Data', 'Call Back', 'Confirmed', 'CET Applied',
+    ];
+    const visitDefaults = ['Interested', 'Not Interested', 'Not Available', 'Scheduled Revisit', 'Confirmed'];
+    if (user?.roleName === 'PRO') {
+      return Array.from(new Set([...visitFromDb, ...visitDefaults])).filter(Boolean).sort();
+    }
+    if (user?.roleName === 'Student Counselor') {
+      return Array.from(new Set([...callFromDb, ...callDefaults, 'No Answer'])).filter(Boolean).sort();
+    }
+    const backendStatuses = filterOptions?.leadStatuses || [];
+    const callOutcomes = ['No Answer', 'Interested', 'Not Interested', 'Confirmed', 'CET Applied', 'Wrong Data', 'Call Back'];
+    return Array.from(new Set([...backendStatuses, ...callOutcomes, 'Assigned']))
+      .filter((s) => s !== 'Answered' && s !== 'New')
+      .sort();
+  }, [filterOptions, user?.roleName]);
 
   // Fetch leads with React Query
   const {
@@ -319,12 +326,21 @@ export default function UserLeadsPage() {
     }
   };
 
+  const getCurrentChannelStatus = (lead: Lead) => {
+    if (user?.roleName === 'PRO') return lead.visitStatus || '';
+    if (user?.roleName === 'Student Counselor') return lead.callStatus || '';
+    return lead.leadStatus || '';
+  };
+
+  const channelFieldLabel =
+    user?.roleName === 'PRO' ? 'Visit status' : user?.roleName === 'Student Counselor' ? 'Call status' : 'Status';
+
   // Open comment modal
   const handleOpenCommentModal = (lead: Lead, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedLead(lead);
     setComment('');
-    setNewStatus(lead.leadStatus || '');
+    setNewStatus(getCurrentChannelStatus(lead));
     setShowCommentModal(true);
   };
 
@@ -359,7 +375,7 @@ export default function UserLeadsPage() {
     if (!selectedLead) return;
 
     const hasComment = comment.trim().length > 0;
-    const hasStatusChange = newStatus && newStatus !== selectedLead.leadStatus;
+    const hasStatusChange = Boolean(newStatus && newStatus !== getCurrentChannelStatus(selectedLead));
 
     if (!hasComment && !hasStatusChange) {
       showToast.error('Please add a comment or change the status');
@@ -384,7 +400,8 @@ export default function UserLeadsPage() {
     setShowConfirmModal(false);
     addActivityMutation.mutate({
       comment: comment.trim() ? comment.trim() : undefined,
-      newStatus: newStatus && newStatus !== selectedLead.leadStatus ? newStatus : undefined,
+      newStatus:
+        newStatus && newStatus !== getCurrentChannelStatus(selectedLead) ? newStatus : undefined,
     });
   };
 
@@ -556,18 +573,48 @@ export default function UserLeadsPage() {
               </select>
             </div>
             <div className="flex items-center gap-1.5 min-w-0 col-span-2 md:col-span-1">
-              <label className="text-[10px] font-medium text-slate-500 shrink-0">Status</label>
+              <label className="text-[10px] font-medium text-slate-500 shrink-0">Pipeline</label>
               <select
                 className="flex-1 min-w-0 rounded border border-slate-200 bg-white py-1 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
                 value={filters.leadStatus || ''}
                 onChange={(e) => handleFilterChange('leadStatus', e.target.value)}
               >
                 <option value="">All</option>
-                {combinedStatusOptions.map((status) => (
+                {pipelineStatusFilterOptions.map((status) => (
                   <option key={status} value={status}>{status}</option>
                 ))}
               </select>
             </div>
+            {user?.roleName === 'Student Counselor' && (
+              <div className="flex items-center gap-1.5 min-w-0 col-span-2 md:col-span-1">
+                <label className="text-[10px] font-medium text-slate-500 shrink-0">Call</label>
+                <select
+                  className="flex-1 min-w-0 rounded border border-slate-200 bg-white py-1 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  value={filters.callStatus || ''}
+                  onChange={(e) => handleFilterChange('callStatus', e.target.value)}
+                >
+                  <option value="">All</option>
+                  {channelStatusOptions.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {user?.roleName === 'PRO' && (
+              <div className="flex items-center gap-1.5 min-w-0 col-span-2 md:col-span-1">
+                <label className="text-[10px] font-medium text-slate-500 shrink-0">Visit</label>
+                <select
+                  className="flex-1 min-w-0 rounded border border-slate-200 bg-white py-1 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  value={filters.visitStatus || ''}
+                  onChange={(e) => handleFilterChange('visitStatus', e.target.value)}
+                >
+                  <option value="">All</option>
+                  {channelStatusOptions.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -892,20 +939,26 @@ export default function UserLeadsPage() {
           <div className="w-full max-h-[90vh] overflow-y-auto sm:max-h-none sm:overflow-visible rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-900 shadow-xl sm:max-w-md pt-4 pb-[env(safe-area-inset-bottom)] sm:pb-4">
             <div className="px-4 sm:px-6 pb-4">
               <div className="mx-auto w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600 sm:hidden mb-4" aria-hidden />
-              <h2 className="mb-4 text-xl font-semibold text-slate-900 dark:text-slate-100">Add Comment / Update Status</h2>
+              <h2 className="mb-4 text-xl font-semibold text-slate-900 dark:text-slate-100">Add Comment / Update {channelFieldLabel}</h2>
               <div className="space-y-4">
                 <div>
+                  <p className="mb-2 text-sm text-gray-600 dark:text-slate-300">
+                    Pipeline (lead): <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedLead.leadStatus || 'New'}</span>
+                  </p>
                   <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                    Current Status: <span className="font-semibold">{selectedLead.leadStatus || 'New'}</span>
+                    Current {channelFieldLabel}:{' '}
+                    <span className="font-semibold">
+                      {getCurrentChannelStatus(selectedLead) || '—'}
+                    </span>
                   </label>
-                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">Update Status</label>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">Update {channelFieldLabel}</label>
                   <select
                     className="w-full rounded-lg border border-gray-300 bg-white px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100 min-h-[44px]"
                     value={newStatus}
                     onChange={(e) => handleStatusChange(e.target.value)}
                   >
-                    <option value="">Keep Current Status</option>
-                    {combinedStatusOptions.map((status) => (
+                    <option value="">Keep current</option>
+                    {channelStatusOptions.map((status) => (
                       <option key={status} value={status}>{status}</option>
                     ))}
                   </select>
@@ -925,7 +978,7 @@ export default function UserLeadsPage() {
                     onClick={handleSaveActivity}
                     disabled={
                       addActivityMutation.isPending ||
-                      (!comment.trim() && newStatus === selectedLead.leadStatus)
+                      (!comment.trim() && newStatus === getCurrentChannelStatus(selectedLead))
                     }
                     className="min-h-[44px] flex-1 sm:flex-initial"
                   >
@@ -958,9 +1011,9 @@ export default function UserLeadsPage() {
             <div className="mx-auto w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600 sm:hidden mb-4" aria-hidden />
             <h2 className="mb-4 text-xl font-semibold text-slate-900 dark:text-slate-100">Confirm Status Change</h2>
             <p className="text-gray-700 dark:text-slate-200 text-base mb-6">
-              Are you sure you want to change the status from{' '}
-              <span className="font-semibold">{selectedLead.leadStatus || 'New'}</span> to{' '}
-              <span className="font-semibold">{newStatus}</span>?
+              Are you sure you want to change {channelFieldLabel.toLowerCase()} from{' '}
+              <span className="font-semibold">{getCurrentChannelStatus(selectedLead) || '—'}</span> to{' '}
+              <span className="font-semibold">{newStatus}</span>? The pipeline may update automatically (e.g. to Interested).
             </p>
             <div className="flex gap-3">
               <Button
@@ -975,7 +1028,7 @@ export default function UserLeadsPage() {
                 variant="outline"
                 onClick={() => {
                   setShowConfirmModal(false);
-                  setNewStatus(selectedLead.leadStatus || '');
+                  setNewStatus(getCurrentChannelStatus(selectedLead));
                 }}
                 disabled={addActivityMutation.isPending}
                 className="min-h-[44px] flex-1"

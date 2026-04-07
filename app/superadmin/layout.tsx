@@ -204,6 +204,7 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
       title={title}
       description={description}
       role={roleLabel}
+      roleName={roleLabel}
       userName={userName}
       permissions={permissionConfig}
     >

@@ -193,12 +193,18 @@ export interface Lead {
   quota: string;
   applicationStatus?: string;
   leadStatus?: string;
+  /** Counsellor phone workflow; omitted in API responses for PRO */
+  callStatus?: string | null;
+  /** PRO field-visit workflow; omitted in API responses for Student Counselor */
+  visitStatus?: string | null;
   admissionNumber?: string;
   gender?: string;
   rank?: number;
   interCollege?: string;
   dynamicFields?: Record<string, any>;
   assignedTo?: User | string;
+  /** PRO field staff assigned to the lead (superadmin / full lead views) */
+  assignedToPro?: User | string;
   assignedAt?: string;
   assignedBy?: User | string;
   source?: string;
@@ -683,6 +689,8 @@ export interface LeadFilters {
   quota?: string;
   status?: string;
   leadStatus?: string;
+  callStatus?: string;
+  visitStatus?: string;
   applicationStatus?: string;
   assignedTo?: string;
   academicYear?: number | string;
@@ -712,6 +720,8 @@ export interface FilterOptions {
   quotas: string[];
   statuses?: string[];
   leadStatuses: string[];
+  callStatuses?: string[];
+  visitStatuses?: string[];
   applicationStatuses: string[];
   academicYears?: number[];
   studentGroups?: string[];
