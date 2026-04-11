@@ -227,10 +227,10 @@ export default function UserLeadsPage() {
       return Array.from(new Set([...visitFromDb, ...visitDefaults])).filter(Boolean).sort();
     }
     if (user?.roleName === 'Student Counselor') {
-      return Array.from(new Set([...callFromDb, ...callDefaults, 'No Answer'])).filter(Boolean).sort();
+      return Array.from(new Set([...callFromDb, ...callDefaults])).filter(Boolean).sort();
     }
     const backendStatuses = filterOptions?.leadStatuses || [];
-    const callOutcomes = ['No Answer', 'Interested', 'Not Interested', 'Confirmed', 'CET Applied', 'Wrong Data', 'Call Back'];
+    const callOutcomes = ['Interested', 'Not Interested', 'Not Answered', 'Confirmed', 'CET Applied', 'Wrong Data', 'Call Back'];
     return Array.from(new Set([...backendStatuses, ...callOutcomes, 'Assigned']))
       .filter((s) => s !== 'Answered' && s !== 'New')
       .sort();
@@ -270,10 +270,17 @@ export default function UserLeadsPage() {
   ) => {
     setFilters((prev) => {
       const newFilters: LeadFilters = { ...prev };
-      if (value !== undefined && value !== null && value !== '') {
-        newFilters[key] = value as LeadFilters[K];
-      } else {
+      if (value === undefined || value === null || value === '') {
         delete newFilters[key];
+        setPage(1);
+        return newFilters;
+      }
+      newFilters[key] = value as LeadFilters[K];
+      if (key === 'district') {
+        delete newFilters.mandal;
+        delete newFilters.village;
+      } else if (key === 'mandal') {
+        delete newFilters.village;
       }
       setPage(1);
       return newFilters;
@@ -330,6 +337,14 @@ export default function UserLeadsPage() {
     if (user?.roleName === 'PRO') return lead.visitStatus || '';
     if (user?.roleName === 'Student Counselor') return lead.callStatus || '';
     return lead.leadStatus || '';
+  };
+
+  /** Badge + table column: counsellor → call, PRO → visit, others → pipeline */
+  const displayStatusForLead = (lead: Lead) => {
+    const raw = getCurrentChannelStatus(lead);
+    if (raw && String(raw).trim()) return String(raw).trim();
+    if (user?.roleName === 'PRO' || user?.roleName === 'Student Counselor') return '—';
+    return lead.leadStatus || 'New';
   };
 
   const channelFieldLabel =
@@ -519,72 +534,100 @@ export default function UserLeadsPage() {
         </div>
 
         {showFilters && (
-          <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-2 md:grid-cols-5">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <label className="text-[10px] font-medium text-slate-500 shrink-0">Mandal</label>
+          <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+            <div className="flex flex-col gap-1 min-w-0 col-span-2 sm:col-span-1">
+              <label className="text-[10px] font-medium text-slate-500">District</label>
               <select
-                className="flex-1 min-w-0 rounded border border-slate-200 bg-white py-1 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                className="w-full min-w-0 rounded border border-slate-200 bg-white py-1.5 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                value={filters.district || ''}
+                onChange={(e) => handleFilterChange('district', e.target.value)}
+              >
+                <option value="">All districts</option>
+                {filterOptions?.districts?.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 min-w-0 col-span-2 sm:col-span-1">
+              <label className="text-[10px] font-medium text-slate-500">Mandal</label>
+              <select
+                className="w-full min-w-0 rounded border border-slate-200 bg-white py-1.5 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
                 value={filters.mandal || ''}
                 onChange={(e) => handleFilterChange('mandal', e.target.value)}
               >
-                <option value="">All</option>
+                <option value="">All mandals</option>
                 {filterOptions?.mandals?.map((mandal) => (
                   <option key={mandal} value={mandal}>{mandal}</option>
                 ))}
               </select>
             </div>
-            <div className="hidden md:flex items-center gap-1.5 min-w-0">
-              <label className="text-[10px] font-medium text-slate-500 shrink-0">State</label>
+            <div className="flex flex-col gap-1 min-w-0 col-span-2 sm:col-span-1">
+              <label className="text-[10px] font-medium text-slate-500">Village</label>
               <select
-                className="flex-1 min-w-0 rounded border border-slate-200 bg-white py-1 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
-                value={filters.state || ''}
-                onChange={(e) => handleFilterChange('state', e.target.value)}
+                className="w-full min-w-0 rounded border border-slate-200 bg-white py-1.5 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                value={filters.village || ''}
+                onChange={(e) => handleFilterChange('village', e.target.value)}
               >
-                <option value="">All</option>
-                {filterOptions?.states?.map((state) => (
-                  <option key={state} value={state}>{state}</option>
+                <option value="">All villages</option>
+                {(filterOptions?.villages || []).map((v) => (
+                  <option key={v} value={v}>{v}</option>
                 ))}
               </select>
             </div>
-            <div className="hidden md:flex items-center gap-1.5 min-w-0">
-              <label className="text-[10px] font-medium text-slate-500 shrink-0">Quota</label>
+            <div className="flex flex-col gap-1 min-w-0 col-span-2 sm:col-span-1">
+              <label className="text-[10px] font-medium text-slate-500">Student group</label>
               <select
-                className="flex-1 min-w-0 rounded border border-slate-200 bg-white py-1 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
-                value={filters.quota || ''}
-                onChange={(e) => handleFilterChange('quota', e.target.value)}
-              >
-                <option value="">All</option>
-                {filterOptions?.quotas?.map((quota) => (
-                  <option key={quota} value={quota}>{quota}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-1.5 min-w-0">
-              <label className="text-[10px] font-medium text-slate-500 shrink-0">Group</label>
-              <select
-                className="flex-1 min-w-0 rounded border border-slate-200 bg-white py-1 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                className="w-full min-w-0 rounded border border-slate-200 bg-white py-1.5 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
                 value={filters.studentGroup || ''}
                 onChange={(e) => handleFilterChange('studentGroup', e.target.value)}
               >
-                <option value="">All</option>
+                <option value="">All groups</option>
                 {filterOptions?.studentGroups?.map((group) => (
                   <option key={group} value={group}>{group}</option>
                 ))}
               </select>
             </div>
-            <div className="flex items-center gap-1.5 min-w-0 col-span-2 md:col-span-1">
-              <label className="text-[10px] font-medium text-slate-500 shrink-0">Pipeline</label>
+            <div className="hidden md:flex flex-col gap-1 min-w-0 col-span-2 sm:col-span-1">
+              <label className="text-[10px] font-medium text-slate-500">State</label>
               <select
-                className="flex-1 min-w-0 rounded border border-slate-200 bg-white py-1 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
-                value={filters.leadStatus || ''}
-                onChange={(e) => handleFilterChange('leadStatus', e.target.value)}
+                className="w-full min-w-0 rounded border border-slate-200 bg-white py-1.5 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                value={filters.state || ''}
+                onChange={(e) => handleFilterChange('state', e.target.value)}
               >
-                <option value="">All</option>
-                {pipelineStatusFilterOptions.map((status) => (
-                  <option key={status} value={status}>{status}</option>
+                <option value="">All states</option>
+                {filterOptions?.states?.map((state) => (
+                  <option key={state} value={state}>{state}</option>
                 ))}
               </select>
             </div>
+            <div className="hidden md:flex flex-col gap-1 min-w-0 col-span-2 sm:col-span-1">
+              <label className="text-[10px] font-medium text-slate-500">Quota</label>
+              <select
+                className="w-full min-w-0 rounded border border-slate-200 bg-white py-1.5 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                value={filters.quota || ''}
+                onChange={(e) => handleFilterChange('quota', e.target.value)}
+              >
+                <option value="">All quotas</option>
+                {filterOptions?.quotas?.map((quota) => (
+                  <option key={quota} value={quota}>{quota}</option>
+                ))}
+              </select>
+            </div>
+            {user?.roleName !== 'PRO' && user?.roleName !== 'Student Counselor' && (
+              <div className="flex items-center gap-1.5 min-w-0 col-span-2 md:col-span-1">
+                <label className="text-[10px] font-medium text-slate-500 shrink-0">Pipeline</label>
+                <select
+                  className="flex-1 min-w-0 rounded border border-slate-200 bg-white py-1 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  value={filters.leadStatus || ''}
+                  onChange={(e) => handleFilterChange('leadStatus', e.target.value)}
+                >
+                  <option value="">All</option>
+                  {pipelineStatusFilterOptions.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             {user?.roleName === 'Student Counselor' && (
               <div className="flex items-center gap-1.5 min-w-0 col-span-2 md:col-span-1">
                 <label className="text-[10px] font-medium text-slate-500 shrink-0">Call</label>
@@ -791,7 +834,7 @@ export default function UserLeadsPage() {
                   <th className="px-6 py-3 font-medium">Group</th>
                   <th className="px-6 py-3 font-medium">District</th>
                   <th className="px-6 py-3 font-medium">Mandal</th>
-                  <th className="px-6 py-3 font-medium">Status</th>
+                  <th className="px-6 py-3 font-medium">{channelFieldLabel}</th>
                   <th className="px-6 py-3 font-medium text-right">Actions</th>
                 </tr>
               </thead>
@@ -824,8 +867,8 @@ export default function UserLeadsPage() {
                     </td>
                     <td className="px-6 py-3">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusColor(lead.leadStatus || '')}`}>
-                          {lead.leadStatus || 'New'}
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusColor(displayStatusForLead(lead))}`}>
+                          {displayStatusForLead(lead)}
                         </span>
                         {lead.needsManualUpdate && (
                           <span className="rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-700" title="Details need manual update">
@@ -887,8 +930,8 @@ export default function UserLeadsPage() {
                         )}
                       </div>
                     </div>
-                    <span className={`shrink-0 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusColor(lead.leadStatus || '')}`}>
-                      {lead.leadStatus || 'New'}
+                    <span className={`shrink-0 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusColor(displayStatusForLead(lead))}`}>
+                      {displayStatusForLead(lead)}
                     </span>
                   </div>
 
@@ -942,9 +985,12 @@ export default function UserLeadsPage() {
               <h2 className="mb-4 text-xl font-semibold text-slate-900 dark:text-slate-100">Add Comment / Update {channelFieldLabel}</h2>
               <div className="space-y-4">
                 <div>
-                  <p className="mb-2 text-sm text-gray-600 dark:text-slate-300">
-                    Pipeline (lead): <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedLead.leadStatus || 'New'}</span>
-                  </p>
+                  {user?.roleName !== 'PRO' && user?.roleName !== 'Student Counselor' && (
+                    <p className="mb-2 text-sm text-gray-600 dark:text-slate-300">
+                      Pipeline (lead):{' '}
+                      <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedLead.leadStatus || 'New'}</span>
+                    </p>
+                  )}
                   <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
                     Current {channelFieldLabel}:{' '}
                     <span className="font-semibold">

@@ -686,6 +686,7 @@ export interface LeadFilters {
   mandal?: string;
   state?: string;
   district?: string;
+  village?: string;
   quota?: string;
   status?: string;
   leadStatus?: string;
@@ -716,6 +717,7 @@ export interface LeadPagination {
 export interface FilterOptions {
   mandals: string[];
   districts: string[];
+  villages?: string[];
   states: string[];
   quotas: string[];
   statuses?: string[];

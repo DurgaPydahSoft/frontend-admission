@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { auth } from '@/lib/auth';
 import { leadAPI } from '@/lib/api';
-import { User } from '@/types';
+import { Lead, User } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { UserDashboardSkeleton } from '@/components/ui/Skeleton';
@@ -55,6 +55,27 @@ const getTodayDateString = () => {
 const currentYear = new Date().getFullYear();
 const DEFAULT_ACADEMIC_YEARS = [currentYear, currentYear - 1, currentYear - 2];
 const STUDENT_GROUP_OPTIONS = ['10th', 'Inter', 'Inter-MPC', 'Inter-BIPC', 'Degree', 'Diploma'];
+
+/** Call-status labels shown on counsellor dashboard (matches lead detail / filters). */
+const STUDENT_COUNSELLOR_CALL_STATUS_LABELS = [
+  'Interested',
+  'Not Interested',
+  'Not Answered',
+  'Wrong Data',
+  'Call Back',
+  'Confirmed',
+  'CET Applied',
+] as const;
+
+/** Visit-status labels shown on PRO dashboard (matches lead detail / filters). */
+const PRO_VISIT_STATUS_LABELS = [
+  'Assigned',
+  'Interested',
+  'Not Interested',
+  'Not Available',
+  'Scheduled Revisit',
+  'Confirmed',
+] as const;
 
 export default function UserDashboard() {
   const router = useRouter();
@@ -267,17 +288,58 @@ export default function UserDashboard() {
     []
   );
 
+  const statusChartTitle =
+    user?.roleName === 'PRO'
+      ? 'Visit status'
+      : user?.roleName === 'Student Counselor'
+        ? 'Call status'
+        : 'Lead status';
+
   const statusChartData = useMemo(() => {
     if (!analytics?.statusBreakdown) return [] as Array<{ name: string; value: number }>;
-    return Object.entries(analytics.statusBreakdown)
+    const entries = Object.entries(analytics.statusBreakdown)
       .map(([status, count]) => ({
         name: status,
         value: typeof count === 'number' ? count : Number(count) || 0,
       }))
-      .filter((entry) => entry.value > 0)
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 8);
-  }, [analytics]);
+      .filter((entry) => entry.value > 0);
+
+    const isPro = user?.roleName === 'PRO';
+    const isCounsellor = user?.roleName === 'Student Counselor';
+    if (!isPro && !isCounsellor) {
+      return entries.sort((a, b) => b.value - a.value).slice(0, 8);
+    }
+
+    const allowed = isPro ? PRO_VISIT_STATUS_LABELS : STUDENT_COUNSELLOR_CALL_STATUS_LABELS;
+    const allowedLower = new Set(allowed.map((s) => s.toLowerCase()));
+    const byKey = new Map<string, number>();
+    let other = 0;
+
+    for (const e of entries) {
+      const lower = e.name.toLowerCase();
+      if (lower === 'not set' || allowedLower.has(lower)) {
+        const canonical = allowed.find((a) => a.toLowerCase() === lower) ?? e.name;
+        byKey.set(canonical, (byKey.get(canonical) || 0) + e.value);
+      } else {
+        other += e.value;
+      }
+    }
+    if (other > 0) {
+      byKey.set('Other', (byKey.get('Other') || 0) + other);
+    }
+
+    const ordered: Array<{ name: string; value: number }> = [];
+    for (const label of [...allowed, 'Not set', 'Other'] as const) {
+      const v = byKey.get(label);
+      if (v && v > 0) ordered.push({ name: label, value: v });
+    }
+    for (const [k, v] of byKey.entries()) {
+      if (!ordered.some((o) => o.name === k) && v > 0) {
+        ordered.push({ name: k, value: v });
+      }
+    }
+    return ordered.sort((a, b) => b.value - a.value).slice(0, 12);
+  }, [analytics, user?.roleName]);
 
   const mandalChartData = useMemo(() => {
     if (!analytics?.mandalBreakdown) return [] as Array<{ name: string; value: number }>;
@@ -389,19 +451,39 @@ export default function UserDashboard() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wide">Today&apos;s scheduled calls</h2>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wide">
+              {user?.roleName === 'PRO' ? "Today's scheduled follow-ups" : "Today's scheduled calls"}
+            </h2>
           </div>
 
           {scheduledLeads.length === 0 ? (
             <div className="px-4 py-6 text-center rounded-xl border border-slate-100 bg-white/50 dark:border-slate-800 dark:bg-slate-900/50">
-              <p className="text-sm font-medium text-slate-500">No calls scheduled for today.</p>
+              <p className="text-sm font-medium text-slate-500">
+                {user?.roleName === 'PRO' ? 'Nothing scheduled for today.' : 'No calls scheduled for today.'}
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
-              {scheduledLeads.map((lead: { _id: string; name?: string; enquiryNumber?: string; nextScheduledCall?: string }) => {
+              {scheduledLeads.map((lead: Lead) => {
                 const timeStr = lead.nextScheduledCall
                   ? new Date(lead.nextScheduledCall).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
                   : null;
+                const channelStatusLabel =
+                  user?.roleName === 'PRO'
+                    ? 'Visit'
+                    : user?.roleName === 'Student Counselor'
+                      ? 'Call'
+                      : 'Status';
+                const channelStatusValue =
+                  user?.roleName === 'PRO'
+                    ? lead.visitStatus
+                    : user?.roleName === 'Student Counselor'
+                      ? lead.callStatus
+                      : lead.leadStatus;
+                const channelDisplay =
+                  channelStatusValue != null && String(channelStatusValue).trim() !== ''
+                    ? String(channelStatusValue).trim()
+                    : '—';
                 return (
                   <button
                     key={lead._id}
@@ -414,7 +496,7 @@ export default function UserDashboard() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold text-slate-900 dark:text-slate-100 text-sm">{lead.name ?? '—'}</p>
-                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 dark:text-slate-400">
                         <span>{lead.enquiryNumber ?? '—'}</span>
                         {timeStr && (
                           <>
@@ -422,6 +504,9 @@ export default function UserDashboard() {
                             <span className="text-orange-600 dark:text-orange-400 font-medium">{timeStr}</span>
                           </>
                         )}
+                        <span className="w-full sm:w-auto sm:ml-0 text-[11px] text-slate-600 dark:text-slate-300">
+                          {channelStatusLabel}: <span className="font-medium text-slate-800 dark:text-slate-200">{channelDisplay}</span>
+                        </span>
                       </div>
                     </div>
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
@@ -440,7 +525,7 @@ export default function UserDashboard() {
       {/* Status distribution: donut chart with filters (same row, no filter background) */}
       {statusChartData.length > 0 && (
         <Card className="border-slate-200 shadow-sm bg-white dark:bg-slate-900 dark:border-slate-700 p-3 sm:p-5">
-          <h2 className="text-sm sm:text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2 sm:mb-4 px-1">Lead Status</h2>
+          <h2 className="text-sm sm:text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2 sm:mb-4 px-1">{statusChartTitle}</h2>
           <div className="grid gap-2 sm:gap-6 lg:grid-cols-2 lg:items-center">
             {/* Chart Section */}
             <div className="h-52 sm:h-72 w-full min-w-0">

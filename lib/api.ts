@@ -218,6 +218,7 @@ export const leadAPI = {
     limit?: number;
     mandal?: string;
     district?: string;
+    village?: string;
     state?: string;
     quota?: string;
     leadStatus?: string;

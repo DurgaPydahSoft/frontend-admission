@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -74,6 +74,8 @@ export default function ManagerLeadDetailPage() {
     outcome: '',
     durationSeconds: 0,
   });
+  const callDataRef = useRef(callData);
+  callDataRef.current = callData;
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [smsData, setSmsData] = useState({
     selectedNumbers: [] as string[],
@@ -2108,14 +2110,16 @@ export default function ManagerLeadDetailPage() {
                 <select
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   value={callData.outcome}
-                  onChange={(e) => setCallData({ ...callData, outcome: e.target.value })}
+                  onChange={(e) =>
+                    setCallData((prev) => ({ ...prev, outcome: e.target.value }))
+                  }
                   required
                 >
                   <option value="">Select outcome...</option>
                   <option value="callback_requested">Call back</option>
                   <option value="switch_off">Switch off</option>
                   <option value="answered">Answered</option>
-                  <option value="no_answer">No Answer</option>
+                  <option value="Not Answered">Not Answered</option>
                   <option value="busy">Busy</option>
                   <option value="voicemail">Voicemail</option>
                   <option value="interested">Interested</option>
@@ -2129,7 +2133,12 @@ export default function ManagerLeadDetailPage() {
                 <Input
                   type="number"
                   value={callData.durationSeconds || ''}
-                  onChange={(e) => setCallData({ ...callData, durationSeconds: parseInt(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setCallData((prev) => ({
+                      ...prev,
+                      durationSeconds: parseInt(e.target.value, 10) || 0,
+                    }))
+                  }
                   placeholder="Call duration in seconds"
                   min="0"
                 />
@@ -2141,19 +2150,23 @@ export default function ManagerLeadDetailPage() {
                 <textarea
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
                   value={callData.remarks}
-                  onChange={(e) => setCallData({ ...callData, remarks: e.target.value })}
+                  onChange={(e) =>
+                    setCallData((prev) => ({ ...prev, remarks: e.target.value }))
+                  }
                   placeholder="Add call remarks..."
                 />
               </div>
               <div className="flex gap-2">
                 <Button
+                  type="button"
                   variant="primary"
-                  onClick={() => callMutation.mutate(callData)}
+                  onClick={() => callMutation.mutate(callDataRef.current)}
                   disabled={!callData.outcome || callMutation.isPending}
                 >
                   {callMutation.isPending ? 'Saving...' : 'Save Call'}
                 </Button>
                 <Button
+                  type="button"
                   variant="outline"
                   onClick={() => {
                     setShowCallRemarksModal(false);

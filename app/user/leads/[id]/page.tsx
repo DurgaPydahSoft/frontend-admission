@@ -82,6 +82,8 @@ export default function UserLeadDetailPage() {
     outcome: '',
     durationSeconds: 0,
   });
+  const callDataRef = useRef(callData);
+  callDataRef.current = callData;
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [smsData, setSmsData] = useState({
     selectedNumbers: [] as string[],
@@ -119,7 +121,7 @@ export default function UserLeadDetailPage() {
   /** Counsellor edits call_status; PRO edits visit_status; admins edit lead_status (pipeline) */
   const statusOptions = useMemo(() => {
     if (user?.roleName === 'Student Counselor') {
-      return ['Interested', 'Not Interested', 'Not Answered', 'Wrong Data', 'Call Back', 'Confirmed', 'CET Applied', 'No Answer'];
+      return ['Interested', 'Not Interested', 'Not Answered', 'Wrong Data', 'Call Back', 'Confirmed', 'CET Applied'];
     }
     if (user?.roleName === 'PRO') {
       return ['Assigned', 'Interested', 'Not Interested', 'Not Available', 'Scheduled Revisit', 'Confirmed'];
@@ -196,15 +198,15 @@ export default function UserLeadDetailPage() {
   // Combined Status Options (Filtered for Call Logs)
   const combinedStatusOptions = useMemo(() => {
     if (user?.roleName === 'Student Counselor') {
-      return ['Interested', 'Not Interested', 'Not Answered', 'Wrong Data', 'Call Back', 'Confirmed', 'CET Applied', 'No Answer'].sort();
+      return ['Interested', 'Not Interested', 'Not Answered', 'Wrong Data', 'Call Back', 'Confirmed', 'CET Applied'].sort();
     }
     if (user?.roleName === 'PRO') {
       return ['Assigned', 'Interested', 'Not Interested', 'Not Available', 'Scheduled Revisit', 'Confirmed'].sort();
     }
     return [
-      'No Answer',
       'Interested',
       'Not Interested',
+      'Not Answered',
       'Confirmed',
       'CET Applied',
       'Wrong Data',
@@ -227,6 +229,22 @@ export default function UserLeadDetailPage() {
       : user?.roleName === 'Student Counselor'
         ? 'Call status'
         : 'Pipeline status';
+
+  const statusButtonLabel =
+    user?.roleName === 'PRO' ? 'Visit status' : user?.roleName === 'Student Counselor' ? 'Call status' : 'Status';
+
+  /** Primary badge text: visit / call / pipeline by role */
+  const displayPrimaryStatusText = useCallback(
+    (l: Lead | undefined) => {
+      const v = getCurrentChannelStatus(l);
+      const t = v != null ? String(v).trim() : '';
+      return t !== '' ? t : '—';
+    },
+    [getCurrentChannelStatus],
+  );
+
+  const showPipelineLeadStatus =
+    user?.roleName !== 'PRO' && user?.roleName !== 'Student Counselor';
 
   // Fetch activity logs
   const {
@@ -1338,7 +1356,7 @@ export default function UserLeadDetailPage() {
                 setShowStatusModal(true);
               }}
               className="flex items-center justify-center size-10 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 text-white shadow-sm"
-              aria-label="Update Status"
+              aria-label={`Update ${statusButtonLabel}`}
             >
               <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1431,7 +1449,11 @@ export default function UserLeadDetailPage() {
                       </p>
                       {user.roleName === 'PRO' ? (
                         <span className="inline-flex shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold bg-white/25 text-white backdrop-blur" title="Visit status">
-                          {lead.visitStatus != null && lead.visitStatus !== '' ? lead.visitStatus : '—'}
+                          {displayPrimaryStatusText(lead)}
+                        </span>
+                      ) : user.roleName === 'Student Counselor' ? (
+                        <span className="inline-flex shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold bg-white/25 text-white backdrop-blur" title="Call status">
+                          {displayPrimaryStatusText(lead)}
                         </span>
                       ) : (
                         lead.leadStatus && (
@@ -1487,7 +1509,14 @@ export default function UserLeadDetailPage() {
                           <svg className="h-4 w-4 shrink-0 text-amber-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          Visit: {lead.visitStatus != null && lead.visitStatus !== '' ? lead.visitStatus : '—'}
+                          Visit: {displayPrimaryStatusText(lead)}
+                        </p>
+                      ) : user.roleName === 'Student Counselor' ? (
+                        <p className="flex items-center gap-2">
+                          <svg className="h-4 w-4 shrink-0 text-amber-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Call: {displayPrimaryStatusText(lead)}
                         </p>
                       ) : (
                         lead.leadStatus && (
@@ -1588,7 +1617,7 @@ export default function UserLeadDetailPage() {
                 <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                Status
+                {statusButtonLabel}
               </button>
               {user.roleName !== 'PRO' && (
                 <button
@@ -1638,14 +1667,21 @@ export default function UserLeadDetailPage() {
           {user.roleName === 'PRO' ? (
             <div className="hidden sm:block">
               <p className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Visit status</p>
-              <span className={`inline-block px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium ${getStatusColor(lead.visitStatus || '')}`}>
-                {lead.visitStatus != null && lead.visitStatus !== '' ? lead.visitStatus : '—'}
+              <span className={`inline-block px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium ${getStatusColor(displayPrimaryStatusText(lead))}`}>
+                {displayPrimaryStatusText(lead)}
+              </span>
+            </div>
+          ) : user.roleName === 'Student Counselor' ? (
+            <div className="hidden sm:block">
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Call status</p>
+              <span className={`inline-block px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium ${getStatusColor(displayPrimaryStatusText(lead))}`}>
+                {displayPrimaryStatusText(lead)}
               </span>
             </div>
           ) : (
             lead.leadStatus && (
               <div className="hidden sm:block">
-                <p className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Status</p>
+                <p className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Lead status</p>
                 <span className={`inline-block px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium ${getStatusColor(lead.leadStatus)}`}>
                   {lead.leadStatus}
                 </span>
@@ -2163,9 +2199,11 @@ export default function UserLeadDetailPage() {
               <h2 className="text-xl font-semibold mb-4">Update {channelFieldLabel}</h2>
               <div className="space-y-4">
                 <div>
-                  <p className="text-sm text-gray-600 mb-2">
-                    Pipeline (lead): <span className="font-semibold text-gray-900">{lead.leadStatus || 'New'}</span>
-                  </p>
+                  {showPipelineLeadStatus && (
+                    <p className="text-sm text-gray-600 mb-2">
+                      Pipeline (lead): <span className="font-semibold text-gray-900">{lead.leadStatus || 'New'}</span>
+                    </p>
+                  )}
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Current {channelFieldLabel}:{' '}
                     <span className="font-semibold">{getCurrentChannelStatus(lead) || '—'}</span>
@@ -2513,7 +2551,9 @@ export default function UserLeadDetailPage() {
                     <select
                       className="w-full px-2.5 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                       value={callData.outcome}
-                      onChange={(e) => setCallData({ ...callData, outcome: e.target.value })}
+                      onChange={(e) =>
+                        setCallData((prev) => ({ ...prev, outcome: e.target.value }))
+                      }
                     >
                       <option value="">Select outcome...</option>
                       {combinedStatusOptions.map((status) => (
@@ -2523,7 +2563,7 @@ export default function UserLeadDetailPage() {
                   </div>
 
                   {/* Conditional Next Scheduled Call Input */}
-                  {['call back', 'interested', 'busy', 'no answer'].some(s => (callData.outcome || '').toLowerCase().includes(s)) && (
+                  {['call back', 'interested', 'busy', 'not answered', 'no answer'].some(s => (callData.outcome || '').toLowerCase().includes(s)) && (
                     <div className="p-3 bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 rounded-lg">
                       <label className="block text-xs font-medium text-orange-800 dark:text-orange-300 mb-1">
                         Schedule Next Call/Follow-up
@@ -2565,12 +2605,15 @@ export default function UserLeadDetailPage() {
                     <textarea
                       className="w-full px-2.5 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 min-h-[80px] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                       value={callData.remarks}
-                      onChange={(e) => setCallData({ ...callData, remarks: e.target.value })}
+                      onChange={(e) =>
+                        setCallData((prev) => ({ ...prev, remarks: e.target.value }))
+                      }
                       placeholder="Add call remarks..."
                     />
                   </div>
                   <div className="flex gap-2 pt-1">
                     <Button
+                      type="button"
                       variant="primary"
                       size="sm"
                       className="flex-1"
@@ -2578,13 +2621,14 @@ export default function UserLeadDetailPage() {
                         if (callScheduledDate) {
                           await scheduleCallMutation.mutateAsync({ nextScheduledCall: new Date(callScheduledDate).toISOString() });
                         }
-                        callMutation.mutate(callData);
+                        callMutation.mutate(callDataRef.current);
                       }}
                       disabled={!callData.outcome || callMutation.isPending || scheduleCallMutation.isPending}
                     >
                       {callMutation.isPending || scheduleCallMutation.isPending ? 'Saving...' : 'Save Call'}
                     </Button>
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={() => {
@@ -2601,6 +2645,7 @@ export default function UserLeadDetailPage() {
                   {/* Separate 'Log & Next' row for better mobile ergonomics */}
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
                     <Button
+                      type="button"
                       variant="secondary"
                       size="sm"
                       className="w-full bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30 border-blue-200 dark:border-blue-800"
@@ -2608,7 +2653,7 @@ export default function UserLeadDetailPage() {
                         if (callScheduledDate) {
                           await scheduleCallMutation.mutateAsync({ nextScheduledCall: new Date(callScheduledDate).toISOString() });
                         }
-                        callMutation.mutate({ ...callData, next: true });
+                        callMutation.mutate({ ...callDataRef.current, next: true });
                       }}
                       disabled={!callData.outcome || callMutation.isPending || scheduleCallMutation.isPending || !nextLeadId}
                     >
