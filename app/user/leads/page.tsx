@@ -65,6 +65,20 @@ export default function UserLeadsPage() {
     }
   }, [filters, isRestored]);
 
+  // After restoring filters from session, drop mandal/village if district is missing (invalid combo)
+  useEffect(() => {
+    if (!isRestored) return;
+    setFilters((prev) => {
+      if (!prev.district && (prev.mandal || prev.village)) {
+        const next = { ...prev };
+        delete next.mandal;
+        delete next.village;
+        return next;
+      }
+      return prev;
+    });
+  }, [isRestored]);
+
   const [showFilters, setShowFilters] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -149,11 +163,14 @@ export default function UserLeadsPage() {
     setUser(currentUser);
   }, [router]);
 
-  // Load filter options
+  // Load filter options (mandals / villages cascade from district + mandal)
   useEffect(() => {
     const loadFilterOptions = async () => {
       try {
-        const options = await leadAPI.getFilterOptions();
+        const options = await leadAPI.getFilterOptions({
+          district: filters.district || undefined,
+          mandal: filters.mandal || undefined,
+        });
         setFilterOptions(options.data || options);
       } catch (error) {
         console.error('Error loading filter options:', error);
@@ -162,7 +179,7 @@ export default function UserLeadsPage() {
     if (user) {
       loadFilterOptions();
     }
-  }, [user]);
+  }, [user, filters.district, filters.mandal]);
 
   // Single search suggestions (name, phone, email, enquiry number)
   useEffect(() => {
@@ -215,14 +232,28 @@ export default function UserLeadsPage() {
     return Array.from(new Set([...backend, 'Assigned', 'New'].filter(Boolean))).sort();
   }, [filterOptions]);
 
-  /** Modal + channel filter: counsellor = call, PRO = visit */
+  /** Modal + channel filter: counsellor = call (+ pipeline Assigned), PRO = visit */
   const channelStatusOptions = useMemo(() => {
     const callFromDb = filterOptions?.callStatuses || [];
     const visitFromDb = filterOptions?.visitStatuses || [];
     const callDefaults = [
-      'Interested', 'Not Interested', 'Not Answered', 'Wrong Data', 'Call Back', 'Confirmed', 'CET Applied',
+      'Assigned',
+      'Interested',
+      'Not Interested',
+      'Not Answered',
+      'Wrong Data',
+      'Call Back',
+      'Confirmed',
+      'CET Applied',
     ];
-    const visitDefaults = ['Interested', 'Not Interested', 'Not Available', 'Scheduled Revisit', 'Confirmed'];
+    const visitDefaults = [
+      'Assigned',
+      'Interested',
+      'Not Interested',
+      'Not Available',
+      'Scheduled Revisit',
+      'Confirmed',
+    ];
     if (user?.roleName === 'PRO') {
       return Array.from(new Set([...visitFromDb, ...visitDefaults])).filter(Boolean).sort();
     }
@@ -287,6 +318,39 @@ export default function UserLeadsPage() {
     });
   };
 
+  /** Status filter: PRO → visit_status only; Student Counselor → call_status only (same columns as analytics). */
+  const handleChannelStatusFilterChange = (value: string) => {
+    setFilters((prev) => {
+      const next: LeadFilters = { ...prev };
+      if (user?.roleName === 'PRO') {
+        if (!value) delete next.visitStatus;
+        else next.visitStatus = value;
+        setPage(1);
+        return next;
+      }
+      if (user?.roleName === 'Student Counselor') {
+        delete next.callStatus;
+        delete next.leadStatus;
+        if (!value) {
+          setPage(1);
+          return next;
+        }
+        next.callStatus = value;
+        setPage(1);
+        return next;
+      }
+      setPage(1);
+      return next;
+    });
+  };
+
+  const channelStatusSelectValue =
+    user?.roleName === 'PRO'
+      ? filters.visitStatus || ''
+      : user?.roleName === 'Student Counselor'
+        ? filters.callStatus || ''
+        : '';
+
   // Clear all filters
   const clearFilters = () => {
     setFilters({});
@@ -328,18 +392,27 @@ export default function UserLeadsPage() {
       case 'new':
       case 'cet applied':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200';
+      case 'assigned':
+        return 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-slate-800/60 dark:text-slate-200';
     }
   };
 
+  /** Call/visit column only for counsellor and PRO (matches list filters and analytics). */
   const getCurrentChannelStatus = (lead: Lead) => {
-    if (user?.roleName === 'PRO') return lead.visitStatus || '';
-    if (user?.roleName === 'Student Counselor') return lead.callStatus || '';
-    return lead.leadStatus || '';
+    if (user?.roleName === 'PRO') {
+      const v = lead.visitStatus != null ? String(lead.visitStatus).trim() : '';
+      return v;
+    }
+    if (user?.roleName === 'Student Counselor') {
+      const c = lead.callStatus != null ? String(lead.callStatus).trim() : '';
+      return c;
+    }
+    return lead.leadStatus != null ? String(lead.leadStatus).trim() : '';
   };
 
-  /** Badge + table column: counsellor → call, PRO → visit, others → pipeline */
+  /** Table column: counsellor/PRO → call or visit only (else "—"); others → pipeline */
   const displayStatusForLead = (lead: Lead) => {
     const raw = getCurrentChannelStatus(lead);
     if (raw && String(raw).trim()) return String(raw).trim();
@@ -534,8 +607,9 @@ export default function UserLeadsPage() {
         </div>
 
         {showFilters && (
-          <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-            <div className="flex flex-col gap-1 min-w-0 col-span-2 sm:col-span-1">
+          <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-2 md:grid-cols-6">
+            {/* Mobile row 1: district | mandal */}
+            <div className="flex min-w-0 flex-col gap-1 col-span-1">
               <label className="text-[10px] font-medium text-slate-500">District</label>
               <select
                 className="w-full min-w-0 rounded border border-slate-200 bg-white py-1.5 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
@@ -548,33 +622,38 @@ export default function UserLeadsPage() {
                 ))}
               </select>
             </div>
-            <div className="flex flex-col gap-1 min-w-0 col-span-2 sm:col-span-1">
+            <div className="flex min-w-0 flex-col gap-1 col-span-1">
               <label className="text-[10px] font-medium text-slate-500">Mandal</label>
               <select
-                className="w-full min-w-0 rounded border border-slate-200 bg-white py-1.5 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                className="w-full min-w-0 rounded border border-slate-200 bg-white py-1.5 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
                 value={filters.mandal || ''}
                 onChange={(e) => handleFilterChange('mandal', e.target.value)}
+                disabled={!filters.district}
+                title={!filters.district ? 'Select a district first to list mandals for that district' : undefined}
               >
-                <option value="">All mandals</option>
+                <option value="">{filters.district ? 'All mandals' : 'Select district first'}</option>
                 {filterOptions?.mandals?.map((mandal) => (
                   <option key={mandal} value={mandal}>{mandal}</option>
                 ))}
               </select>
             </div>
-            <div className="flex flex-col gap-1 min-w-0 col-span-2 sm:col-span-1">
+            {/* Mobile row 2: village | student group */}
+            <div className="flex min-w-0 flex-col gap-1 col-span-1">
               <label className="text-[10px] font-medium text-slate-500">Village</label>
               <select
-                className="w-full min-w-0 rounded border border-slate-200 bg-white py-1.5 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                className="w-full min-w-0 rounded border border-slate-200 bg-white py-1.5 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
                 value={filters.village || ''}
                 onChange={(e) => handleFilterChange('village', e.target.value)}
+                disabled={!filters.district}
+                title={!filters.district ? 'Select a district first to list villages' : undefined}
               >
-                <option value="">All villages</option>
+                <option value="">{filters.district ? 'All villages' : 'Select district first'}</option>
                 {(filterOptions?.villages || []).map((v) => (
                   <option key={v} value={v}>{v}</option>
                 ))}
               </select>
             </div>
-            <div className="flex flex-col gap-1 min-w-0 col-span-2 sm:col-span-1">
+            <div className="flex min-w-0 flex-col gap-1 col-span-1">
               <label className="text-[10px] font-medium text-slate-500">Student group</label>
               <select
                 className="w-full min-w-0 rounded border border-slate-200 bg-white py-1.5 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
@@ -587,7 +666,7 @@ export default function UserLeadsPage() {
                 ))}
               </select>
             </div>
-            <div className="hidden md:flex flex-col gap-1 min-w-0 col-span-2 sm:col-span-1">
+            <div className="hidden md:flex flex-col gap-1 min-w-0 col-span-1">
               <label className="text-[10px] font-medium text-slate-500">State</label>
               <select
                 className="w-full min-w-0 rounded border border-slate-200 bg-white py-1.5 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
@@ -600,7 +679,7 @@ export default function UserLeadsPage() {
                 ))}
               </select>
             </div>
-            <div className="hidden md:flex flex-col gap-1 min-w-0 col-span-2 sm:col-span-1">
+            <div className="hidden md:flex flex-col gap-1 min-w-0 col-span-1">
               <label className="text-[10px] font-medium text-slate-500">Quota</label>
               <select
                 className="w-full min-w-0 rounded border border-slate-200 bg-white py-1.5 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
@@ -614,10 +693,10 @@ export default function UserLeadsPage() {
               </select>
             </div>
             {user?.roleName !== 'PRO' && user?.roleName !== 'Student Counselor' && (
-              <div className="flex items-center gap-1.5 min-w-0 col-span-2 md:col-span-1">
-                <label className="text-[10px] font-medium text-slate-500 shrink-0">Pipeline</label>
+              <div className="flex min-w-0 col-span-2 items-center gap-1.5 md:col-span-2 lg:col-span-2">
+                <label className="shrink-0 text-[10px] font-medium text-slate-500">Pipeline</label>
                 <select
-                  className="flex-1 min-w-0 rounded border border-slate-200 bg-white py-1 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  className="min-w-0 flex-1 rounded border border-slate-200 bg-white py-1 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
                   value={filters.leadStatus || ''}
                   onChange={(e) => handleFilterChange('leadStatus', e.target.value)}
                 >
@@ -628,28 +707,13 @@ export default function UserLeadsPage() {
                 </select>
               </div>
             )}
-            {user?.roleName === 'Student Counselor' && (
-              <div className="flex items-center gap-1.5 min-w-0 col-span-2 md:col-span-1">
-                <label className="text-[10px] font-medium text-slate-500 shrink-0">Call</label>
+            {(user?.roleName === 'Student Counselor' || user?.roleName === 'PRO') && (
+              <div className="flex min-w-0 col-span-2 items-center gap-1.5 md:col-span-2 lg:col-span-2">
+                <label className="shrink-0 text-[10px] font-medium text-slate-500">Status</label>
                 <select
-                  className="flex-1 min-w-0 rounded border border-slate-200 bg-white py-1 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
-                  value={filters.callStatus || ''}
-                  onChange={(e) => handleFilterChange('callStatus', e.target.value)}
-                >
-                  <option value="">All</option>
-                  {channelStatusOptions.map((status) => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {user?.roleName === 'PRO' && (
-              <div className="flex items-center gap-1.5 min-w-0 col-span-2 md:col-span-1">
-                <label className="text-[10px] font-medium text-slate-500 shrink-0">Visit</label>
-                <select
-                  className="flex-1 min-w-0 rounded border border-slate-200 bg-white py-1 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
-                  value={filters.visitStatus || ''}
-                  onChange={(e) => handleFilterChange('visitStatus', e.target.value)}
+                  className="min-w-0 flex-1 rounded border border-slate-200 bg-white py-1 px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  value={channelStatusSelectValue}
+                  onChange={(e) => handleChannelStatusFilterChange(e.target.value)}
                 >
                   <option value="">All</option>
                   {channelStatusOptions.map((status) => (

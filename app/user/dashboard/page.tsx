@@ -58,6 +58,7 @@ const STUDENT_GROUP_OPTIONS = ['10th', 'Inter', 'Inter-MPC', 'Inter-BIPC', 'Degr
 
 /** Call-status labels shown on counsellor dashboard (matches lead detail / filters). */
 const STUDENT_COUNSELLOR_CALL_STATUS_LABELS = [
+  'Assigned',
   'Interested',
   'Not Interested',
   'Not Answered',

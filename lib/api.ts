@@ -380,8 +380,12 @@ export const leadAPI = {
     const response = await api.get('/leads/staged-count');
     return response.data?.data || response.data;
   },
-  getFilterOptions: async () => {
-    const response = await api.get('/leads/filters/options');
+  getFilterOptions: async (opts?: { district?: string; mandal?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.district) params.append('district', opts.district);
+    if (opts?.mandal) params.append('mandal', opts.mandal);
+    const q = params.toString();
+    const response = await api.get(`/leads/filters/options${q ? `?${q}` : ''}`);
     return response.data;
   },
   getAllIds: async (filters?: {

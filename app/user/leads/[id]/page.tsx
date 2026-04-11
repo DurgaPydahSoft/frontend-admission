@@ -218,9 +218,17 @@ export default function UserLeadDetailPage() {
 
   const getCurrentChannelStatus = useCallback((l: Lead | undefined) => {
     if (!l) return '';
-    if (user?.roleName === 'PRO') return l.visitStatus || '';
-    if (user?.roleName === 'Student Counselor') return l.callStatus || '';
-    return l.leadStatus || '';
+    if (user?.roleName === 'PRO') {
+      const v = l.visitStatus != null ? String(l.visitStatus).trim() : '';
+      if (v) return v;
+      return l.leadStatus != null ? String(l.leadStatus).trim() : '';
+    }
+    if (user?.roleName === 'Student Counselor') {
+      const c = l.callStatus != null ? String(l.callStatus).trim() : '';
+      if (c) return c;
+      return l.leadStatus != null ? String(l.leadStatus).trim() : '';
+    }
+    return l.leadStatus != null ? String(l.leadStatus).trim() : '';
   }, [user?.roleName]);
 
   const channelFieldLabel =
