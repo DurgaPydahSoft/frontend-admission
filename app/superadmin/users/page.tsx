@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userAPI, managerAPI } from '@/lib/api';
 import type { User, ModulePermission, RoleName } from '@/types';
+import * as XLSX from 'xlsx';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -36,9 +37,19 @@ const IconCards = ({ className = 'w-4 h-4' }: { className?: string }) => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
   </svg>
 );
+const IconPhone = ({ className = 'w-4 h-4' }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+  </svg>
+);
 const IconUserGroup = ({ className = 'w-4 h-4' }: { className?: string }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+  </svg>
+);
+const IconSearch = ({ className = 'w-4 h-4' }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
   </svg>
 );
 const IconBadge = ({ className = 'w-4 h-4' }: { className?: string }) => (
@@ -57,6 +68,12 @@ const IconX = ({ className = 'w-4 h-4' }: { className?: string }) => (
   </svg>
 );
 
+const IconFileExport = ({ className = 'w-4 h-4' }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+);
+
 const UserManagementPage = () => {
   const queryClient = useQueryClient();
   const { setHeaderContent, clearHeaderContent } = useDashboardHeader();
@@ -65,6 +82,13 @@ const UserManagementPage = () => {
   const currentUser = auth.getUser();
   const canDeleteUsers = canManageUsers && currentUser?.roleName !== 'Sub Super Admin';
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDivision, setSelectedDivision] = useState<string>('all');
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [selectedGroup, setSelectedGroup] = useState<string>('all');
+  const [selectedRole, setSelectedRole] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [showEditUser, setShowEditUser] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -114,7 +138,6 @@ const UserManagementPage = () => {
   const [editPermissionState, setEditPermissionState] = useState<
     Record<PermissionModuleKey, ModulePermission>
   >(createEmptyPermissions());
-  const [searchTerm, setSearchTerm] = useState('');
   const [hrmsSearchTerm, setHrmsSearchTerm] = useState('');
   const [hrmsResults, setHrmsResults] = useState<any[]>([]);
   const [isSearchingHrms, setIsSearchingHrms] = useState(false);
@@ -145,29 +168,52 @@ const UserManagementPage = () => {
     };
   }, [users]);
 
+  const filterOptions = useMemo(() => {
+    const divs = new Set<string>();
+    const depts = new Set<string>();
+    const groups = new Set<string>();
+    const roles = new Set<string>();
+
+    users.forEach(u => {
+      if (u.division && u.division !== '-') divs.add(u.division);
+      if (u.department && u.department !== '-') depts.add(u.department);
+      if (u.group && u.group !== '-') groups.add(u.group);
+      if (u.roleName) roles.add(u.roleName);
+    });
+
+    return {
+      divisions: Array.from(divs).sort(),
+      departments: Array.from(depts).sort(),
+      groups: Array.from(groups).sort(),
+      roles: Array.from(roles).sort()
+    };
+  }, [users]);
+
   const filteredUsers = useMemo(() => {
-    if (!searchTerm.trim()) return users;
-    const term = searchTerm.toLowerCase();
-    return users.filter((user) =>
-      [user.name, user.email, user.mobileNumber, user.roleName, user.designation].some((field) =>
+    return users.filter((user) => {
+      // Search term filter
+      const term = searchTerm.toLowerCase();
+      const matchesSearch = !term || [user.name, user.email, user.mobileNumber, user.roleName, user.designation, user.emp_no].some((field) =>
         field?.toLowerCase().includes(term)
-      )
-    );
-  }, [users, searchTerm]);
+      );
+
+      // Category filters
+      const matchesDivision = selectedDivision === 'all' || user.division === selectedDivision;
+      const matchesDepartment = selectedDepartment === 'all' || user.department === selectedDepartment;
+      const matchesGroup = selectedGroup === 'all' || user.group === selectedGroup;
+      const matchesRole = selectedRole === 'all' || user.roleName === selectedRole;
+      const matchesStatus = selectedStatus === 'all' || 
+        (selectedStatus === 'active' ? user.isActive : !user.isActive);
+
+      return matchesSearch && matchesDivision && matchesDepartment && matchesGroup && matchesRole && matchesStatus;
+    });
+  }, [users, searchTerm, selectedDivision, selectedDepartment, selectedGroup, selectedRole, selectedStatus]);
 
   const headerContent = useMemo(
     () => (
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between w-full">
         <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">User Management</h1>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="min-w-0 flex-1">
-            <Input
-              placeholder="Search users..."
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              className="w-full xl:w-64"
-            />
-          </div>
           <div className="flex shrink-0 items-center rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-1 shadow-sm dark:border-[#334155] dark:bg-[#0f172a]">
             <button
               onClick={() => setViewMode('list')}
@@ -300,6 +346,40 @@ const UserManagementPage = () => {
     },
   });
 
+  const handleExportExcel = () => {
+    try {
+      if (filteredUsers.length === 0) {
+        showToast.error('No data to export');
+        return;
+      }
+
+      const exportData = filteredUsers.map(user => ({
+        'Employee ID': user.emp_no || '-',
+        'Name': user.name,
+        'Email': user.email,
+        'Mobile': user.mobileNumber || '-',
+        'Division': user.division || '-',
+        'Department': user.department || '-',
+        'Group': user.group || '-',
+        'Role': user.roleName,
+        'Status': user.isActive ? 'Active' : 'Inactive',
+        'Manager': typeof user.managedBy === 'object' ? user.managedBy?.name : (users.find(u => u._id === user.managedBy)?.name || '-')
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Users');
+
+      // Style adjustments if needed, though basic XLSX is limited
+      const date = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(workbook, `CRM_Users_Export_${date}.xlsx`);
+      showToast.success('Excel export started');
+    } catch (error) {
+      console.error('Export error:', error);
+      showToast.error('Failed to export Excel file');
+    }
+  };
+
   const deleteUserMutation = useMutation({
     mutationFn: async (userId: string) => userAPI.delete(userId),
     onSuccess: () => {
@@ -320,9 +400,27 @@ const UserManagementPage = () => {
   const [showUserDetail, setShowUserDetail] = useState(false);
   const [selectedUserDetail, setSelectedUserDetail] = useState<User | null>(null);
 
-  const handleRowClick = (user: User) => {
+  const handleRowClick = async (user: User) => {
     setSelectedUserDetail(user);
     setShowUserDetail(true);
+
+    // Fetch additional HRMS details if linked to provide division/dept/group
+    if (user.emp_no) {
+      try {
+        const response = await userAPI.getHrmsEmployeeByEmpNo(user.emp_no);
+        const hrmsData = response.data || response;
+        if (hrmsData) {
+          setSelectedUserDetail(prev => prev ? ({
+            ...prev,
+            division: hrmsData.division,
+            department: hrmsData.department,
+            group: hrmsData.group
+          }) : null);
+        }
+      } catch (error) {
+        console.error('Failed to fetch HRMS details:', error);
+      }
+    }
   };
 
   const handleOpenTeamAssignment = (user: User, event?: React.MouseEvent) => {
@@ -536,6 +634,78 @@ const UserManagementPage = () => {
         </Card>
       </div>
 
+      {/* Advanced Filter Bar */}
+      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/40">
+        <div className="flex-1 min-w-[240px]">
+          <div className="relative">
+            <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input
+              placeholder="Search by name, email, mobile or ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 h-10"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={selectedDivision}
+            onChange={(e) => setSelectedDivision(e.target.value)}
+            className="h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          >
+            <option value="all">All Divisions</option>
+            {filterOptions.divisions.map(div => <option key={div} value={div}>{div}</option>)}
+          </select>
+
+          <select
+            value={selectedDepartment}
+            onChange={(e) => setSelectedDepartment(e.target.value)}
+            className="h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          >
+            <option value="all">All Departments</option>
+            {filterOptions.departments.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+          </select>
+
+          <select
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+            className="h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          >
+            <option value="all">All Groups</option>
+            {filterOptions.groups.map(group => <option key={group} value={group}>{group}</option>)}
+          </select>
+
+          <select
+            value={selectedRole}
+            onChange={(e) => setSelectedRole(e.target.value)}
+            className="h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          >
+            <option value="all">All Roles</option>
+            {filterOptions.roles.map(role => <option key={role} value={role}>{role}</option>)}
+          </select>
+
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          >
+            <option value="all">All Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+
+          <Button
+            variant="secondary"
+            onClick={handleExportExcel}
+            className="flex items-center gap-2 h-10 border border-slate-200 shadow-sm"
+          >
+            <IconFileExport className="w-4 h-4 text-orange-600" />
+            <span className="hidden sm:inline">Export to Excel</span>
+          </Button>
+        </div>
+      </div>
+
       {viewMode === 'list' ? (
         <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
           <div className="overflow-x-auto">
@@ -543,13 +713,22 @@ const UserManagementPage = () => {
               <thead className="bg-slate-50 dark:bg-slate-800/80">
                 <tr>
                   <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                    Emp ID
+                  </th>
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                     Name
                   </th>
                   <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                    Email
+                    Mobile
+                  </th>
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 min-w-[220px]">
+                    Division
                   </th>
                   <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                    Mobile
+                    Department
+                  </th>
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                    Group
                   </th>
                   <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                     Role
@@ -557,7 +736,7 @@ const UserManagementPage = () => {
                   <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                     Status
                   </th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 max-w-[100px]">
                     Manager
                   </th>
                   <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 min-w-[120px]">
@@ -568,13 +747,13 @@ const UserManagementPage = () => {
               <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900/40">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+                    <td colSpan={10} className="px-3 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
                       Loading users…
                     </td>
                   </tr>
                 ) : filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+                    <td colSpan={10} className="px-3 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
                       No users match the current search.
                     </td>
                   </tr>
@@ -595,11 +774,14 @@ const UserManagementPage = () => {
                         className="cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800/60"
                         onClick={() => handleRowClick(user)}
                       >
+                        <td className="px-3 py-2.5 align-middle text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap font-mono selection:bg-blue-100 uppercase tracking-tighter font-bold text-blue-600 dark:text-blue-400">
+                          {user.emp_no || '-'}
+                        </td>
                         <td className="px-3 py-2.5 align-middle text-sm font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
                           <div className="flex items-center gap-2">
-                            {user.name}
+                            <span>{user.name}</span>
                             {user.emp_no && (
-                              <span title={`HRMS Linked: ${user.emp_no}`}>
+                              <span title={`HRMS Linked: ${user.emp_no}`} className="shrink-0">
                                 <svg className="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                                 </svg>
@@ -607,11 +789,17 @@ const UserManagementPage = () => {
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-2.5 align-middle text-sm text-slate-600 dark:text-slate-300">
-                          <span className="truncate max-w-[180px] inline-block" title={user.email}>{user.email}</span>
-                        </td>
                         <td className="px-3 py-2.5 align-middle text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
                           {user.mobileNumber || '-'}
+                        </td>
+                        <td className="px-3 py-2.5 align-middle text-xs text-slate-600 dark:text-slate-300 truncate max-w-[220px]" title={user.division}>
+                          {user.division || '-'}
+                        </td>
+                        <td className="px-3 py-2.5 align-middle text-xs text-slate-600 dark:text-slate-300 truncate max-w-[120px]" title={user.department}>
+                          {user.department || '-'}
+                        </td>
+                        <td className="px-3 py-2.5 align-middle text-xs text-slate-600 dark:text-slate-300 truncate max-w-[100px]" title={user.group}>
+                          {user.group || '-'}
                         </td>
                         <td className="px-3 py-2.5 align-middle text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
                           {displayRole(user)}
@@ -626,9 +814,9 @@ const UserManagementPage = () => {
                             {user.isActive ? 'Active' : 'Inactive'}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 align-middle text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                        <td className="px-3 py-2.5 align-middle text-sm text-slate-600 dark:text-slate-300 truncate max-w-[100px]">
                           {manager ? (
-                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200">
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200 truncate max-w-full" title={manager.name}>
                               {manager.name}
                             </span>
                           ) : (
@@ -700,17 +888,78 @@ const UserManagementPage = () => {
 
                   <div className="mt-4 space-y-2 text-sm text-slate-600 dark:text-slate-300">
                     <div className="flex items-center gap-2 truncate">
-                      <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      <svg
+                        className="h-4 w-4 shrink-0 text-slate-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                        />
                       </svg>
                       <span className="truncate">{user.email}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                      {user.mobileNumber || '-'}
+
+                    {user.emp_no && (
+                      <div className="flex items-center justify-between text-[10px] font-bold text-blue-500 dark:text-blue-400 font-mono uppercase tracking-widest mb-1.5 pb-1.5 border-b border-slate-100 dark:border-slate-800">
+                        <span>Emp ID</span>
+                        <span>{user.emp_no}</span>
+                      </div>
+                    )}
+
+                    {user.division && user.division !== '-' && (
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-400 dark:text-slate-500 font-medium">
+                          Division
+                        </span>
+                        <span
+                          className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[140px]"
+                          title={user.division}
+                        >
+                          {user.division}
+                        </span>
+                      </div>
+                    )}
+
+                    {user.department && user.department !== '-' && (
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-400 dark:text-slate-500 font-medium">
+                          Department
+                        </span>
+                        <span
+                          className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[120px]"
+                          title={user.department}
+                        >
+                          {user.department}
+                        </span>
+                      </div>
+                    )}
+
+                    {user.group && user.group !== '-' && (
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-400 dark:text-slate-500 font-medium">
+                          Group
+                        </span>
+                        <span
+                          className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[100px]"
+                          title={user.group}
+                        >
+                          {user.group}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-2">
+                        <IconPhone className="h-3 w-3 text-slate-400" />
+                        <span>{user.mobileNumber || '-'}</span>
+                      </div>
                     </div>
+
                     {manager && (
                       <div className="flex items-center gap-2">
                         <IconUserGroup className="h-4 w-4 shrink-0 text-slate-400" />
@@ -752,9 +1001,16 @@ const UserManagementPage = () => {
                   <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
                     {selectedUserDetail.name}
                   </h2>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    {selectedUserDetail.email}
-                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {selectedUserDetail.email}
+                    </p>
+                    {selectedUserDetail.emp_no && (
+                      <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 ring-1 ring-blue-100 dark:ring-blue-800/50">
+                        {selectedUserDetail.emp_no}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <button
@@ -798,6 +1054,29 @@ const UserManagementPage = () => {
                   </p>
                 </div>
               </div>
+
+              {selectedUserDetail.emp_no && (
+                <div className="space-y-3 pt-2">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <IconBadge className="w-3.5 h-3.5" />
+                    HRMS Organizational Details
+                  </h3>
+                  <div className="grid grid-cols-1 gap-3 rounded-xl border border-blue-100 bg-blue-50/30 p-4 dark:border-blue-900/20 dark:bg-blue-900/10">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-500 dark:text-slate-400">Division</span>
+                      <span className="font-semibold text-blue-700 dark:text-blue-300">{selectedUserDetail.division || '—'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-500 dark:text-slate-400">Department</span>
+                      <span className="font-semibold text-blue-700 dark:text-blue-300">{selectedUserDetail.department || '—'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-500 dark:text-slate-400">Employee Group</span>
+                      <span className="font-semibold text-blue-700 dark:text-blue-300">{selectedUserDetail.group || '—'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col gap-2">
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">Actions</h3>
@@ -1037,7 +1316,10 @@ const UserManagementPage = () => {
                                   <span className="text-xs font-medium text-blue-600 dark:text-blue-400">{emp.emp_no}</span>
                                 </div>
                                 <div className="text-xs text-slate-500 dark:text-slate-400">
-                                  {emp.designation} • {emp.email}
+                                  {emp.division} • {emp.department} • {emp.group}
+                                </div>
+                                <div className="text-xs text-slate-400 dark:text-slate-500 italic">
+                                  {emp.email}
                                 </div>
                               </button>
                             ))}

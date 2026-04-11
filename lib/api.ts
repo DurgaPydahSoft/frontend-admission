@@ -185,6 +185,10 @@ export const userAPI = {
     const response = await api.get(`/users/hrms/search?name=${encodeURIComponent(name)}`);
     return response.data;
   },
+  getHrmsEmployeeByEmpNo: async (empNo: string) => {
+    const response = await api.get(`/users/hrms/${empNo}`);
+    return response.data;
+  },
 };
 
 // User Settings API (current user only)
