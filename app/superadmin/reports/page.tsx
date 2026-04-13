@@ -438,23 +438,29 @@ export default function ReportsPage() {
   // Call reports: build merged data for Excel (User Performance + Daily Report)
   // Dedicated queries for Export Preview to support specific date filtering
   const { data: previewCallReports, isLoading: isPreviewCallsLoading, isFetching: isPreviewCallsFetching } = useQuery({
-    queryKey: ['previewCallReports', exportPreviewStartDate, exportPreviewEndDate, filters.userId],
+    queryKey: ['previewCallReports', exportPreviewStartDate, exportPreviewEndDate, filters.userId, exportSelectedDivision, exportSelectedDepartment, exportSelectedGroup],
     queryFn: () => reportAPI.getDailyCallReports({
       startDate: exportPreviewStartDate,
       endDate: exportPreviewEndDate,
       userId: filters.userId || undefined,
+      division: exportSelectedDivision.length === 1 ? exportSelectedDivision[0] : undefined,
+      department: exportSelectedDepartment.length === 1 ? exportSelectedDepartment[0] : undefined,
+      group: exportSelectedGroup.length === 1 ? exportSelectedGroup[0] : undefined,
     }),
     enabled: callReportExportPreviewOpen && (!!exportPreviewStartDate || datePreset === 'overall'),
     staleTime: 0,
   });
 
   const { data: previewUserAnalytics, isLoading: isPreviewUserLoading, isFetching: isPreviewUserFetching } = useQuery({
-    queryKey: ['previewUserAnalytics', exportPreviewStartDate, exportPreviewEndDate, filters.academicYear, filters.userId],
+    queryKey: ['previewUserAnalytics', exportPreviewStartDate, exportPreviewEndDate, filters.academicYear, filters.userId, exportSelectedDivision, exportSelectedDepartment, exportSelectedGroup],
     queryFn: () => leadAPI.getUserAnalytics({
       startDate: exportPreviewStartDate,
       endDate: exportPreviewEndDate,
       academicYear: filters.academicYear != null ? filters.academicYear : undefined,
       userId: filters.userId || undefined,
+      division: exportSelectedDivision.length === 1 ? exportSelectedDivision[0] : undefined,
+      department: exportSelectedDepartment.length === 1 ? exportSelectedDepartment[0] : undefined,
+      group: exportSelectedGroup.length === 1 ? exportSelectedGroup[0] : undefined,
     }),
     enabled: callReportExportPreviewOpen && (!!exportPreviewStartDate || datePreset === 'overall'),
     staleTime: 0,
@@ -465,10 +471,18 @@ export default function ReportsPage() {
     const rawAnalyticUsers = previewUserAnalytics?.users || [];
     const daily = previewCallReports?.reports || [];
 
-    // Filter analytic users by organizational filters
+    // Map for fast user lookup
+    const userMetaMap = new Map();
+    users.forEach((u: any) => {
+      userMetaMap.set(u._id, u);
+      userMetaMap.set(u.name, u);
+    });
+
+    // Filter analytic users by organizational filters (if multiple selected, we still filter on client)
     const finalUsersToExport = rawAnalyticUsers.filter((u: any) => {
-      // Find full user metadata from the 'users' list
-      const fullUser = users.find((fu: any) => fu._id === u.userId || fu.name === (u.name || u.userName));
+      if (exportSelectedDivision.length === 0 && exportSelectedDepartment.length === 0 && exportSelectedGroup.length === 0 && !filters.userId) return true;
+      
+      const fullUser = userMetaMap.get(u.userId) || userMetaMap.get(u.name || u.userName);
       
       const matchesDivision = exportSelectedDivision.length === 0 || (fullUser?.division && exportSelectedDivision.includes(fullUser.division));
       const matchesDepartment = exportSelectedDepartment.length === 0 || (fullUser?.department && exportSelectedDepartment.includes(fullUser.department));
@@ -482,7 +496,7 @@ export default function ReportsPage() {
     const filteredPerformanceUserIds = new Set(finalUsersToExport.map((u: any) => u.userId));
 
     const performanceRows = finalUsersToExport.map((u: any) => {
-      const fullUser = users.find((fu: any) => fu._id === u.userId || fu.name === (u.name || u.userName));
+      const fullUser = userMetaMap.get(u.userId) || userMetaMap.get(u.name || u.userName);
       return {
         User: u.name || u.userName || '—',
         Division: fullUser?.division || '—',
@@ -497,42 +511,108 @@ export default function ReportsPage() {
       };
     });
 
-    const dailyRows = daily
-      .filter((r: any) => filteredPerformanceUserNames.has(r.userName) || filteredPerformanceUserIds.has(r.userId))
-      .map((r: any) => {
-        const fullUser = users.find((fu: any) => fu._id === r.userId || fu.name === r.userName);
-        return {
-          Date: format(new Date(r.date), 'yyyy-MM-dd'),
-          User: r.userName || '—',
-          Division: fullUser?.division || '—',
-          Department: fullUser?.department || '—',
-          Group: fullUser?.group || '—',
-          Calls: r.callCount ?? 0,
-          'Total Duration': formatSecondsToMMSS(r.totalDuration ?? 0),
-          'Avg Duration': formatSecondsToMMSS(r.averageDuration ?? 0),
-        };
-      });
+    // Group by userName
+    const dailyGrouped: { userName: string; rows: any[]; fullUser: any }[] = [];
+    const userIndexMap = new Map<string, number>();
+
+    daily.forEach((r: any) => {
+      if (!filteredPerformanceUserNames.has(r.userName) && !filteredPerformanceUserIds.has(r.userId)) return;
+
+      const fullUser = userMetaMap.get(r.userId) || userMetaMap.get(r.userName);
+      const existingIdx = userIndexMap.get(r.userName);
+      if (existingIdx === undefined) {
+        userIndexMap.set(r.userName, dailyGrouped.length);
+        dailyGrouped.push({ userName: r.userName, rows: [r], fullUser });
+      } else {
+        dailyGrouped[existingIdx].rows.push(r);
+      }
+    });
+
+    dailyGrouped.forEach(g => g.rows.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+
+    const dailyRows = dailyGrouped.flatMap(g =>
+      g.rows.map((r: any) => ({
+        User: g.userName || '—',
+        Division: g.fullUser?.division || '—',
+        Department: g.fullUser?.department || '—',
+        Group: g.fullUser?.group || '—',
+        Date: format(new Date(r.date), 'dd MMM yyyy'),
+        Calls: r.callCount ?? 0,
+        'Total Duration': formatSecondsToMMSS(r.totalDuration ?? 0),
+        'Avg Duration': formatSecondsToMMSS(r.averageDuration ?? 0),
+      }))
+    );
 
     return { performanceRows, dailyRows };
   }, [previewUserAnalytics?.users, previewCallReports?.reports, exportSelectedDivision, exportSelectedDepartment, exportSelectedGroup, filters.userId, users]);
 
   const downloadCallReportExcel = () => {
+    console.log("Running Enhanced Excel Export with Merges...");
     const { performanceRows, dailyRows } = callReportMergedData;
     if (performanceRows.length === 0 && dailyRows.length === 0) return;
     const workbook = XLSX.utils.book_new();
+
     if (performanceRows.length > 0) {
       const ws1 = XLSX.utils.json_to_sheet(performanceRows);
+      const perfCols = Object.keys(performanceRows[0]).map(key => {
+        const maxLen = Math.max(key.length, ...performanceRows.map((r: any) => String(r[key] ?? '').length));
+        return { wch: maxLen + 5 };
+      });
+      ws1['!cols'] = perfCols;
       XLSX.utils.book_append_sheet(workbook, ws1, 'User Performance');
     }
+
     if (dailyRows.length > 0) {
-      const ws2 = XLSX.utils.json_to_sheet(dailyRows);
+      // Clear redundant values first to ensure clean look even if merges are finicky
+      const displayData = dailyRows.map((row: any, idx: number) => {
+        const newRow = { ...row };
+        if (idx > 0 && dailyRows[idx - 1].User === row.User) {
+          newRow.User = "";
+          newRow.Division = "";
+          newRow.Department = "";
+          newRow.Group = "";
+        }
+        return newRow;
+      });
+
+      const ws2 = XLSX.utils.json_to_sheet(displayData);
+      const merges: XLSX.Range[] = [];
+      
+      let startIdx = 0;
+      while (startIdx < dailyRows.length) {
+        const userName = dailyRows[startIdx].User;
+        let endIdx = startIdx;
+        while (endIdx + 1 < dailyRows.length && dailyRows[endIdx + 1].User === userName) {
+          endIdx++;
+        }
+        
+        if (endIdx > startIdx) {
+          // Merge columns A-D (0-3) from startIdx+1 to endIdx+1 (header is row 0)
+          for (let col = 0; col <= 3; col++) {
+            merges.push({
+              s: { r: startIdx + 1, c: col },
+              e: { r: endIdx + 1, c: col }
+            });
+          }
+        }
+        startIdx = endIdx + 1;
+      }
+      ws2['!merges'] = merges;
+
+      const dailyCols = Object.keys(dailyRows[0]).map(key => {
+        const maxLen = Math.max(key.length, ...dailyRows.map((r: any) => String(r[key] ?? '').length));
+        return { wch: maxLen + 5 };
+      });
+      ws2['!cols'] = dailyCols;
       XLSX.utils.book_append_sheet(workbook, ws2, 'Daily Call Report');
     }
-    const filename = `call-report-${exportPreviewStartDate || filters.startDate}.xlsx`;
+
+    const dateRange = exportPreviewStartDate && exportPreviewEndDate
+      ? `${exportPreviewStartDate}_to_${exportPreviewEndDate}`
+      : exportPreviewStartDate || filters.startDate;
+    const filename = `call-report-${dateRange}.xlsx`;
     XLSX.writeFile(workbook, filename);
     setCallReportExportPreviewOpen(false);
-    setExportPreviewStartDate('');
-    setExportPreviewEndDate('');
   };
 
   // Prepare chart data
@@ -1050,7 +1130,7 @@ export default function ReportsPage() {
                     </button>
                   </nav>
 
-                  {/* Export buttons — only on Daily Call Report sub-tab */}
+                  {/* Export button — only on Daily Call Report sub-tab (Excel only, no CSV) */}
                   {callSubTab === 'daily' && callReports?.reports && callReports.reports.length > 0 && (
                     <div className="flex items-center gap-3 pb-1">
                       {/* Date range label */}
@@ -1065,45 +1145,86 @@ export default function ReportsPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          const exportData = callReports.reports.map((r: any) => {
-                            const fu = users.find((u: any) => u._id === r.userId || u.name === r.userName);
-                            return {
-                              User: r.userName || '—',
-                              Department: fu?.department || '—',
-                              Group: fu?.group || '—',
+                          const daily = callReports?.reports || [];
+                          if (daily.length === 0) return;
+
+                          // Group and sort data
+                          const grouped: { userName: string; rows: any[]; fullUser: any }[] = [];
+                          const seen = new Map<string, number>();
+
+                          daily.forEach((r: any) => {
+                            const fullUser = users.find((u: any) => u._id === r.userId || u.name === r.userName);
+                            if (!seen.has(r.userName)) {
+                              seen.set(r.userName, grouped.length);
+                              grouped.push({ userName: r.userName, rows: [r], fullUser });
+                            } else {
+                              grouped[seen.get(r.userName)!].rows.push(r);
+                            }
+                          });
+                          grouped.forEach(g => g.rows.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+
+                          // Build flat data rows
+                          const allRows = grouped.flatMap(g =>
+                            g.rows.map((r: any) => ({
+                              User: g.userName || '—',
+                              Division: g.fullUser?.division || '—',
+                              Department: g.fullUser?.department || '—',
+                              Group: g.fullUser?.group || '—',
                               Date: format(new Date(r.date), 'dd MMM yyyy'),
                               Calls: r.callCount ?? 0,
                               'Total Duration': formatSecondsToMMSS(r.totalDuration ?? 0),
                               'Avg Duration': formatSecondsToMMSS(r.averageDuration ?? 0),
-                            };
+                            }))
+                          );
+
+                          // Prepare display data with cleared redundant cells
+                          const displayData = allRows.map((row: any, idx: number) => {
+                            const newRow = { ...row };
+                            if (idx > 0 && allRows[idx - 1].User === row.User) {
+                              newRow.User = "";
+                              newRow.Division = "";
+                              newRow.Department = "";
+                              newRow.Group = "";
+                            }
+                            return newRow;
                           });
-                          handleExport('excel', exportData, `daily-call-reports-${filters.startDate}-${filters.endDate}`);
+
+                          // Generate worksheet & merges
+                          const worksheet = XLSX.utils.json_to_sheet(displayData);
+                          const merges: XLSX.Range[] = [];
+                          let startIdx = 0;
+                          while (startIdx < allRows.length) {
+                            const userName = allRows[startIdx].User;
+                            let endIdx = startIdx;
+                            while (endIdx + 1 < allRows.length && allRows[endIdx + 1].User === userName) {
+                              endIdx++;
+                            }
+
+                            if (endIdx > startIdx) {
+                              for (let col = 0; col <= 3; col++) {
+                                merges.push({
+                                  s: { r: startIdx + 1, c: col },
+                                  e: { r: endIdx + 1, c: col }
+                                });
+                              }
+                            }
+                            startIdx = endIdx + 1;
+                          }
+                          worksheet['!merges'] = merges;
+
+                          // Column sizing
+                          const cols = Object.keys(allRows[0]).map(key => ({
+                            wch: Math.max(key.length, ...allRows.map((r: any) => String(r[key] ?? '').length)) + 5
+                          }));
+                          worksheet['!cols'] = cols;
+
+                          const workbook = XLSX.utils.book_new();
+                          XLSX.utils.book_append_sheet(workbook, worksheet, 'Daily Call Report');
+                          XLSX.writeFile(workbook, `daily-call-reports-${filters.startDate}-${filters.endDate}.xlsx`);
                         }}
                       >
                         <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />
                         Export Excel
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const exportData = callReports.reports.map((r: any) => {
-                            const fu = users.find((u: any) => u._id === r.userId || u.name === r.userName);
-                            return {
-                              User: r.userName || '—',
-                              Department: fu?.department || '—',
-                              Group: fu?.group || '—',
-                              Date: format(new Date(r.date), 'dd MMM yyyy'),
-                              Calls: r.callCount ?? 0,
-                              'Total Duration': formatSecondsToMMSS(r.totalDuration ?? 0),
-                              'Avg Duration': formatSecondsToMMSS(r.averageDuration ?? 0),
-                            };
-                          });
-                          handleExport('csv', exportData, `daily-call-reports-${filters.startDate}-${filters.endDate}`);
-                        }}
-                      >
-                        <Download className="w-3.5 h-3.5 mr-1.5" />
-                        Export CSV
                       </Button>
                     </div>
                   )}
@@ -1536,8 +1657,11 @@ export default function ReportsPage() {
                                 <table className="min-w-full divide-y divide-[#e2e8f0] dark:divide-[#475569] text-sm">
                                   <thead>
                                     <tr className="bg-slate-100 dark:bg-slate-800">
-                                      <th className="px-4 py-2 text-left font-medium text-slate-700 dark:text-slate-300">Date</th>
                                       <th className="px-4 py-2 text-left font-medium text-slate-700 dark:text-slate-300">User</th>
+                                      <th className="px-4 py-2 text-left font-medium text-slate-700 dark:text-slate-300">Division</th>
+                                      <th className="px-4 py-2 text-left font-medium text-slate-700 dark:text-slate-300">Department</th>
+                                      <th className="px-4 py-2 text-left font-medium text-slate-700 dark:text-slate-300">Group</th>
+                                      <th className="px-4 py-2 text-left font-medium text-slate-700 dark:text-slate-300">Date</th>
                                       <th className="px-4 py-2 text-left font-medium text-slate-700 dark:text-slate-300">Calls</th>
                                       <th className="px-4 py-2 text-left font-medium text-slate-700 dark:text-slate-300">Total Duration</th>
                                       <th className="px-4 py-2 text-left font-medium text-slate-700 dark:text-slate-300">Avg Duration</th>
@@ -1546,9 +1670,12 @@ export default function ReportsPage() {
                                   <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#475569] bg-[#ffffff] dark:bg-[#1e293b]/50">
                                     {callReportMergedData.dailyRows.map((row: any, idx: number) => (
                                       <tr key={idx} className={idx % 2 === 0 ? 'bg-[#ffffff] dark:bg-[#1e293b]/50' : 'bg-slate-50 dark:bg-slate-700/30'}>
-                                        <td className="px-4 py-2 text-slate-700 dark:text-slate-300">{row.Date}</td>
                                         <td className="px-4 py-2 text-slate-900 dark:text-slate-100 font-medium">{row.User}</td>
-                                        <td className="px-4 py-2 text-slate-700 dark:text-slate-300">{row.Calls}</td>
+                                        <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{row.Division}</td>
+                                        <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{row.Department}</td>
+                                        <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{row.Group}</td>
+                                        <td className="px-4 py-2 text-slate-700 dark:text-slate-300">{row.Date}</td>
+                                        <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row.Calls}</td>
                                         <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row['Total Duration']}</td>
                                         <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row['Avg Duration']}</td>
                                       </tr>

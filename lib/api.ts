@@ -570,13 +570,23 @@ export const leadAPI = {
     // Extract the nested data property for consistency
     return response.data?.data || response.data;
   },
-  getUserAnalytics: async (params?: { startDate?: string; endDate?: string; userId?: string; academicYear?: number | string; includeAssignmentDetails?: boolean }) => {
+  getUserAnalytics: async (params?: { 
+    startDate?: string; 
+    endDate?: string; 
+    userId?: string; 
+    academicYear?: number | string;
+    division?: string;
+    department?: string;
+    group?: string;
+  }) => {
     const queryParams = new URLSearchParams();
     if (params?.startDate) queryParams.append('startDate', params.startDate);
     if (params?.endDate) queryParams.append('endDate', params.endDate);
     if (params?.academicYear != null && params.academicYear !== '') queryParams.append('academicYear', String(params.academicYear));
     if (params?.userId) queryParams.append('userId', params.userId);
-    if (params?.includeAssignmentDetails) queryParams.append('includeAssignmentDetails', 'true');
+    if (params?.division) queryParams.append('division', params.division);
+    if (params?.department) queryParams.append('department', params.department);
+    if (params?.group) queryParams.append('group', params.group);
     const query = queryParams.toString();
     const response = await api.get(`/leads/analytics/users${query ? `?${query}` : ''}`);
     // Backend returns { success: true, data: { users: [...] }, message: "..." }
@@ -1064,11 +1074,17 @@ export const reportAPI = {
     startDate?: string;
     endDate?: string;
     userId?: string;
+    division?: string;
+    department?: string;
+    group?: string;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.startDate) queryParams.append('startDate', params.startDate);
     if (params?.endDate) queryParams.append('endDate', params.endDate);
     if (params?.userId) queryParams.append('userId', params.userId);
+    if (params?.division) queryParams.append('division', params.division);
+    if (params?.department) queryParams.append('department', params.department);
+    if (params?.group) queryParams.append('group', params.group);
     const query = queryParams.toString();
     const response = await api.get(`/reports/calls/daily${query ? `?${query}` : ''}`);
     // Backend returns { success: true, data: { reports: [...], summary: [...] }, message: "..." }
