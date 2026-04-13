@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, Fragment } from 'react';
+import React, { useState, useEffect, useMemo, Fragment, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -27,6 +27,7 @@ import {
   Legend,
   CartesianGrid,
 } from 'recharts';
+import { Check, ChevronDown, Download, Filter, FileSpreadsheet, Calendar, Search } from 'lucide-react';
 
 type TabType = 'calls' | 'conversions' | 'users' | 'abstract' | 'activityLogs';
 
@@ -41,6 +42,96 @@ const CALL_REPORT_CARD_STYLES = [
   'bg-[#f97316] shadow-[0_4px_14px_0_rgba(249,115,22,0.39)]',
   'bg-[#8b5cf6] shadow-[0_4px_14px_0_rgba(139,92,246,0.39)]',
 ];
+
+/**
+ * Custom Multi-Select Dropdown with Checkboxes for the Export Modal
+ */
+function MultiSelectDropdown({ 
+  label, 
+  options, 
+  selected, 
+  onChange 
+}: { 
+  label: string; 
+  options: string[]; 
+  selected: string[]; 
+  onChange: (vals: string[]) => void 
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleOption = (opt: string) => {
+    if (selected.includes(opt)) {
+      onChange(selected.filter(s => s !== opt));
+    } else {
+      onChange([...selected, opt]);
+    }
+  };
+
+  const isAllSelected = selected.length === options.length && options.length > 0;
+
+  const toggleAll = () => {
+    if (isAllSelected) {
+      onChange([]);
+    } else {
+      onChange([...options]);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5 min-w-[170px] relative" ref={containerRef}>
+      <span className="text-[10px] font-bold text-slate-500 uppercase px-1">{label}</span>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="h-9 rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-medium flex items-center justify-between gap-2 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 min-w-[180px]"
+      >
+        <span className="flex-1 text-left">
+          {selected.length === 0 ? "All" : 
+           selected.length === options.length ? "All Selected" : 
+           `${selected.length} Selected`}
+        </span>
+        <ChevronDown className={`w-3 h-3 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 w-full min-w-[200px] max-h-[250px] overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl z-50 p-1">
+          <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 rounded cursor-pointer border-b border-slate-100 dark:border-slate-700 mb-1">
+            <input
+              type="checkbox"
+              checked={isAllSelected}
+              onChange={toggleAll}
+              className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-200 select-none">Select All</span>
+          </label>
+          {options.map(opt => (
+            <label key={opt} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 rounded cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={selected.includes(opt)}
+                onChange={() => toggleOption(opt)}
+                className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white select-none whitespace-normal">
+                {opt}
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ReportsPage() {
   const searchParams = useSearchParams();
@@ -59,6 +150,11 @@ export default function ReportsPage() {
   const [activityLogPage, setActivityLogPage] = useState(1);
   const [expandedActivityLogId, setExpandedActivityLogId] = useState<string | null>(null);
   const [activityLogEventType, setActivityLogEventType] = useState<'tracking_enabled' | 'tracking_disabled' | ''>('');
+  
+  // States for export preview filters (Multi-select)
+  const [exportSelectedDivision, setExportSelectedDivision] = useState<string[]>([]);
+  const [exportSelectedDepartment, setExportSelectedDepartment] = useState<string[]>([]);
+  const [exportSelectedGroup, setExportSelectedGroup] = useState<string[]>([]);
 
   // Unified filters for all tabs (default to today)
   const [filters, setFilters] = useState({
@@ -97,6 +193,24 @@ export default function ReportsPage() {
     if (!usersResponse) return [];
     return Array.isArray(usersResponse) ? usersResponse : [];
   }, [usersResponse]);
+
+  const exportFilterOptions = useMemo(() => {
+    const divs = new Set<string>();
+    const depts = new Set<string>();
+    const groups = new Set<string>();
+
+    users.forEach((u: any) => {
+      if (u.division && u.division !== '-') divs.add(u.division);
+      if (u.department && u.department !== '-') depts.add(u.department);
+      if (u.group && u.group !== '-') groups.add(u.group);
+    });
+
+    return {
+      divisions: Array.from(divs).sort(),
+      departments: Array.from(depts).sort(),
+      groups: Array.from(groups).sort()
+    };
+  }, [users]);
 
   const activityLogUsers = useMemo(
     () =>
@@ -344,29 +458,59 @@ export default function ReportsPage() {
 
   const callReportMergedData = useMemo(() => {
     // If modal is open, use the data fetched for the specific preview date
-    const users = previewUserAnalytics?.users || [];
+    const rawAnalyticUsers = previewUserAnalytics?.users || [];
     const daily = previewCallReports?.reports || [];
 
-    // No need to client-side filter Daily Reports anymore as the API returns specific date data
+    // Filter analytic users by organizational filters
+    const finalUsersToExport = rawAnalyticUsers.filter((u: any) => {
+      // Find full user metadata from the 'users' list
+      const fullUser = users.find((fu: any) => fu._id === u.userId || fu.name === (u.name || u.userName));
+      
+      const matchesDivision = exportSelectedDivision.length === 0 || (fullUser?.division && exportSelectedDivision.includes(fullUser.division));
+      const matchesDepartment = exportSelectedDepartment.length === 0 || (fullUser?.department && exportSelectedDepartment.includes(fullUser.department));
+      const matchesGroup = exportSelectedGroup.length === 0 || (fullUser?.group && exportSelectedGroup.includes(fullUser.group));
+      const matchesSpecificUser = filters.userId === '' || u.userId === filters.userId;
 
-    const performanceRows = users.map((u: any) => ({
-      User: u.name || u.userName || '—',
-      'Total Leads': u.totalAssigned ?? 0,
-      Calls: u.calls?.total ?? 0,
-      'Avg Call': formatSecondsToMMSS(u.calls?.averageDuration ?? 0),
-      SMS: u.sms?.total ?? 0,
-      'Interested': u.interested ?? 0, // Assuming 'interested' represents Interested count
-      Confirmed: u.convertedLeads ?? 0,
-    }));
-    const dailyRows = daily.map((r: any) => ({
-      Date: format(new Date(r.date), 'yyyy-MM-dd'),
-      User: r.userName || '—',
-      Calls: r.callCount ?? 0,
-      'Total Duration': formatSecondsToMMSS(r.totalDuration ?? 0),
-      'Avg Duration': formatSecondsToMMSS(r.averageDuration ?? 0),
-    }));
+      return matchesDivision && matchesDepartment && matchesGroup && matchesSpecificUser;
+    });
+
+    const filteredPerformanceUserNames = new Set(finalUsersToExport.map((u: any) => u.name || u.userName));
+    const filteredPerformanceUserIds = new Set(finalUsersToExport.map((u: any) => u.userId));
+
+    const performanceRows = finalUsersToExport.map((u: any) => {
+      const fullUser = users.find((fu: any) => fu._id === u.userId || fu.name === (u.name || u.userName));
+      return {
+        User: u.name || u.userName || '—',
+        Division: fullUser?.division || '—',
+        Department: fullUser?.department || '—',
+        Group: fullUser?.group || '—',
+        'Total Leads': u.totalAssigned ?? 0,
+        Calls: u.calls?.total ?? 0,
+        'Avg Call': formatSecondsToMMSS(u.calls?.averageDuration ?? 0),
+        SMS: u.sms?.total ?? 0,
+        'Interested': u.interested ?? 0,
+        Confirmed: u.convertedLeads ?? 0,
+      };
+    });
+
+    const dailyRows = daily
+      .filter((r: any) => filteredPerformanceUserNames.has(r.userName) || filteredPerformanceUserIds.has(r.userId))
+      .map((r: any) => {
+        const fullUser = users.find((fu: any) => fu._id === r.userId || fu.name === r.userName);
+        return {
+          Date: format(new Date(r.date), 'yyyy-MM-dd'),
+          User: r.userName || '—',
+          Division: fullUser?.division || '—',
+          Department: fullUser?.department || '—',
+          Group: fullUser?.group || '—',
+          Calls: r.callCount ?? 0,
+          'Total Duration': formatSecondsToMMSS(r.totalDuration ?? 0),
+          'Avg Duration': formatSecondsToMMSS(r.averageDuration ?? 0),
+        };
+      });
+
     return { performanceRows, dailyRows };
-  }, [previewUserAnalytics?.users, previewCallReports?.reports]);
+  }, [previewUserAnalytics?.users, previewCallReports?.reports, exportSelectedDivision, exportSelectedDepartment, exportSelectedGroup, filters.userId, users]);
 
   const downloadCallReportExcel = () => {
     const { performanceRows, dailyRows } = callReportMergedData;
@@ -571,6 +715,22 @@ export default function ReportsPage() {
             {preset === 'overall' && 'Overall'}
           </button>
         ))}
+
+        {activeTab === 'calls' && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setExportPreviewStartDate(filters.startDate);
+              setExportPreviewEndDate(filters.endDate);
+              setCallReportExportPreviewOpen(true);
+            }}
+            disabled={!(userAnalytics?.users?.length || callReports?.reports?.length)}
+            className="ml-2"
+          >
+            Export Comprehensive Report (Excel)
+          </Button>
+        )}
       </div>
 
       {/* Filters – hidden on Call Reports, User Analytics, Leads Abstract AND Activity Logs (since moved to top) */}
@@ -837,20 +997,6 @@ export default function ReportsPage() {
             </Card>
           ) : (
             <>
-              <div className="flex justify-end mb-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setExportPreviewStartDate(filters.startDate);
-                    setExportPreviewEndDate(filters.endDate);
-                    setCallReportExportPreviewOpen(true);
-                  }}
-                  disabled={!(userAnalytics?.users?.length || callReports?.reports?.length)}
-                >
-                  Export Comprehensive Report (Excel)
-                </Button>
-              </div>
               {/* Original User Performance stats for other tabs (if any) or shared view */}
               {userAnalytics?.users && Array.isArray(userAnalytics.users) && userAnalytics.users.length > 0 && (
                 <>
@@ -1003,32 +1149,57 @@ export default function ReportsPage() {
               {callReportExportPreviewOpen && typeof document !== 'undefined' && createPortal(
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setCallReportExportPreviewOpen(false)}>
                   <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-                    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                      <div>
-                        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Excel export preview</h3>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                          Report will contain two sheets: <strong>User Performance</strong>, <strong>Daily Call Report</strong>. Click Proceed to download.
-                        </p>
+                    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Excel export preview</h3>
+                          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                            Report will contain two sheets: <strong>User Performance</strong> and <strong>Daily Call Report</strong>.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">From:</span>
+                            <input
+                              type="date"
+                              value={exportPreviewStartDate}
+                              onChange={(e) => setExportPreviewStartDate(e.target.value)}
+                              className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs font-medium dark:border-slate-600 dark:bg-slate-700"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">To:</span>
+                            <input
+                              type="date"
+                              value={exportPreviewEndDate}
+                              onChange={(e) => setExportPreviewEndDate(e.target.value)}
+                              className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs font-medium dark:border-slate-600 dark:bg-slate-700"
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">From:</span>
-                          <input
-                            type="date"
-                            value={exportPreviewStartDate}
-                            onChange={(e) => setExportPreviewStartDate(e.target.value)}
-                            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-700"
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">To:</span>
-                          <input
-                            type="date"
-                            value={exportPreviewEndDate}
-                            onChange={(e) => setExportPreviewEndDate(e.target.value)}
-                            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-700"
-                          />
-                        </div>
+
+                      <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                        <MultiSelectDropdown 
+                          label="Division"
+                          options={exportFilterOptions.divisions}
+                          selected={exportSelectedDivision}
+                          onChange={setExportSelectedDivision}
+                        />
+
+                        <MultiSelectDropdown 
+                          label="Department"
+                          options={exportFilterOptions.departments}
+                          selected={exportSelectedDepartment}
+                          onChange={setExportSelectedDepartment}
+                        />
+
+                        <MultiSelectDropdown 
+                          label="Group"
+                          options={exportFilterOptions.groups}
+                          selected={exportSelectedGroup}
+                          onChange={setExportSelectedGroup}
+                        />
                       </div>
                     </div>
                     <div className="flex-1 overflow-auto p-6 space-y-6">
@@ -1058,8 +1229,8 @@ export default function ReportsPage() {
                                   <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#475569] bg-[#ffffff] dark:bg-[#1e293b]/50">
                                     {callReportMergedData.performanceRows.map((row: any, idx: number) => (
                                       <tr key={idx} className={idx % 2 === 0 ? 'bg-[#ffffff] dark:bg-[#1e293b]/50' : 'bg-slate-50 dark:bg-slate-700/30'}>
-                                        <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row.User}</td>
-                                        <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row['Total Leads']}</td>
+                                        <td className="px-4 py-2 text-slate-900 dark:text-slate-100 font-medium">{row.User}</td>
+                                        <td className="px-4 py-2 text-slate-700 dark:text-slate-300">{row['Total Leads']}</td>
                                         <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row.Calls}</td>
                                         <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row['Avg Call']}</td>
                                         <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row.SMS}</td>
@@ -1089,9 +1260,9 @@ export default function ReportsPage() {
                                   <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#475569] bg-[#ffffff] dark:bg-[#1e293b]/50">
                                     {callReportMergedData.dailyRows.map((row: any, idx: number) => (
                                       <tr key={idx} className={idx % 2 === 0 ? 'bg-[#ffffff] dark:bg-[#1e293b]/50' : 'bg-slate-50 dark:bg-slate-700/30'}>
-                                        <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row.Date}</td>
-                                        <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row.User}</td>
-                                        <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row.Calls}</td>
+                                        <td className="px-4 py-2 text-slate-700 dark:text-slate-300">{row.Date}</td>
+                                        <td className="px-4 py-2 text-slate-900 dark:text-slate-100 font-medium">{row.User}</td>
+                                        <td className="px-4 py-2 text-slate-700 dark:text-slate-300">{row.Calls}</td>
                                         <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row['Total Duration']}</td>
                                         <td className="px-4 py-2 text-slate-900 dark:text-slate-100">{row['Avg Duration']}</td>
                                       </tr>

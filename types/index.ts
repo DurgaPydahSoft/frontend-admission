@@ -26,6 +26,9 @@ export interface User {
   /** When false, User/Counsellor/Manager can only access Settings until they enable tracking */
   timeTrackingEnabled?: boolean;
   autoCallingEnabled?: boolean;
+  division?: string;
+  department?: string;
+  group?: string;
   createdAt: string;
   updatedAt: string;
 }
