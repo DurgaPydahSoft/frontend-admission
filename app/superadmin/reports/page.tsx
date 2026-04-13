@@ -137,6 +137,7 @@ export default function ReportsPage() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabType>('calls');
   const [callSubTab, setCallSubTab] = useState<'daily' | 'performance'>('daily');
+  const [expandedDailyUsers, setExpandedDailyUsers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const tabFromUrl = searchParams?.get('tab');
@@ -1049,7 +1050,15 @@ export default function ReportsPage() {
 
                   {/* Export buttons — only on Daily Call Report sub-tab */}
                   {callSubTab === 'daily' && callReports?.reports && callReports.reports.length > 0 && (
-                    <div className="flex items-center gap-2 pb-1">
+                    <div className="flex items-center gap-3 pb-1">
+                      {/* Date range label */}
+                      {filters.startDate && filters.endDate && (
+                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded px-2 py-1 whitespace-nowrap">
+                          {format(new Date(filters.startDate), 'dd MMM yyyy')}
+                          <span className="mx-1 text-slate-400">→</span>
+                          {format(new Date(filters.endDate), 'dd MMM yyyy')}
+                        </span>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -1057,10 +1066,10 @@ export default function ReportsPage() {
                           const exportData = callReports.reports.map((r: any) => {
                             const fu = users.find((u: any) => u._id === r.userId || u.name === r.userName);
                             return {
-                              Date: format(new Date(r.date), 'yyyy-MM-dd'),
                               User: r.userName || '—',
                               Department: fu?.department || '—',
                               Group: fu?.group || '—',
+                              Date: format(new Date(r.date), 'dd MMM yyyy'),
                               Calls: r.callCount ?? 0,
                               'Total Duration': formatSecondsToMMSS(r.totalDuration ?? 0),
                               'Avg Duration': formatSecondsToMMSS(r.averageDuration ?? 0),
@@ -1079,10 +1088,10 @@ export default function ReportsPage() {
                           const exportData = callReports.reports.map((r: any) => {
                             const fu = users.find((u: any) => u._id === r.userId || u.name === r.userName);
                             return {
-                              Date: format(new Date(r.date), 'yyyy-MM-dd'),
                               User: r.userName || '—',
                               Department: fu?.department || '—',
                               Group: fu?.group || '—',
+                              Date: format(new Date(r.date), 'dd MMM yyyy'),
                               Calls: r.callCount ?? 0,
                               'Total Duration': formatSecondsToMMSS(r.totalDuration ?? 0),
                               'Avg Duration': formatSecondsToMMSS(r.averageDuration ?? 0),
@@ -1108,39 +1117,120 @@ export default function ReportsPage() {
                         <table className="min-w-full divide-y divide-[#e2e8f0] dark:divide-[#475569]">
                           <thead>
                             <tr className="bg-[#475569] dark:bg-[#334155]">
-                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Date</th>
                               <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">User</th>
                               <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Department</th>
                               <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Group</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Date</th>
                               <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Calls</th>
                               <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Total Duration</th>
                               <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Avg Duration</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#475569]">
-                            {callReports.reports.map((report: any, idx: number) => {
-                              const fu = users.find((u: any) => u._id === report.userId || u.name === report.userName);
-                              return (
-                                <tr
-                                  key={idx}
-                                  className={idx % 2 === 0 ? 'bg-[#ffffff] dark:bg-[#1e293b]/50 hover:bg-slate-50 dark:hover:bg-slate-700/50' : 'bg-[#f8fafc]/80 dark:bg-[#334155]/30 hover:bg-slate-100 dark:hover:bg-slate-700/50'}
-                                >
-                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">
-                                    {format(new Date(report.date), 'MMM dd, yyyy')}
-                                  </td>
-                                  <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">{report.userName}</td>
-                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{fu?.department || '—'}</td>
-                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{fu?.group || '—'}</td>
-                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{report.callCount}</td>
-                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">
-                                    {formatSecondsToMMSS(report.totalDuration)}
-                                  </td>
-                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">
-                                    {formatSecondsToMMSS(report.averageDuration)}
-                                  </td>
-                                </tr>
-                              );
-                            })}
+                            {(() => {
+                              // Group reports by userName, preserving first-appearance order
+                              const grouped: { userName: string; rows: any[]; fu: any }[] = [];
+                              const seen = new Map<string, number>();
+                              callReports.reports.forEach((r: any) => {
+                                const fu = users.find((u: any) => u._id === r.userId || u.name === r.userName);
+                                if (!seen.has(r.userName)) {
+                                  seen.set(r.userName, grouped.length);
+                                  grouped.push({ userName: r.userName, rows: [r], fu });
+                                } else {
+                                  grouped[seen.get(r.userName)!].rows.push(r);
+                                }
+                              });
+
+                              return grouped.flatMap((group, gIdx) => {
+                                const isMultiDay = group.rows.length > 1;
+                                const isExpanded = expandedDailyUsers.has(group.userName);
+                                const rowBg = gIdx % 2 === 0
+                                  ? 'bg-[#ffffff] dark:bg-[#1e293b]/50'
+                                  : 'bg-[#f8fafc]/80 dark:bg-[#334155]/30';
+
+                                // ── Single-day: show date directly, no accordion ──
+                                if (!isMultiDay) {
+                                  const r = group.rows[0];
+                                  return [(
+                                    <tr key={group.userName} className={`${rowBg} hover:bg-slate-50 dark:hover:bg-slate-700/50`}>
+                                      <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-slate-900 dark:text-slate-100 border-r border-slate-100 dark:border-slate-700">{group.userName}</td>
+                                      <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400 border-r border-slate-100 dark:border-slate-700">{group.fu?.department || '—'}</td>
+                                      <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400 border-r border-slate-100 dark:border-slate-700">{group.fu?.group || '—'}</td>
+                                      <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-700 dark:text-slate-300">{format(new Date(r.date), 'dd MMM yyyy')}</td>
+                                      <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{r.callCount}</td>
+                                      <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{formatSecondsToMMSS(Number(r.totalDuration) || 0)}</td>
+                                      <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{formatSecondsToMMSS(Number(r.averageDuration) || 0)}</td>
+                                    </tr>
+                                  )];
+                                }
+
+                                // ── Multi-day aggregates ──
+                                const totalCalls    = group.rows.reduce((s: number, r: any) => s + (Number(r.callCount)    || 0), 0);
+                                const totalDuration = group.rows.reduce((s: number, r: any) => s + (Number(r.totalDuration) || 0), 0);
+                                const avgDuration   = totalCalls > 0 ? Math.round(totalDuration / totalCalls) : 0;
+
+                                const toggleExpand = () =>
+                                  setExpandedDailyUsers(prev => {
+                                    const n = new Set(prev);
+                                    if (n.has(group.userName)) n.delete(group.userName); else n.add(group.userName);
+                                    return n;
+                                  });
+
+                                if (!isExpanded) {
+                                  // ── Collapsed summary row ──
+                                  return [(
+                                    <tr
+                                      key={`${group.userName}-summary`}
+                                      className={`${rowBg} cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors`}
+                                      onClick={toggleExpand}
+                                    >
+                                      <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-slate-900 dark:text-slate-100 border-r border-slate-100 dark:border-slate-700">
+                                        <div className="flex items-center gap-2">
+                                          <ChevronDown className="w-3.5 h-3.5 -rotate-90 text-orange-400 flex-shrink-0 transition-transform" />
+                                          {group.userName}
+                                        </div>
+                                      </td>
+                                      <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400 border-r border-slate-100 dark:border-slate-700">{group.fu?.department || '—'}</td>
+                                      <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400 border-r border-slate-100 dark:border-slate-700">{group.fu?.group || '—'}</td>
+                                      <td className="whitespace-nowrap px-6 py-4 text-sm">
+                                        <span className="inline-flex items-center rounded-full bg-orange-50 dark:bg-orange-900/20 px-2 py-0.5 text-xs font-medium text-orange-600 dark:text-orange-400">
+                                          {group.rows.length} days
+                                        </span>
+                                      </td>
+                                      <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-slate-900 dark:text-slate-100">{totalCalls}</td>
+                                      <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{formatSecondsToMMSS(totalDuration)}</td>
+                                      <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{formatSecondsToMMSS(avgDuration)}</td>
+                                    </tr>
+                                  )];
+                                }
+
+                                // ── Expanded rows: user spans all date rows ──
+                                return group.rows.map((report: any, rIdx: number) => (
+                                  <tr key={`${group.userName}-${rIdx}`} className={`${rowBg} hover:bg-slate-50 dark:hover:bg-slate-700/50`}>
+                                    {rIdx === 0 && (
+                                      <>
+                                        <td
+                                          rowSpan={group.rows.length}
+                                          className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-slate-900 dark:text-slate-100 align-top border-r border-slate-100 dark:border-slate-700 cursor-pointer"
+                                          onClick={toggleExpand}
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            <ChevronDown className="w-3.5 h-3.5 text-orange-400 flex-shrink-0 transition-transform" />
+                                            {group.userName}
+                                          </div>
+                                        </td>
+                                        <td rowSpan={group.rows.length} className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400 align-top border-r border-slate-100 dark:border-slate-700">{group.fu?.department || '—'}</td>
+                                        <td rowSpan={group.rows.length} className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400 align-top border-r border-slate-100 dark:border-slate-700">{group.fu?.group || '—'}</td>
+                                      </>
+                                    )}
+                                    <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-700 dark:text-slate-300">{format(new Date(report.date), 'dd MMM yyyy')}</td>
+                                    <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{report.callCount}</td>
+                                    <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{formatSecondsToMMSS(report.totalDuration)}</td>
+                                    <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{formatSecondsToMMSS(report.averageDuration)}</td>
+                                  </tr>
+                                ));
+                              });
+                            })()}
                           </tbody>
                         </table>
                       </div>
