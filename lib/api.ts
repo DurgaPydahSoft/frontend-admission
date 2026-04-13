@@ -477,6 +477,8 @@ export const leadAPI = {
     targetRole?: string;
     /** When `district`, requires `state`. When `mandal`, requires `state` and `district`. */
     geoBreakdown?: 'district' | 'mandal';
+    /** Skip heavy state/mandal grouped breakdown queries when false. */
+    includeBreakdowns?: boolean;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.mandal) queryParams.append('mandal', params.mandal);
@@ -489,6 +491,7 @@ export const leadAPI = {
     if (params?.cycleNumber != null && params.cycleNumber !== '') queryParams.append('cycleNumber', String(params.cycleNumber));
     if (params?.targetRole) queryParams.append('targetRole', params.targetRole);
     if (params?.geoBreakdown) queryParams.append('geoBreakdown', params.geoBreakdown);
+    if (params?.includeBreakdowns === false) queryParams.append('includeBreakdowns', 'false');
     const query = queryParams.toString();
     const response = await api.get(`/leads/assign/stats${query ? `?${query}` : ''}`);
     return response.data;

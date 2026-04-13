@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/Dialog';
+import UnassignedLocationPrintView from '@/components/superadmin/UnassignedLocationPrintView';
 import * as XLSX from 'xlsx';
 import { showToast } from '@/lib/toast';
 
@@ -96,6 +97,8 @@ export default function AssignLeadsPage() {
   const [searchResults, setSearchResults] = useState<Lead[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const printStatsRef = useRef<HTMLDivElement>(null);
+  const isPrintingRef = useRef(false);
 
   // Institution-wise (school/college) allocation state
   const [institutionStudentGroup, setInstitutionStudentGroup] = useState<string>('');
@@ -399,7 +402,7 @@ export default function AssignLeadsPage() {
     isLoading: isStatsLoading,
     isFetching: isStatsFetching
   } = useQuery<{ data: AssignmentStats }>({
-    queryKey: ['assignmentStats', statsQueryMandal, statsQueryDistrict, statsQueryState, statsQueryAcademicYear, statsQueryStudentGroup, statsQueryCycleNumber, targetRole],
+    queryKey: ['assignmentStats', mode, statsQueryMandal, statsQueryDistrict, statsQueryState, statsQueryAcademicYear, statsQueryStudentGroup, statsQueryCycleNumber, targetRole],
     queryFn: async () => {
       const response = await leadAPI.getAssignmentStats({
         mandal: statsQueryMandal || undefined,
@@ -409,6 +412,7 @@ export default function AssignLeadsPage() {
         studentGroup: statsQueryStudentGroup || undefined,
         cycleNumber: statsQueryCycleNumber !== '' ? statsQueryCycleNumber : undefined,
         targetRole: targetRole || undefined,
+        includeBreakdowns: mode === 'stats',
       });
       // Backend returns { success, data: { totalLeads, assignedCount, ... }, message }
       const payload = response?.data ?? response ?? {};
@@ -419,46 +423,121 @@ export default function AssignLeadsPage() {
       !!currentUser &&
       mode !== 'remove' &&
       !(mode === 'bulk' && academicYear === ''),
+    staleTime: 20_000,
+    refetchOnWindowFocus: false,
   });
 
   const stats = statsData?.data;
 
   const { data: districtGeoStatsRaw } = useQuery({
-    queryKey: ['assignmentStatsGeo', 'district', state, academicYear, studentGroup, cycleNumber, targetRole],
+    queryKey: ['assignmentStatsGeo', 'district', mode, statsQueryState, statsQueryAcademicYear, statsQueryStudentGroup, statsQueryCycleNumber, targetRole],
     queryFn: async () => {
       const response = await leadAPI.getAssignmentStats({
-        academicYear: academicYear !== '' ? academicYear : undefined,
-        studentGroup: studentGroup || undefined,
-        cycleNumber: cycleNumber !== '' ? cycleNumber : undefined,
-        state: state || undefined,
+        academicYear: statsQueryAcademicYear !== '' ? statsQueryAcademicYear : undefined,
+        studentGroup: statsQueryStudentGroup || undefined,
+        cycleNumber: statsQueryCycleNumber !== '' ? statsQueryCycleNumber : undefined,
+        state: statsQueryState || undefined,
         geoBreakdown: 'district',
         targetRole: targetRole || undefined,
+        includeBreakdowns: false,
       });
       const payload = (response?.data ?? response) as AssignmentStats;
       return payload;
     },
-    enabled: isReady && !!currentUser && mode === 'bulk' && !!state && academicYear !== '',
+    enabled:
+      isReady &&
+      !!currentUser &&
+      (mode === 'bulk' || mode === 'stats') &&
+      !!statsQueryState &&
+      !(mode === 'bulk' && academicYear === ''),
     staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 
   const { data: mandalGeoStatsRaw } = useQuery({
-    queryKey: ['assignmentStatsGeo', 'mandal', state, district, academicYear, studentGroup, cycleNumber, targetRole],
+    queryKey: ['assignmentStatsGeo', 'mandal', mode, statsQueryState, statsQueryDistrict, statsQueryAcademicYear, statsQueryStudentGroup, statsQueryCycleNumber, targetRole],
     queryFn: async () => {
       const response = await leadAPI.getAssignmentStats({
-        academicYear: academicYear !== '' ? academicYear : undefined,
-        studentGroup: studentGroup || undefined,
-        cycleNumber: cycleNumber !== '' ? cycleNumber : undefined,
-        state: state || undefined,
-        district: district || undefined,
+        academicYear: statsQueryAcademicYear !== '' ? statsQueryAcademicYear : undefined,
+        studentGroup: statsQueryStudentGroup || undefined,
+        cycleNumber: statsQueryCycleNumber !== '' ? statsQueryCycleNumber : undefined,
+        state: statsQueryState || undefined,
+        district: statsQueryDistrict || undefined,
         geoBreakdown: 'mandal',
         targetRole: targetRole || undefined,
+        includeBreakdowns: false,
       });
       const payload = (response?.data ?? response) as AssignmentStats;
       return payload;
     },
-    enabled: isReady && !!currentUser && mode === 'bulk' && !!state && !!district && academicYear !== '',
+    enabled:
+      isReady &&
+      !!currentUser &&
+      (mode === 'bulk' || mode === 'stats') &&
+      !!statsQueryState &&
+      !!statsQueryDistrict &&
+      !(mode === 'bulk' && academicYear === ''),
     staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
+
+  const districtAssignmentRows = useMemo(
+    () =>
+      (districtGeoStatsRaw?.districtAssignmentBreakdown || []).map((row) => ({
+        label: row.district,
+        unassignedCount: row.unassignedCount,
+        assignedCount: row.assignedCount,
+      })),
+    [districtGeoStatsRaw]
+  );
+
+  const mandalAssignmentRows = useMemo(
+    () =>
+      (mandalGeoStatsRaw?.mandalAssignmentBreakdown || []).map((row) => ({
+        label: row.mandal,
+        unassignedCount: row.unassignedCount,
+        assignedCount: row.assignedCount,
+      })),
+    [mandalGeoStatsRaw]
+  );
+
+  const handlePrintUnassignedStats = () => {
+    if (isPrintingRef.current) return;
+    const node = printStatsRef.current;
+    if (!node) {
+      showToast.error('Nothing to print yet.');
+      return;
+    }
+    isPrintingRef.current = true;
+    const printWindow = window.open('', 'unassigned-location-report', 'width=1000,height=800');
+    if (!printWindow) {
+      isPrintingRef.current = false;
+      showToast.error('Popup blocked. Please allow popups and try again.');
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Unassigned By Location Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 16px; }
+            @page { size: A4 portrait; margin: 12mm; }
+          </style>
+        </head>
+        <body>${node.innerHTML}</body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      // Release lock shortly after invoking print to avoid duplicate windows.
+      setTimeout(() => {
+        isPrintingRef.current = false;
+      }, 500);
+    }, 200);
+  };
 
   const districtCountByName = useMemo(() => {
     const m = new Map<string, { u: number; a: number }>();
@@ -491,11 +570,14 @@ export default function AssignLeadsPage() {
         studentGroup: institutionStudentGroup || undefined,
         forBreakdown: institutionForBreakdown,
         targetRole: targetRole || undefined,
+        includeBreakdowns: false,
       });
       const payload = response?.data ?? response ?? {};
       return { data: payload };
     },
     enabled: isReady && !!currentUser && mode === 'institution' && !!institutionStudentGroup,
+    staleTime: 20_000,
+    refetchOnWindowFocus: false,
   });
   const institutionStats = institutionStatsData?.data;
 
@@ -852,62 +934,6 @@ export default function AssignLeadsPage() {
           </p> */}
         </div>
 
-        {/* Header filters for stats (hidden on Bulk — that tab uses the form row below). */}
-        {mode !== 'bulk' && (
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-slate-200 whitespace-nowrap">
-                Academic year:
-              </label>
-              <select
-                value={statsAcademicYear === '' ? '' : statsAcademicYear}
-                onChange={(e) => setStatsAcademicYear(e.target.value === '' ? '' : Number(e.target.value))}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-              >
-                <option value="">All years</option>
-                {filterAcademicYearOptions.map((y: number) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-slate-200 whitespace-nowrap">
-                Student group:
-              </label>
-              <select
-                value={statsStudentGroup}
-                onChange={(e) => setStatsStudentGroup(e.target.value)}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-              >
-                <option value="">All</option>
-                {studentGroupOptions.map((g: string) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-slate-200 whitespace-nowrap">
-                Cycle:
-              </label>
-              <select
-                value={statsCycleNumber === '' ? '' : statsCycleNumber}
-                onChange={(e) => setStatsCycleNumber(e.target.value === '' ? '' : Number(e.target.value))}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-              >
-                <option value="">All Cycles</option>
-                {[1, 2, 3, 4, 5].map((c) => (
-                  <option key={c} value={c}>
-                    Cycle {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Statistics Cards — Remove tab: only the user selected below + filters in that form (not global header totals) */}
@@ -1060,8 +1086,60 @@ export default function AssignLeadsPage() {
           {mode === 'stats' ? (
             <div className="space-y-6">
               <p className="text-sm text-gray-600 dark:text-slate-400">
-                Unassigned leads breakdown by <strong>State</strong> and <strong>Mandal</strong>. Use the filters below and the Academic year / Student group at the top to scope the counts.
+                Unassigned leads breakdown by <strong>State</strong> and <strong>Mandal</strong>. Use the filters below to scope the counts.
               </p>
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" onClick={handlePrintUnassignedStats} disabled={!stats}>
+                  Print / Save PDF
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">Academic year</label>
+                  <select
+                    value={statsAcademicYear === '' ? '' : statsAcademicYear}
+                    onChange={(e) => setStatsAcademicYear(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  >
+                    <option value="">All years</option>
+                    {filterAcademicYearOptions.map((y: number) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">Student group</label>
+                  <select
+                    value={statsStudentGroup}
+                    onChange={(e) => setStatsStudentGroup(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  >
+                    <option value="">All</option>
+                    {studentGroupOptions.map((g: string) => (
+                      <option key={g} value={g}>
+                        {g}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">Cycle</label>
+                  <select
+                    value={statsCycleNumber === '' ? '' : statsCycleNumber}
+                    onChange={(e) => setStatsCycleNumber(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  >
+                    <option value="">All cycles</option>
+                    {[1, 2, 3, 4, 5].map((c) => (
+                      <option key={c} value={c}>
+                        Cycle {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">State</label>
@@ -1159,6 +1237,72 @@ export default function AssignLeadsPage() {
                   {statsState ? `, State: ${statsState}` : ''}{statsDistrict ? `, District: ${statsDistrict}` : ''}{statsMandal ? `, Mandal: ${statsMandal}` : ''}.
                 </p>
               )}
+              {stats && (
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <Card>
+                    <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                      District Wise (Assigned vs Unassigned)
+                    </h3>
+                    <div className="max-h-80 space-y-2 overflow-y-auto">
+                      {(districtAssignmentRows || []).length > 0 ? (
+                        districtAssignmentRows.map((row) => (
+                          <div key={`dst-${row.label}`} className="flex items-center justify-between gap-4 text-sm">
+                            <span className="text-gray-700 dark:text-slate-300">{row.label}</span>
+                            <span className="text-slate-900 dark:text-slate-100">
+                              U: {row.unassignedCount.toLocaleString()} | A: {(row.assignedCount || 0).toLocaleString()}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500 dark:text-slate-400">Select a state to view district-wise counts.</p>
+                      )}
+                    </div>
+                  </Card>
+                  <Card>
+                    <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                      Mandal Wise (Assigned vs Unassigned)
+                    </h3>
+                    <div className="max-h-80 space-y-2 overflow-y-auto">
+                      {(mandalAssignmentRows || []).length > 0 ? (
+                        mandalAssignmentRows.map((row) => (
+                          <div key={`mnd-${row.label}`} className="flex items-center justify-between gap-4 text-sm">
+                            <span className="text-gray-700 dark:text-slate-300">{row.label}</span>
+                            <span className="text-slate-900 dark:text-slate-100">
+                              U: {row.unassignedCount.toLocaleString()} | A: {(row.assignedCount || 0).toLocaleString()}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500 dark:text-slate-400">Select a district to view mandal-wise counts.</p>
+                      )}
+                    </div>
+                  </Card>
+                </div>
+              )}
+              <div className="hidden">
+                <div ref={printStatsRef}>
+                  <UnassignedLocationPrintView
+                    generatedAt={new Date().toLocaleString()}
+                    filters={{
+                      academicYear: statsAcademicYear ? String(statsAcademicYear) : 'All',
+                      studentGroup: statsStudentGroup || 'All',
+                      cycle: statsCycleNumber ? `Cycle ${statsCycleNumber}` : 'All',
+                      state: statsState || 'All',
+                      district: statsDistrict || 'All',
+                      mandal: statsMandal || 'All',
+                    }}
+                    summary={{
+                      totalLeads: stats?.totalLeads || 0,
+                      assignedCount: stats?.assignedCount || 0,
+                      unassignedCount: stats?.unassignedCount || 0,
+                    }}
+                    stateBreakdown={(stats?.stateBreakdown || []).map((x) => ({ name: x.state, count: x.count }))}
+                    mandalBreakdown={(stats?.mandalBreakdown || []).map((x) => ({ name: x.mandal, count: x.count }))}
+                    districtAssignmentBreakdown={districtAssignmentRows}
+                    mandalAssignmentBreakdown={mandalAssignmentRows}
+                  />
+                </div>
+              </div>
             </div>
           ) : mode === 'institution' ? (
             <form onSubmit={handleInstitutionAssign} className="space-y-6">
