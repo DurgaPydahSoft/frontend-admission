@@ -34,6 +34,7 @@ type LeadFormState = Required<
     | 'gender'
     | 'interCollege'
     | 'rank'
+    | 'studentGroup'
   >
 >;
 
@@ -55,6 +56,7 @@ const initialFormState: LeadFormState = {
   gender: 'Not Specified',
   interCollege: '',
   rank: '',
+  studentGroup: '',
 };
 
 const requiredFields: Array<keyof LeadFormState> = [
@@ -65,6 +67,7 @@ const requiredFields: Array<keyof LeadFormState> = [
   'village',
   'district',
   'mandal',
+  'studentGroup',
 ];
 
 const IndividualLeadPage = () => {
@@ -259,6 +262,8 @@ const IndividualLeadPage = () => {
         const rankRaw = getFieldValue(['rank']);
         const rankValue =
           rankRaw && !Number.isNaN(Number(rankRaw)) ? Number(rankRaw) : undefined;
+        const studentGroupRaw = getFieldValue(['student_group', 'studentGroup', 'student group']);
+        const studentGroup = typeof studentGroupRaw === 'string' ? studentGroupRaw.trim() : '';
 
         const payload = {
           name: getFieldValue(['name', 'fullName', 'studentName', 'student_name']) || '',
@@ -274,6 +279,7 @@ const IndividualLeadPage = () => {
             getFieldValue(['courseInterested', 'course', 'courseName']) || undefined,
           interCollege:
             getFieldValue(['interCollege', 'college', 'collegeName']) || undefined,
+          studentGroup: studentGroup || undefined,
           rank: rankValue,
           village: getFieldValue(['village', 'city', 'town', 'address_village_city']) || '',
           state: getFieldValue(['state', 'address_state']) || '',
@@ -302,6 +308,7 @@ const IndividualLeadPage = () => {
         motherName: formState.motherName || undefined,
         courseInterested: formState.courseInterested || undefined,
         interCollege: formState.interCollege || undefined,
+        studentGroup: formState.studentGroup || undefined,
         rank: rankValue,
       };
       return leadAPI.create(payload);
@@ -354,6 +361,12 @@ const IndividualLeadPage = () => {
         if (staffNameEmpty) {
           nextErrors.staff_name = 'Required when Data Collection Type is Direct or Exam Center';
         }
+      }
+      const dynamicStudentGroup =
+        (dynamicFormData.student_group ?? dynamicFormData.studentGroup ?? '').toString().trim();
+      if (!dynamicStudentGroup) {
+        nextErrors.student_group = 'Student group is required';
+        nextErrors.studentGroup = 'Student group is required';
       }
       setErrors(nextErrors);
       return Object.keys(nextErrors).length === 0;
@@ -855,6 +868,27 @@ const IndividualLeadPage = () => {
                   placeholder="Rank (if available)"
                   inputMode="numeric"
                 />
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                    Student Group *
+                  </label>
+                  <select
+                    name="studentGroup"
+                    value={formState.studentGroup}
+                    onChange={handleChange('studentGroup')}
+                    className="w-full rounded-xl border-2 border-gray-200 bg-white/80 px-4 py-3 text-sm font-medium text-slate-600 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
+                  >
+                    <option value="">Select student group</option>
+                    {['10th', 'Inter', 'Inter-MPC', 'Inter-BIPC', 'Degree', 'Diploma'].map((group) => (
+                      <option key={group} value={group}>
+                        {group}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.studentGroup && (
+                    <p className="mt-1 text-sm text-red-600">{errors.studentGroup}</p>
+                  )}
+                </div>
                 <div>
                   <Input
                     label="Intermediate / Diploma College"

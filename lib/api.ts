@@ -313,6 +313,7 @@ export const leadAPI = {
     gender?: string;
     rank?: number;
     interCollege?: string;
+    studentGroup?: string;
     dynamicFields?: Record<string, any>;
     source?: string;
   }) => {
