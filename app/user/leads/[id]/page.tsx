@@ -1371,18 +1371,16 @@ export default function UserLeadDetailPage() {
               </svg>
             </button>
 
-            {user.roleName !== 'PRO' && (
-              <button
-                type="button"
-                onClick={() => setShowEditModal(true)}
-                className="flex items-center justify-center size-10 rounded-xl bg-slate-600 hover:bg-slate-700 active:scale-95 text-white shadow-sm"
-                aria-label="Edit Lead"
-              >
-                <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setShowEditModal(true)}
+              className="flex items-center justify-center size-10 rounded-xl bg-slate-600 hover:bg-slate-700 active:scale-95 text-white shadow-sm"
+              aria-label="Edit Lead"
+            >
+              <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
 
             <button
               type="button"
@@ -1627,18 +1625,16 @@ export default function UserLeadDetailPage() {
                 </svg>
                 {statusButtonLabel}
               </button>
-              {user.roleName !== 'PRO' && (
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(true)}
-                  className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800 dark:hover:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs sm:text-sm font-medium"
-                >
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  Edit
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setShowEditModal(true)}
+                className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800 dark:hover:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs sm:text-sm font-medium"
+              >
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit
+              </button>
               <button
                 type="button"
                 onClick={handleNextLead}
