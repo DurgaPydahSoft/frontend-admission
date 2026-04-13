@@ -578,6 +578,7 @@ export const leadAPI = {
     division?: string;
     department?: string;
     group?: string;
+    includeAssignmentDetails?: boolean;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.startDate) queryParams.append('startDate', params.startDate);
@@ -587,6 +588,7 @@ export const leadAPI = {
     if (params?.division) queryParams.append('division', params.division);
     if (params?.department) queryParams.append('department', params.department);
     if (params?.group) queryParams.append('group', params.group);
+    if (params?.includeAssignmentDetails) queryParams.append('includeAssignmentDetails', 'true');
     const query = queryParams.toString();
     const response = await api.get(`/leads/analytics/users${query ? `?${query}` : ''}`);
     // Backend returns { success: true, data: { users: [...] }, message: "..." }

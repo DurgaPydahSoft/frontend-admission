@@ -350,7 +350,8 @@ export default function ReportsPage() {
       startDate: filters.startDate,
       endDate: filters.endDate,
       academicYear: filters.academicYear != null ? filters.academicYear : undefined,
-      includeAssignmentDetails: activeTab === 'calls' && callSubTab === 'performance',
+      // Keep assignment details available for Call Reports so expandable rows always have data.
+      includeAssignmentDetails: activeTab === 'calls',
     }),
     enabled: activeTab === 'calls' || activeTab === 'users',
     retry: 2,
@@ -1401,7 +1402,7 @@ export default function ReportsPage() {
                             const userLabel = user.name || user.userName;
                             const isExpanded = expandedPerformanceUsers.has(user.userId);
                             const assignmentsByDate = Array.isArray(user.assignmentsByDate) ? user.assignmentsByDate : [];
-                            const canExpand = assignmentsByDate.length > 0;
+                            const canExpand = true;
                             const toggleExpand = () =>
                               setExpandedPerformanceUsers((prev) => {
                                 const next = new Set(prev);
@@ -1464,6 +1465,13 @@ export default function ReportsPage() {
                                           </span>
                                         </div>
                                         <div className="space-y-3">
+                                          {assignmentsByDate.length === 0 && (
+                                            <div className="rounded-md border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/30 p-3">
+                                              <p className="text-xs text-slate-600 dark:text-slate-400">
+                                                No date-wise assignment history found for the selected filters.
+                                              </p>
+                                            </div>
+                                          )}
                                           {assignmentsByDate.map((day: any) => {
                                             const statusEntries = Object.entries(day.leadStatusCounts || {})
                                               .sort((a: any, b: any) => Number(b[1] || 0) - Number(a[1] || 0));
