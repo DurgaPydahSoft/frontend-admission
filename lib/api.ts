@@ -570,12 +570,13 @@ export const leadAPI = {
     // Extract the nested data property for consistency
     return response.data?.data || response.data;
   },
-  getUserAnalytics: async (params?: { startDate?: string; endDate?: string; userId?: string; academicYear?: number | string }) => {
+  getUserAnalytics: async (params?: { startDate?: string; endDate?: string; userId?: string; academicYear?: number | string; includeAssignmentDetails?: boolean }) => {
     const queryParams = new URLSearchParams();
     if (params?.startDate) queryParams.append('startDate', params.startDate);
     if (params?.endDate) queryParams.append('endDate', params.endDate);
     if (params?.academicYear != null && params.academicYear !== '') queryParams.append('academicYear', String(params.academicYear));
     if (params?.userId) queryParams.append('userId', params.userId);
+    if (params?.includeAssignmentDetails) queryParams.append('includeAssignmentDetails', 'true');
     const query = queryParams.toString();
     const response = await api.get(`/leads/analytics/users${query ? `?${query}` : ''}`);
     // Backend returns { success: true, data: { users: [...] }, message: "..." }

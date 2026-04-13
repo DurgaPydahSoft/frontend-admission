@@ -138,6 +138,7 @@ export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('calls');
   const [callSubTab, setCallSubTab] = useState<'daily' | 'performance'>('daily');
   const [expandedDailyUsers, setExpandedDailyUsers] = useState<Set<string>>(new Set());
+  const [expandedPerformanceUsers, setExpandedPerformanceUsers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const tabFromUrl = searchParams?.get('tab');
@@ -344,11 +345,12 @@ export default function ReportsPage() {
 
   // User Analytics (used for Call reports tab stats + User Analytics tab detail; same date range)
   const { data: userAnalytics, isLoading: isLoadingUserAnalytics, error: userAnalyticsError } = useQuery({
-    queryKey: ['userAnalytics', filters.startDate, filters.endDate, filters.academicYear],
+    queryKey: ['userAnalytics', filters.startDate, filters.endDate, filters.academicYear, activeTab, callSubTab],
     queryFn: () => leadAPI.getUserAnalytics({
       startDate: filters.startDate,
       endDate: filters.endDate,
       academicYear: filters.academicYear != null ? filters.academicYear : undefined,
+      includeAssignmentDetails: activeTab === 'calls' && callSubTab === 'performance',
     }),
     enabled: activeTab === 'calls' || activeTab === 'users',
     retry: 2,
@@ -1274,21 +1276,148 @@ export default function ReportsPage() {
                         <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-800/50">
                           {userAnalytics.users.map((user: any, rowIdx: number) => {
                             const fu = users.find((fu: any) => fu._id === user.userId || fu.name === (user.name || user.userName));
+                            const baseRowBg = rowIdx % 2 === 0 ? 'bg-[#ffffff] dark:bg-[#1e293b]/50' : 'bg-[#f8fafc]/80 dark:bg-[#334155]/30';
+                            const userLabel = user.name || user.userName;
+                            const isExpanded = expandedPerformanceUsers.has(user.userId);
+                            const assignmentsByDate = Array.isArray(user.assignmentsByDate) ? user.assignmentsByDate : [];
+                            const canExpand = assignmentsByDate.length > 0;
+                            const toggleExpand = () =>
+                              setExpandedPerformanceUsers((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(user.userId)) {
+                                  next.delete(user.userId);
+                                } else {
+                                  next.add(user.userId);
+                                }
+                                return next;
+                              });
+
                             return (
-                              <tr key={user.userId} className={`${rowIdx % 2 === 0 ? 'bg-[#ffffff] dark:bg-[#1e293b]/50' : 'bg-[#f8fafc]/80 dark:bg-[#334155]/30'} hover:bg-slate-100 dark:hover:bg-slate-700/50`}>
-                                <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">{user.name || user.userName}</td>
-                                <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{fu?.department || '—'}</td>
-                                <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{fu?.group || '—'}</td>
-                                <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.totalAssigned || 0}</td>
-                                <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.calls?.total ?? 0}</td>
-                                <td className="whitespace-nowrap px-6 py-4 text-sm">
-                                  <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-800 dark:bg-slate-900/30 dark:text-slate-400">
-                                    {(user.totalAssigned || 0) - (user.calls?.total ?? 0)}
-                                  </span>
-                                </td>
-                                <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.interested ?? 0}</td>
-                                <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.convertedLeads ?? 0}</td>
-                              </tr>
+                              <Fragment key={user.userId}>
+                                <tr
+                                  className={`${baseRowBg} hover:bg-slate-100 dark:hover:bg-slate-700/50 ${canExpand ? 'cursor-pointer' : ''}`}
+                                  onClick={canExpand ? toggleExpand : undefined}
+                                >
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
+                                    <div className="flex items-center gap-2">
+                                      {canExpand ? (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleExpand();
+                                          }}
+                                          className="inline-flex items-center justify-center rounded p-0.5 hover:bg-slate-200/70 dark:hover:bg-slate-700"
+                                          aria-label={isExpanded ? `Collapse ${userLabel}` : `Expand ${userLabel}`}
+                                        >
+                                          <ChevronDown className={`w-3.5 h-3.5 text-orange-400 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                                        </button>
+                                      ) : (
+                                        <span className="w-4 h-4 inline-block" />
+                                      )}
+                                      {userLabel}
+                                    </div>
+                                  </td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{fu?.department || '—'}</td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{fu?.group || '—'}</td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.totalAssigned || 0}</td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.calls?.total ?? 0}</td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm">
+                                    <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-800 dark:bg-slate-900/30 dark:text-slate-400">
+                                      {(user.totalAssigned || 0) - (user.calls?.total ?? 0)}
+                                    </span>
+                                  </td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.interested ?? 0}</td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.convertedLeads ?? 0}</td>
+                                </tr>
+                                {isExpanded && (
+                                  <tr className={`${baseRowBg}`}>
+                                    <td colSpan={8} className="px-6 py-4 border-t border-slate-200/70 dark:border-slate-700">
+                                      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/30 p-4">
+                                        <div className="mb-3 flex items-center justify-between">
+                                          <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                                            Date-wise assigned leads with current lead status
+                                          </h4>
+                                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                                            {assignmentsByDate.length} day{assignmentsByDate.length !== 1 ? 's' : ''}
+                                          </span>
+                                        </div>
+                                        <div className="space-y-3">
+                                          {assignmentsByDate.map((day: any) => {
+                                            const statusEntries = Object.entries(day.leadStatusCounts || {})
+                                              .sort((a: any, b: any) => Number(b[1] || 0) - Number(a[1] || 0));
+                                            const targetDateEntries = Object.entries(day.targetDateCounts || {})
+                                              .sort((a: any, b: any) => String(a[0]).localeCompare(String(b[0])));
+                                            return (
+                                              <div key={`${user.userId}-${day.date}`} className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 p-3">
+                                                <div className="mb-2 flex items-center justify-between gap-3">
+                                                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                                                    {day.date ? format(new Date(day.date), 'dd MMM yyyy') : 'Unknown date'}
+                                                  </span>
+                                                  <div className="flex items-center gap-2">
+                                                    <span className="inline-flex items-center rounded-full bg-orange-50 dark:bg-orange-900/20 px-2 py-0.5 text-xs font-semibold text-orange-700 dark:text-orange-300">
+                                                      Assigned: {day.totalAssigned || 0}
+                                                    </span>
+                                                    {Number(day.currentlyWithSameUser || 0) > 0 && (
+                                                      <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                                                        Currently With User: {Number(day.currentlyWithSameUser) || 0}
+                                                      </span>
+                                                    )}
+                                                    {Number(day.currentlyUnassigned || 0) > 0 && (
+                                                      <span className="inline-flex items-center rounded-full bg-rose-50 dark:bg-rose-900/20 px-2 py-0.5 text-xs font-semibold text-rose-700 dark:text-rose-300">
+                                                        Currently Unassigned: {Number(day.currentlyUnassigned) || 0}
+                                                      </span>
+                                                    )}
+                                                    {Number(day.movedToOtherUser || 0) > 0 && (
+                                                      <span className="inline-flex items-center rounded-full bg-violet-50 dark:bg-violet-900/20 px-2 py-0.5 text-xs font-semibold text-violet-700 dark:text-violet-300">
+                                                        Moved to Other User: {Number(day.movedToOtherUser) || 0}
+                                                      </span>
+                                                    )}
+                                                    {Number(day.reclaimedCount || 0) > 0 && (
+                                                      <span className="inline-flex items-center rounded-full bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                                                        Reclaimed: {Number(day.reclaimedCount) || 0}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                  {statusEntries.length > 0 ? statusEntries.map(([status, count]) => (
+                                                    <span
+                                                      key={`${user.userId}-${day.date}-${status}`}
+                                                      className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-700 px-2.5 py-1 text-xs font-medium text-slate-700 dark:text-slate-200"
+                                                    >
+                                                      {status}: {Number(count) || 0}
+                                                    </span>
+                                                  )) : (
+                                                    <span className="text-xs text-slate-500 dark:text-slate-400">No status data</span>
+                                                  )}
+                                                </div>
+                                                {targetDateEntries.length > 0 && (
+                                                  <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                                                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                                      Target Date Breakdown
+                                                    </p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                      {targetDateEntries.map(([targetDate, count]) => (
+                                                        <span
+                                                          key={`${user.userId}-${day.date}-target-${targetDate}`}
+                                                          className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-900/20 px-2.5 py-1 text-xs font-medium text-blue-700 dark:text-blue-300"
+                                                        >
+                                                          {format(new Date(targetDate), 'dd MMM yyyy')}: {Number(count) || 0}
+                                                        </span>
+                                                      ))}
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
                             );
                           })}
                         </tbody>
