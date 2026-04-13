@@ -136,6 +136,7 @@ function MultiSelectDropdown({
 export default function ReportsPage() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabType>('calls');
+  const [callSubTab, setCallSubTab] = useState<'daily' | 'performance'>('daily');
 
   useEffect(() => {
     const tabFromUrl = searchParams?.get('tab');
@@ -997,33 +998,172 @@ export default function ReportsPage() {
             </Card>
           ) : (
             <>
-              {/* Original User Performance stats for other tabs (if any) or shared view */}
+              {/* Stats Cards – always visible */}
               {userAnalytics?.users && Array.isArray(userAnalytics.users) && userAnalytics.users.length > 0 && (
-                <>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                    {[
-                      { label: 'Total Users', value: userAnalytics.users.length, style: CALL_REPORT_CARD_STYLES[0] },
-                      { label: 'Total Assigned Leads', value: userAnalytics.users.reduce((sum: number, u: any) => sum + (u.totalAssigned || 0), 0), style: CALL_REPORT_CARD_STYLES[1] },
-                      { label: 'Total Calls', value: userAnalytics.users.reduce((sum: number, u: any) => sum + (u.calls?.total ?? 0), 0), style: CALL_REPORT_CARD_STYLES[2] },
-                      { label: 'Total SMS', value: userAnalytics.users.reduce((sum: number, u: any) => sum + (u.sms?.total ?? 0), 0), style: CALL_REPORT_CARD_STYLES[3] },
-                    ].map((item, i) => (
-                      <div key={i} className={`overflow-hidden rounded-xl border-0 ${item.style} p-4 shadow-lg`}>
-                        <p className="text-sm font-semibold uppercase tracking-wider text-white/90">{item.label}</p>
-                        <p className="mt-2 text-2xl font-bold text-white drop-shadow-sm">{item.value}</p>
-                      </div>
-                    ))}
-                  </div>
-                  {/* User Performance Summary – single export opens preview modal */}
-                  <div className="space-y-4">
-
-                    <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
-                      <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">User Performance Summary</h3>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                  {[
+                    { label: 'Total Users', value: userAnalytics.users.length, style: CALL_REPORT_CARD_STYLES[0] },
+                    { label: 'Total Assigned Leads', value: userAnalytics.users.reduce((sum: number, u: any) => sum + (u.totalAssigned || 0), 0), style: CALL_REPORT_CARD_STYLES[1] },
+                    { label: 'Total Calls', value: userAnalytics.users.reduce((sum: number, u: any) => sum + (u.calls?.total ?? 0), 0), style: CALL_REPORT_CARD_STYLES[2] },
+                    { label: 'Total SMS', value: userAnalytics.users.reduce((sum: number, u: any) => sum + (u.sms?.total ?? 0), 0), style: CALL_REPORT_CARD_STYLES[3] },
+                  ].map((item, i) => (
+                    <div key={i} className={`overflow-hidden rounded-xl border-0 ${item.style} p-4 shadow-lg`}>
+                      <p className="text-sm font-semibold uppercase tracking-wider text-white/90">{item.label}</p>
+                      <p className="mt-2 text-2xl font-bold text-white drop-shadow-sm">{item.value}</p>
                     </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Inner Sub-Tabs: Daily Call Report | User Performance Summary */}
+              <div className="border-b border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between gap-3">
+                  <nav className="flex space-x-6">
+                    <button
+                      onClick={() => {
+                        setCallSubTab('daily');
+                        handleDatePreset('today');
+                      }}
+                      className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                        callSubTab === 'daily'
+                          ? 'border-[#f97316] text-[#ea580c] dark:text-[#fb923c]'
+                          : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                      }`}
+                    >
+                      Daily Call Report
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCallSubTab('performance');
+                        handleDatePreset('overall');
+                      }}
+                      className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                        callSubTab === 'performance'
+                          ? 'border-[#f97316] text-[#ea580c] dark:text-[#fb923c]'
+                          : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                      }`}
+                    >
+                      User Performance Summary
+                    </button>
+                  </nav>
+
+                  {/* Export buttons — only on Daily Call Report sub-tab */}
+                  {callSubTab === 'daily' && callReports?.reports && callReports.reports.length > 0 && (
+                    <div className="flex items-center gap-2 pb-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const exportData = callReports.reports.map((r: any) => {
+                            const fu = users.find((u: any) => u._id === r.userId || u.name === r.userName);
+                            return {
+                              Date: format(new Date(r.date), 'yyyy-MM-dd'),
+                              User: r.userName || '—',
+                              Department: fu?.department || '—',
+                              Group: fu?.group || '—',
+                              Calls: r.callCount ?? 0,
+                              'Total Duration': formatSecondsToMMSS(r.totalDuration ?? 0),
+                              'Avg Duration': formatSecondsToMMSS(r.averageDuration ?? 0),
+                            };
+                          });
+                          handleExport('excel', exportData, `daily-call-reports-${filters.startDate}-${filters.endDate}`);
+                        }}
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />
+                        Export Excel
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const exportData = callReports.reports.map((r: any) => {
+                            const fu = users.find((u: any) => u._id === r.userId || u.name === r.userName);
+                            return {
+                              Date: format(new Date(r.date), 'yyyy-MM-dd'),
+                              User: r.userName || '—',
+                              Department: fu?.department || '—',
+                              Group: fu?.group || '—',
+                              Calls: r.callCount ?? 0,
+                              'Total Duration': formatSecondsToMMSS(r.totalDuration ?? 0),
+                              'Avg Duration': formatSecondsToMMSS(r.averageDuration ?? 0),
+                            };
+                          });
+                          handleExport('csv', exportData, `daily-call-reports-${filters.startDate}-${filters.endDate}`);
+                        }}
+                      >
+                        <Download className="w-3.5 h-3.5 mr-1.5" />
+                        Export CSV
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Daily Call Report Sub-Tab */}
+              {callSubTab === 'daily' && (
+                callReports?.reports && callReports.reports.length > 0 ? (
+                  <>
+                    <Card className="overflow-hidden border-slate-200 dark:border-slate-700">
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-[#e2e8f0] dark:divide-[#475569]">
+                          <thead>
+                            <tr className="bg-[#475569] dark:bg-[#334155]">
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Date</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">User</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Department</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Group</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Calls</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Total Duration</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Avg Duration</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#475569]">
+                            {callReports.reports.map((report: any, idx: number) => {
+                              const fu = users.find((u: any) => u._id === report.userId || u.name === report.userName);
+                              return (
+                                <tr
+                                  key={idx}
+                                  className={idx % 2 === 0 ? 'bg-[#ffffff] dark:bg-[#1e293b]/50 hover:bg-slate-50 dark:hover:bg-slate-700/50' : 'bg-[#f8fafc]/80 dark:bg-[#334155]/30 hover:bg-slate-100 dark:hover:bg-slate-700/50'}
+                                >
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">
+                                    {format(new Date(report.date), 'MMM dd, yyyy')}
+                                  </td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">{report.userName}</td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{fu?.department || '—'}</td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{fu?.group || '—'}</td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{report.callCount}</td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">
+                                    {formatSecondsToMMSS(report.totalDuration)}
+                                  </td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">
+                                    {formatSecondsToMMSS(report.averageDuration)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </Card>
+                  </>
+                ) : (
+                  <Card className="p-8 text-center">
+                    <p className="text-slate-500 dark:text-slate-400">No call reports found for the selected period.</p>
+                  </Card>
+                )
+              )}
+
+              {/* User Performance Summary Sub-Tab */}
+              {callSubTab === 'performance' && (
+                userAnalytics?.users && Array.isArray(userAnalytics.users) && userAnalytics.users.length > 0 ? (
+                  <div className="space-y-4">
                     <div className="overflow-x-auto rounded-lg border border-[#e2e8f0] dark:border-[#475569]">
                       <table className="min-w-full divide-y divide-[#e2e8f0] dark:divide-[#475569]">
                         <thead>
                           <tr className="bg-[#475569] dark:bg-[#334155]">
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">User</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Department</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Group</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Total Leads</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">
                               {datePreset === 'today' ? 'Today Calls Done' :
@@ -1036,113 +1176,40 @@ export default function ReportsPage() {
                                             datePreset === 'custom' ? 'Custom Range Calls Done' :
                                               'Overall Calls Done'}
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">SMS</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Remaining Leads</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Interested Leads</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Confirmed</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Remaining Leads</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-800/50">
-                          {userAnalytics.users.map((user: any, rowIdx: number) => (
-                            <tr key={user.userId} className={`${rowIdx % 2 === 0 ? 'bg-[#ffffff] dark:bg-[#1e293b]/50' : 'bg-[#f8fafc]/80 dark:bg-[#334155]/30'} hover:bg-slate-100 dark:hover:bg-slate-700/50`}>
-                              <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">{user.name || user.userName}</td>
-                              <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.totalAssigned || 0}</td>
-                              <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.calls?.total ?? 0}</td>
-                              <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.sms?.total ?? 0}</td>
-                              <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.interested ?? 0}</td>
-                              <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.convertedLeads ?? 0}</td>
-                              <td className="whitespace-nowrap px-6 py-4 text-sm">
-                                <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-800 dark:bg-slate-900/30 dark:text-slate-400">
-                                  {(user.totalAssigned || 0) - (user.calls?.total ?? 0)}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
+                          {userAnalytics.users.map((user: any, rowIdx: number) => {
+                            const fu = users.find((fu: any) => fu._id === user.userId || fu.name === (user.name || user.userName));
+                            return (
+                              <tr key={user.userId} className={`${rowIdx % 2 === 0 ? 'bg-[#ffffff] dark:bg-[#1e293b]/50' : 'bg-[#f8fafc]/80 dark:bg-[#334155]/30'} hover:bg-slate-100 dark:hover:bg-slate-700/50`}>
+                                <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">{user.name || user.userName}</td>
+                                <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{fu?.department || '—'}</td>
+                                <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{fu?.group || '—'}</td>
+                                <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.totalAssigned || 0}</td>
+                                <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.calls?.total ?? 0}</td>
+                                <td className="whitespace-nowrap px-6 py-4 text-sm">
+                                  <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-800 dark:bg-slate-900/30 dark:text-slate-400">
+                                    {(user.totalAssigned || 0) - (user.calls?.total ?? 0)}
+                                  </span>
+                                </td>
+                                <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.interested ?? 0}</td>
+                                <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.convertedLeads ?? 0}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
                   </div>
-                </>
-              )}
-              {callReports?.reports && callReports.reports.length > 0 ? (
-                <>
-                  <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-                    <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Daily Call Reports</h3>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const exportData = callReports.reports.map((r: any) => ({
-                            Date: format(new Date(r.date), 'yyyy-MM-dd'),
-                            User: r.userName || '—',
-                            Calls: r.callCount ?? 0,
-                            'Total Duration': formatSecondsToMMSS(r.totalDuration ?? 0),
-                            'Avg Duration': formatSecondsToMMSS(r.averageDuration ?? 0),
-                          }));
-                          handleExport('excel', exportData, `daily-call-reports-${filters.startDate}-${filters.endDate}`);
-                        }}
-                      >
-                        Export Excel
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const exportData = callReports.reports.map((r: any) => ({
-                            Date: format(new Date(r.date), 'yyyy-MM-dd'),
-                            User: r.userName || '—',
-                            Calls: r.callCount ?? 0,
-                            'Total Duration': formatSecondsToMMSS(r.totalDuration ?? 0),
-                            'Avg Duration': formatSecondsToMMSS(r.averageDuration ?? 0),
-                          }));
-                          handleExport('csv', exportData, `daily-call-reports-${filters.startDate}-${filters.endDate}`);
-                        }}
-                      >
-                        Export CSV
-                      </Button>
-                    </div>
-                  </div>
-                  <Card className="overflow-hidden border-slate-200 dark:border-slate-700">
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-[#e2e8f0] dark:divide-[#475569]">
-                        <thead>
-                          <tr className="bg-[#475569] dark:bg-[#334155]">
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Date</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">User</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Calls</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Total Duration</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Avg Duration</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#e2e8f0] dark:divide-[#475569]">
-                          {callReports.reports.map((report: any, idx: number) => (
-                            <tr
-                              key={idx}
-                              className={idx % 2 === 0 ? 'bg-[#ffffff] dark:bg-[#1e293b]/50 hover:bg-slate-50 dark:hover:bg-slate-700/50' : 'bg-[#f8fafc]/80 dark:bg-[#334155]/30 hover:bg-slate-100 dark:hover:bg-slate-700/50'}
-                            >
-                              <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">
-                                {format(new Date(report.date), 'MMM dd, yyyy')}
-                              </td>
-                              <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">{report.userName}</td>
-                              <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{report.callCount}</td>
-                              <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">
-                                {formatSecondsToMMSS(report.totalDuration)}
-                              </td>
-                              <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">
-                                {formatSecondsToMMSS(report.averageDuration)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                ) : (
+                  <Card className="p-8 text-center">
+                    <p className="text-slate-500 dark:text-slate-400">No performance data found for the selected period.</p>
                   </Card>
-                </>
-              ) : (
-                <Card className="p-8 text-center">
-                  <p className="text-slate-500 dark:text-slate-400">No call reports found for the selected period.</p>
-                </Card>
+                )
               )}
 
               {/* Excel export preview modal (portaled so it appears above header) */}
