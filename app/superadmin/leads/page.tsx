@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { auth } from '@/lib/auth';
 import { leadAPI, userAPI } from '@/lib/api';
@@ -37,6 +37,7 @@ const STORAGE_KEY = 'leads_management_state';
 
 export default function LeadsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { setHeaderContent, clearHeaderContent } = useDashboardHeader();
   const [user, setUser] = useState(auth.getUser());
   const pageSizeOptions = [50, 100, 200, 300];
@@ -101,6 +102,18 @@ export default function LeadsPage() {
   const deleteJobCompletedRef = useRef<boolean>(false);
   const [isExporting, setIsExporting] = useState(false);
   const queryClient = useQueryClient();
+
+  // Apply source filter when navigated from dashboard quick links (e.g., Recent Leads by Source)
+  useEffect(() => {
+    const sourceFromUrl = searchParams?.get('source');
+    if (!sourceFromUrl) return;
+    setFilters((prev) => ({
+      ...prev,
+      source: sourceFromUrl,
+    }));
+    setPage(1);
+    setShowFilters(true);
+  }, [searchParams]);
 
   // Save state to localStorage whenever it changes
   useEffect(() => {
@@ -1369,6 +1382,19 @@ export default function LeadsPage() {
                       </th>
                       <th
                         className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                        onClick={() => handleSort('source')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Source
+                          {sortField === 'source' && (
+                            <span className="text-blue-600 dark:text-blue-300">
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800/60"
                         onClick={() => handleSort('leadStatus')}
                       >
                         <div className="flex items-center gap-1">
@@ -1488,6 +1514,9 @@ export default function LeadsPage() {
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 truncate max-w-[100px]" title={lead.mandal || '—'}>
                             {lead.mandal || '—'}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 truncate max-w-[120px]" title={lead.source || '—'}>
+                            {lead.source || '—'}
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap max-w-[112px]">
                             <span

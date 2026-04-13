@@ -139,6 +139,9 @@ export default function ReportsPage() {
   const [callSubTab, setCallSubTab] = useState<'daily' | 'performance'>('daily');
   const [expandedDailyUsers, setExpandedDailyUsers] = useState<Set<string>>(new Set());
   const [expandedPerformanceUsers, setExpandedPerformanceUsers] = useState<Set<string>>(new Set());
+  const [performanceSearch, setPerformanceSearch] = useState('');
+  const [performanceDepartment, setPerformanceDepartment] = useState('');
+  const [performanceGroup, setPerformanceGroup] = useState('');
 
   useEffect(() => {
     const tabFromUrl = searchParams?.get('tab');
@@ -213,6 +216,24 @@ export default function ReportsPage() {
       departments: Array.from(depts).sort(),
       groups: Array.from(groups).sort()
     };
+  }, [users]);
+
+  const performanceFilterOptions = useMemo(() => {
+    const departments = Array.from(
+      new Set(
+        users
+          .map((u: any) => u?.department)
+          .filter((d: any) => d && d !== '-')
+      )
+    ).sort();
+    const groups = Array.from(
+      new Set(
+        users
+          .map((u: any) => u?.group)
+          .filter((g: any) => g && g !== '-')
+      )
+    ).sort();
+    return { departments, groups };
   }, [users]);
 
   const activityLogUsers = useMemo(
@@ -356,6 +377,21 @@ export default function ReportsPage() {
     enabled: activeTab === 'calls' || activeTab === 'users',
     retry: 2,
   });
+
+  const filteredPerformanceUsers = useMemo(() => {
+    const rawUsers = Array.isArray(userAnalytics?.users) ? userAnalytics.users : [];
+    const searchTerm = performanceSearch.trim().toLowerCase();
+    return rawUsers.filter((u: any) => {
+      const name = String(u?.name || u?.userName || '').toLowerCase();
+      const fullUser = users.find((fu: any) => fu._id === u.userId || fu.name === (u.name || u.userName));
+      const department = String(fullUser?.department || '');
+      const group = String(fullUser?.group || '');
+      const matchesSearch = !searchTerm || name.includes(searchTerm);
+      const matchesDepartment = !performanceDepartment || department === performanceDepartment;
+      const matchesGroup = !performanceGroup || group === performanceGroup;
+      return matchesSearch && matchesDepartment && matchesGroup;
+    });
+  }, [userAnalytics?.users, users, performanceSearch, performanceDepartment, performanceGroup]);
 
   // States for Abstract tab (state → districts → mandals)
   const { data: abstractStates } = useQuery({
@@ -1229,6 +1265,40 @@ export default function ReportsPage() {
                       </Button>
                     </div>
                   )}
+                  {callSubTab === 'performance' && (
+                    <div className="flex flex-wrap items-center gap-2 pb-1">
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          value={performanceSearch}
+                          onChange={(e) => setPerformanceSearch(e.target.value)}
+                          placeholder="Search user"
+                          className="h-8 w-40 rounded-md border border-slate-300 bg-white pl-7 pr-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                        />
+                      </div>
+                      <select
+                        value={performanceDepartment}
+                        onChange={(e) => setPerformanceDepartment(e.target.value)}
+                        className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                      >
+                        <option value="">All Departments</option>
+                        {performanceFilterOptions.departments.map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={performanceGroup}
+                        onChange={(e) => setPerformanceGroup(e.target.value)}
+                        className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                      >
+                        <option value="">All Groups</option>
+                        {performanceFilterOptions.groups.map((g) => (
+                          <option key={g} value={g}>{g}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1369,7 +1439,7 @@ export default function ReportsPage() {
 
               {/* User Performance Summary Sub-Tab */}
               {callSubTab === 'performance' && (
-                userAnalytics?.users && Array.isArray(userAnalytics.users) && userAnalytics.users.length > 0 ? (
+                filteredPerformanceUsers.length > 0 ? (
                   <div className="space-y-4">
                     <div className="overflow-x-auto rounded-lg border border-[#e2e8f0] dark:border-[#475569]">
                       <table className="min-w-full divide-y divide-[#e2e8f0] dark:divide-[#475569]">
@@ -1380,23 +1450,23 @@ export default function ReportsPage() {
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Group</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Total Leads</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">
-                              {datePreset === 'today' ? 'Today Calls Done' :
-                                datePreset === 'yesterday' ? 'Yesterday Calls Done' :
-                                  datePreset === 'last7days' ? 'Last 7 Days Calls Done' :
-                                    datePreset === 'last30days' ? 'Last 30 Days Calls Done' :
-                                      datePreset === 'thisWeek' ? 'This Week Calls Done' :
-                                        datePreset === 'thisMonth' ? 'This Month Calls Done' :
-                                          datePreset === 'lastMonth' ? 'Last Month Calls Done' :
-                                            datePreset === 'custom' ? 'Custom Range Calls Done' :
-                                              'Overall Calls Done'}
+                              {datePreset === 'today' ? 'Today Calls/Visits Done' :
+                                datePreset === 'yesterday' ? 'Yesterday Calls/Visits Done' :
+                                  datePreset === 'last7days' ? 'Last 7 Days Calls/Visits Done' :
+                                    datePreset === 'last30days' ? 'Last 30 Days Calls/Visits Done' :
+                                      datePreset === 'thisWeek' ? 'This Week Calls/Visits Done' :
+                                        datePreset === 'thisMonth' ? 'This Month Calls/Visits Done' :
+                                          datePreset === 'lastMonth' ? 'Last Month Calls/Visits Done' :
+                                            datePreset === 'custom' ? 'Custom Range Calls/Visits Done' :
+                                              'Calls/Visits Done'}
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Remaining Leads</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Balance</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Interested Leads</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Confirmed</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-800/50">
-                          {userAnalytics.users.map((user: any, rowIdx: number) => {
+                          {filteredPerformanceUsers.map((user: any, rowIdx: number) => {
                             const fu = users.find((fu: any) => fu._id === user.userId || fu.name === (user.name || user.userName));
                             const baseRowBg = rowIdx % 2 === 0 ? 'bg-[#ffffff] dark:bg-[#1e293b]/50' : 'bg-[#f8fafc]/80 dark:bg-[#334155]/30';
                             const userLabel = user.name || user.userName;
@@ -1555,7 +1625,7 @@ export default function ReportsPage() {
                   </div>
                 ) : (
                   <Card className="p-8 text-center">
-                    <p className="text-slate-500 dark:text-slate-400">No performance data found for the selected period.</p>
+                    <p className="text-slate-500 dark:text-slate-400">No performance data found for the selected filters.</p>
                   </Card>
                 )
               )}

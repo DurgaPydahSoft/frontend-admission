@@ -87,6 +87,7 @@ export default function SuperAdminDashboard() {
   const [dashboardAcademicYear, setDashboardAcademicYear] = useState<number | ''>('');
   const [dashboardStudentGroup, setDashboardStudentGroup] = useState<string>('');
   const [showAllCalls, setShowAllCalls] = useState(false);
+  const [recentLeadsDays, setRecentLeadsDays] = useState<3 | 7 | 10>(3);
 
   useEffect(() => {
     const currentUser = auth.getUser();
@@ -112,6 +113,17 @@ export default function SuperAdminDashboard() {
     staleTime: 120_000,
   });
 
+  const { data: usersDirectoryData } = useQuery({
+    queryKey: ['users-directory'],
+    queryFn: async () => {
+      const response = await userAPI.getAll();
+      if (Array.isArray(response)) return response;
+      if (response?.data && Array.isArray(response.data)) return response.data;
+      return [];
+    },
+    staleTime: 120_000,
+  });
+
   const todayStr = getTodayDateString();
   const { data: scheduledLeadsData } = useQuery({
     queryKey: ['leads', 'scheduled', todayStr],
@@ -122,6 +134,37 @@ export default function SuperAdminDashboard() {
     staleTime: 60_000,
   });
   const scheduledLeads = Array.isArray(scheduledLeadsData) ? scheduledLeadsData : [];
+  const usersDirectory = Array.isArray(usersDirectoryData) ? usersDirectoryData : [];
+  const scheduledByUser = useMemo(() => {
+    const userMetaByName = new Map<string, { department: string }>();
+    usersDirectory.forEach((u: any) => {
+      const name = String(u?.name || '').trim();
+      if (!name) return;
+      userMetaByName.set(name.toLowerCase(), {
+        department: String(u?.department || '').trim() || '—',
+      });
+    });
+
+    const counts = new Map<string, { userName: string; department: string; count: number }>();
+    scheduledLeads.forEach((lead: any) => {
+      const assigneeName =
+        (typeof lead?.assignedTo === 'object' && lead?.assignedTo?.name
+          ? String(lead.assignedTo.name).trim()
+          : '') || 'Unassigned';
+      const key = assigneeName.toLowerCase();
+      const existing = counts.get(key);
+      if (existing) {
+        existing.count += 1;
+        return;
+      }
+      const dept = assigneeName === 'Unassigned'
+        ? '—'
+        : (userMetaByName.get(key)?.department || '—');
+      counts.set(key, { userName: assigneeName, department: dept, count: 1 });
+    });
+    return Array.from(counts.values())
+      .sort((a, b) => b.count - a.count || a.userName.localeCompare(b.userName));
+  }, [scheduledLeads, usersDirectory]);
 
   const { data: filterOptionsData } = useQuery({
     queryKey: ['filterOptions'],
@@ -298,7 +341,37 @@ export default function SuperAdminDashboard() {
   ]), [overviewAnalytics]);
 
   const userAnalytics = userAnalyticsData?.users || [];
-  const userCounts = overviewAnalytics?.totals.userRoleCounts || { counselors: 0, pros: 0, dataEntry: 0, subAdmins: 0 };
+  const { data: recentLeadsData } = useQuery({
+    queryKey: ['recent-leads-source', recentLeadsDays],
+    queryFn: async () => {
+      const now = new Date();
+      const start = new Date(now);
+      start.setDate(now.getDate() - (recentLeadsDays - 1));
+      const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+      const response = await leadAPI.getAll({
+        page: 1,
+        limit: 5000,
+        startDate: fmt(start),
+        endDate: fmt(now),
+      } as any);
+      return Array.isArray(response?.leads) ? response.leads : [];
+    },
+    staleTime: 60_000,
+  });
+
+  const recentLeadsSourceCounts = useMemo(() => {
+    const leads = Array.isArray(recentLeadsData) ? recentLeadsData : [];
+    const sourceMap = new Map<string, number>();
+    leads.forEach((lead: any) => {
+      const source = String(lead?.source || '').trim() || 'Unknown';
+      sourceMap.set(source, (sourceMap.get(source) || 0) + 1);
+    });
+    return Array.from(sourceMap.entries())
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count || a.source.localeCompare(b.source));
+  }, [recentLeadsData]);
 
   const isInitialLoad = !overviewData && isLoadingOverview;
   if (isLoadingUserAnalytics || isInitialLoad) {
@@ -354,12 +427,6 @@ export default function SuperAdminDashboard() {
 
       {/* Stats cards: aligned grid, theme-colored */}
       <div className="relative">
-        {isFetchingOverview && (
-          <div className="absolute right-0 top-0 z-10 flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-700 dark:border-orange-800 dark:bg-orange-950/50 dark:text-orange-300">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-orange-500" />
-            Updating…
-          </div>
-        )}
         <div className={`grid grid-cols-1 gap-4 transition-opacity duration-200 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 ${isFetchingOverview ? 'opacity-75' : 'opacity-100'}`}>
           {summaryCards.map((card, index) => {
             const style = summaryCardConfig[index % summaryCardConfig.length];
@@ -373,9 +440,18 @@ export default function SuperAdminDashboard() {
                   <p className={`text-xs font-semibold uppercase tracking-wider whitespace-nowrap ${style.label}`}>
                     {card.label}
                   </p>
-                  <p className={`mt-1 text-2xl font-bold sm:text-3xl ${style.value}`}>
-                    {formatNumber(card.value)}
-                  </p>
+                  <div className="mt-1 flex items-center justify-center min-h-[2.25rem]">
+                    {isFetchingOverview ? (
+                      <span
+                        className={`inline-block h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent opacity-70 ${style.value}`}
+                        aria-label="Updating"
+                      />
+                    ) : (
+                      <p className={`text-2xl font-bold sm:text-3xl ${style.value}`}>
+                        {formatNumber(card.value)}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </Card>
             );
@@ -385,7 +461,7 @@ export default function SuperAdminDashboard() {
 
       {/* Today's scheduled calls & User Role Counts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Today's scheduled calls - Left Column */}
+        {/* Today's scheduled calls (user-wise) - Left Column */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-m font-semibold text-[#0f172a] dark:text-[#f1f5f9]">Today&apos;s scheduled calls</h2>
@@ -394,80 +470,86 @@ export default function SuperAdminDashboard() {
             </Link>
           </div>
 
-          {scheduledLeads.length === 0 ? (
+          {scheduledByUser.length === 0 ? (
             <div className="h-full rounded-lg border border-dashed border-[#e2e8f0] p-4 flex items-center justify-center text-xs text-[#64748b] dark:border-[#334155] dark:text-[#94a3b8]">
               No calls scheduled for today.
             </div>
           ) : (
             <>
               <ul className="divide-y divide-slate-100 dark:divide-slate-800 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 overflow-hidden">
-                {scheduledLeads.slice(0, showAllCalls ? undefined : 5).map((lead: { _id: string; name?: string; enquiryNumber?: string; phone?: string; nextScheduledCall?: string; assignedTo?: { name?: string } }) => (
-                  <li key={lead._id} className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                {scheduledByUser.slice(0, showAllCalls ? undefined : 5).map((row) => (
+                  <li key={row.userName} className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">{lead.name ?? '—'}</p>
-                        {lead.enquiryNumber && <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-sm">{lead.enquiryNumber}</span>}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-[#64748b] dark:text-[#94a3b8] mt-0.5">
-                        {lead.nextScheduledCall && (
-                          <span className="flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#fb923c]"></span>
-                            {new Date(lead.nextScheduledCall).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        )}
-                        {typeof lead.assignedTo === 'object' && lead.assignedTo?.name && (
-                          <span>• {lead.assignedTo.name}</span>
-                        )}
-                      </div>
+                      <p className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
+                        {row.userName}
+                        <span className="ml-2 text-xs font-normal text-[#64748b] dark:text-[#94a3b8]">
+                          {row.department}
+                        </span>
+                      </p>
                     </div>
-                    <Link href={`/superadmin/leads/${lead._id}`}>
-                      <button className="flex items-center justify-center h-7 w-7 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                        <span className="sr-only">Open</span>
-                        <svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </Link>
+                    <span className="inline-flex items-center rounded-full bg-orange-50 dark:bg-orange-900/20 px-2 py-0.5 text-xs font-semibold text-orange-700 dark:text-orange-300">
+                      {formatNumber(row.count)}
+                    </span>
                   </li>
                 ))}
               </ul>
-              {scheduledLeads.length > 5 && (
+              {scheduledByUser.length > 5 && (
                 <button
                   onClick={() => setShowAllCalls(!showAllCalls)}
                   className="mt-1 w-full rounded-md py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors border border-slate-200 dark:border-slate-800"
                 >
-                  {showAllCalls ? 'Show Less' : `Show ${scheduledLeads.length - 5} More`}
+                  {showAllCalls ? 'Show Less' : `Show ${scheduledByUser.length - 5} More`}
                 </button>
               )}
             </>
           )}
         </div>
 
-        {/* User Counts Grid - Right Column */}
+        {/* Recent Leads by Source - Right Column */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between px-1">
-            <h2 className="text-m font-semibold text-[#0f172a] dark:text-[#f1f5f9]">Users Roster Registry</h2>
-            <Link href="/superadmin/users" className="text-xs font-medium text-[#ea580c] hover:text-[#c2410c] dark:text-[#f97316]">
-              Directory
+            <h2 className="text-m font-semibold text-[#0f172a] dark:text-[#f1f5f9]">Recent Leads by Source</h2>
+            <Link href="/superadmin/leads" className="text-xs font-medium text-[#ea580c] hover:text-[#c2410c] dark:text-[#f97316]">
+              View leads
             </Link>
           </div>
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
-            <Card className="flex flex-col justify-center p-2.5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 border-blue-100 dark:border-blue-800/50">
-              <p className="text-[9px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">Counselors</p>
-              <p className="text-xl font-black text-blue-900 dark:text-blue-100">{userCounts.counselors}</p>
-            </Card>
-            <Card className="flex flex-col justify-center p-2.5 bg-gradient-to-br from-purple-50 to-fuchsia-50 dark:from-purple-900/10 dark:to-fuchsia-900/10 border-purple-100 dark:border-purple-800/50">
-              <p className="text-[9px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">PRO Users</p>
-              <p className="text-xl font-black text-purple-900 dark:text-purple-100">{userCounts.pros}</p>
-            </Card>
-            <Card className="flex flex-col justify-center p-2.5 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/10 dark:to-teal-900/10 border-emerald-100 dark:border-emerald-800/50">
-              <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Data Entry</p>
-              <p className="text-xl font-black text-emerald-900 dark:text-emerald-100">{userCounts.dataEntry}</p>
-            </Card>
-            <Card className="flex flex-col justify-center p-2.5 bg-gradient-to-br from-rose-50 to-pink-50 dark:from-rose-900/10 dark:to-pink-900/10 border-rose-100 dark:border-rose-800/50">
-              <p className="text-[9px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">Sub Admins</p>
-              <p className="text-xl font-black text-rose-900 dark:text-rose-100">{userCounts.subAdmins}</p>
-            </Card>
+          <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 overflow-hidden">
+            <div className="flex items-center gap-2 p-2 border-b border-slate-100 dark:border-slate-800">
+              {[3, 7, 10].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setRecentLeadsDays(d as 3 | 7 | 10)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                    recentLeadsDays === d
+                      ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  Last {d} days
+                </button>
+              ))}
+            </div>
+            {recentLeadsSourceCounts.length === 0 ? (
+              <div className="p-4 text-center text-xs text-slate-500 dark:text-slate-400">
+                No recent leads found.
+              </div>
+            ) : (
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                {recentLeadsSourceCounts.slice(0, 8).map((row) => (
+                  <li key={row.source} className="flex items-center justify-between px-3 py-2">
+                    <Link
+                      href={`/superadmin/leads?source=${encodeURIComponent(row.source)}`}
+                      className="text-sm text-slate-700 dark:text-slate-200 truncate hover:text-orange-600 dark:hover:text-orange-300"
+                    >
+                      {row.source}
+                    </Link>
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                      {formatNumber(row.count)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </div>
