@@ -455,6 +455,7 @@ export const leadAPI = {
     institutionName?: string;
     targetDate?: string;
     district?: string;
+    cycleNumber?: number | string;
   }) => {
     const response = await api.post('/leads/assign', data);
     return response.data;
@@ -469,6 +470,8 @@ export const leadAPI = {
     district?: string;
     cycleNumber?: number | string;
     targetRole?: string;
+    /** When `district`, requires `state`. When `mandal`, requires `state` and `district`. */
+    geoBreakdown?: 'district' | 'mandal';
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.mandal) queryParams.append('mandal', params.mandal);
@@ -480,6 +483,7 @@ export const leadAPI = {
     if (params?.forBreakdown) queryParams.append('forBreakdown', params.forBreakdown);
     if (params?.cycleNumber != null && params.cycleNumber !== '') queryParams.append('cycleNumber', String(params.cycleNumber));
     if (params?.targetRole) queryParams.append('targetRole', params.targetRole);
+    if (params?.geoBreakdown) queryParams.append('geoBreakdown', params.geoBreakdown);
     const query = queryParams.toString();
     const response = await api.get(`/leads/assign/stats${query ? `?${query}` : ''}`);
     return response.data;

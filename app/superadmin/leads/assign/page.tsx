@@ -25,6 +25,10 @@ interface AssignmentStats {
   mandalBreakdown: Array<{ mandal: string; count: number }>;
   stateBreakdown: Array<{ state: string; count: number }>;
   institutionBreakdown?: Array<{ id: string; name: string; count: number }>;
+  /** Present when requesting geoBreakdown=district (scoped by state + form filters). */
+  districtAssignmentBreakdown?: Array<{ district: string; unassignedCount: number; assignedCount: number }>;
+  /** Present when requesting geoBreakdown=mandal (scoped by state + district + form filters). */
+  mandalAssignmentBreakdown?: Array<{ mandal: string; unassignedCount: number; assignedCount: number }>;
 }
 
 export default function AssignLeadsPage() {
@@ -376,12 +380,13 @@ export default function AssignLeadsPage() {
   const statsQueryDistrict = mode === 'stats' ? statsDistrict : mode === 'institution' ? '' : district;
   const statsQueryMandal = mode === 'stats' ? statsMandal : mode === 'institution' ? '' : mandal;
 
-  // Top stats cards always follow the header filters (and institution form when on that tab) — not the bulk-assign form defaults
+  // Top stats: bulk tab uses the bulk form filters; other tabs use the header (except institution).
   const statsQueryAcademicYear =
-    mode === 'institution' ? institutionAcademicYear : statsAcademicYear;
+    mode === 'institution' ? institutionAcademicYear : mode === 'bulk' ? academicYear : statsAcademicYear;
   const statsQueryStudentGroup =
-    mode === 'institution' ? institutionStudentGroup : statsStudentGroup;
-  const statsQueryCycleNumber = mode === 'institution' ? '' : statsCycleNumber;
+    mode === 'institution' ? institutionStudentGroup : mode === 'bulk' ? studentGroup : statsStudentGroup;
+  const statsQueryCycleNumber =
+    mode === 'institution' ? '' : mode === 'bulk' ? cycleNumber : statsCycleNumber;
 
   // Fetch assignment statistics (scoped by academic year, student group, and location)
   const activeUserId = mode === 'institution' ? institutionUserId : selectedUserId;
@@ -409,10 +414,69 @@ export default function AssignLeadsPage() {
       const payload = response?.data ?? response ?? {};
       return { data: payload };
     },
-    enabled: isReady && !!currentUser && mode !== 'remove',
+    enabled:
+      isReady &&
+      !!currentUser &&
+      mode !== 'remove' &&
+      !(mode === 'bulk' && academicYear === ''),
   });
 
   const stats = statsData?.data;
+
+  const { data: districtGeoStatsRaw } = useQuery({
+    queryKey: ['assignmentStatsGeo', 'district', state, academicYear, studentGroup, cycleNumber, targetRole],
+    queryFn: async () => {
+      const response = await leadAPI.getAssignmentStats({
+        academicYear: academicYear !== '' ? academicYear : undefined,
+        studentGroup: studentGroup || undefined,
+        cycleNumber: cycleNumber !== '' ? cycleNumber : undefined,
+        state: state || undefined,
+        geoBreakdown: 'district',
+        targetRole: targetRole || undefined,
+      });
+      const payload = (response?.data ?? response) as AssignmentStats;
+      return payload;
+    },
+    enabled: isReady && !!currentUser && mode === 'bulk' && !!state && academicYear !== '',
+    staleTime: 30_000,
+  });
+
+  const { data: mandalGeoStatsRaw } = useQuery({
+    queryKey: ['assignmentStatsGeo', 'mandal', state, district, academicYear, studentGroup, cycleNumber, targetRole],
+    queryFn: async () => {
+      const response = await leadAPI.getAssignmentStats({
+        academicYear: academicYear !== '' ? academicYear : undefined,
+        studentGroup: studentGroup || undefined,
+        cycleNumber: cycleNumber !== '' ? cycleNumber : undefined,
+        state: state || undefined,
+        district: district || undefined,
+        geoBreakdown: 'mandal',
+        targetRole: targetRole || undefined,
+      });
+      const payload = (response?.data ?? response) as AssignmentStats;
+      return payload;
+    },
+    enabled: isReady && !!currentUser && mode === 'bulk' && !!state && !!district && academicYear !== '',
+    staleTime: 30_000,
+  });
+
+  const districtCountByName = useMemo(() => {
+    const m = new Map<string, { u: number; a: number }>();
+    for (const row of districtGeoStatsRaw?.districtAssignmentBreakdown || []) {
+      const k = String(row.district || '').trim().toLowerCase();
+      m.set(k, { u: row.unassignedCount, a: row.assignedCount });
+    }
+    return m;
+  }, [districtGeoStatsRaw]);
+
+  const mandalCountByName = useMemo(() => {
+    const m = new Map<string, { u: number; a: number }>();
+    for (const row of mandalGeoStatsRaw?.mandalAssignmentBreakdown || []) {
+      const k = String(row.mandal || '').trim().toLowerCase();
+      m.set(k, { u: row.unassignedCount, a: row.assignedCount });
+    }
+    return m;
+  }, [mandalGeoStatsRaw]);
 
   // Institution-wise: use schools for 10th, colleges for Inter/Degree etc.
   const institutionUseSchools = institutionStudentGroup === '10th';
@@ -540,10 +604,12 @@ export default function AssignLeadsPage() {
       leadIds?: string[];
       institutionName?: string;
       targetDate?: string;
+      cycleNumber?: number | string;
     }) => leadAPI.assignLeads(payload),
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: ['assignmentStats'] });
+      queryClient.invalidateQueries({ queryKey: ['assignmentStatsGeo'] });
       queryClient.invalidateQueries({ queryKey: ['assignmentStatsInstitution'] });
       refetchStats();
       refetchInstitutionStats();
@@ -648,6 +714,7 @@ export default function AssignLeadsPage() {
       academicYear,
       studentGroup: studentGroup || undefined,
       targetDate: targetDate || undefined,
+      cycleNumber: cycleNumber !== '' ? cycleNumber : undefined,
       count,
     });
   };
@@ -785,60 +852,62 @@ export default function AssignLeadsPage() {
           </p> */}
         </div>
 
-        {/* Academic Year and Student Group filters – aligned to the right */}
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-slate-200 whitespace-nowrap">
-              Academic year:
-            </label>
-            <select
-              value={statsAcademicYear === '' ? '' : statsAcademicYear}
-              onChange={(e) => setStatsAcademicYear(e.target.value === '' ? '' : Number(e.target.value))}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            >
-              <option value="">All years</option>
-              {filterAcademicYearOptions.map((y: number) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
+        {/* Header filters for stats (hidden on Bulk — that tab uses the form row below). */}
+        {mode !== 'bulk' && (
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-slate-200 whitespace-nowrap">
+                Academic year:
+              </label>
+              <select
+                value={statsAcademicYear === '' ? '' : statsAcademicYear}
+                onChange={(e) => setStatsAcademicYear(e.target.value === '' ? '' : Number(e.target.value))}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              >
+                <option value="">All years</option>
+                {filterAcademicYearOptions.map((y: number) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-slate-200 whitespace-nowrap">
+                Student group:
+              </label>
+              <select
+                value={statsStudentGroup}
+                onChange={(e) => setStatsStudentGroup(e.target.value)}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              >
+                <option value="">All</option>
+                {studentGroupOptions.map((g: string) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-slate-200 whitespace-nowrap">
+                Cycle:
+              </label>
+              <select
+                value={statsCycleNumber === '' ? '' : statsCycleNumber}
+                onChange={(e) => setStatsCycleNumber(e.target.value === '' ? '' : Number(e.target.value))}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              >
+                <option value="">All Cycles</option>
+                {[1, 2, 3, 4, 5].map((c) => (
+                  <option key={c} value={c}>
+                    Cycle {c}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-slate-200 whitespace-nowrap">
-              Student group:
-            </label>
-            <select
-              value={statsStudentGroup}
-              onChange={(e) => setStatsStudentGroup(e.target.value)}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            >
-              <option value="">All</option>
-              {studentGroupOptions.map((g: string) => (
-                <option key={g} value={g}>
-                  {g}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-slate-200 whitespace-nowrap">
-              Cycle:
-            </label>
-            <select
-              value={statsCycleNumber === '' ? '' : statsCycleNumber}
-              onChange={(e) => setStatsCycleNumber(e.target.value === '' ? '' : Number(e.target.value))}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            >
-              <option value="">All Cycles</option>
-              {[1, 2, 3, 4, 5].map((c) => (
-                <option key={c} value={c}>
-                  Cycle {c}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Statistics Cards — Remove tab: only the user selected below + filters in that form (not global header totals) */}
@@ -1506,34 +1575,31 @@ export default function AssignLeadsPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:items-end">
+                <div className="min-w-0">
                   <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
                     Academic Year *
                   </label>
                   <select
-                    className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
+                    className="w-full min-w-0 rounded-lg border border-gray-300 bg-white/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
                     value={academicYear === '' ? '' : academicYear}
                     onChange={(event) => setAcademicYear(event.target.value === '' ? '' : Number(event.target.value))}
                     required
                   >
                     <option value="">Select academic year…</option>
-                    {academicYearOptions.map((y) => (
+                    {filterAcademicYearOptions.map((y: number) => (
                       <option key={y} value={y}>
                         {y}
                       </option>
                     ))}
                   </select>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                    {targetRole === 'PRO' ? 'Available leads for this academic year will be assigned.' : 'Only unassigned leads for this academic year will be assigned.'}
-                  </p>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
                     Student group (optional)
                   </label>
                   <select
-                    className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
+                    className="w-full min-w-0 rounded-lg border border-gray-300 bg-white/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
                     value={studentGroup}
                     onChange={(e) => setStudentGroup(e.target.value)}
                   >
@@ -1545,13 +1611,12 @@ export default function AssignLeadsPage() {
                     ))}
                   </select>
                 </div>
-
-                <div>
+                <div className="min-w-0">
                   <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
                     Cycle (Filter Leads)
                   </label>
                   <select
-                    className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
+                    className="w-full min-w-0 rounded-lg border border-gray-300 bg-white/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
                     value={cycleNumber}
                     onChange={(e) => setCycleNumber(e.target.value === '' ? '' : Number(e.target.value))}
                   >
@@ -1563,8 +1628,7 @@ export default function AssignLeadsPage() {
                     ))}
                   </select>
                 </div>
-
-                <div>
+                <div className="min-w-0">
                   <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
                     Target Date (Auto Reclaim)
                   </label>
@@ -1572,13 +1636,16 @@ export default function AssignLeadsPage() {
                     type="date"
                     value={targetDate}
                     onChange={(e) => setTargetDate(e.target.value)}
-                    className="w-full px-3 py-2"
+                    className="w-full min-w-0 px-3 py-2 text-sm"
                   />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                    'Not Interested' leads reclaim after this date.
-                  </p>
                 </div>
               </div>
+              <p className="text-xs text-gray-500 dark:text-slate-400">
+                {targetRole === 'PRO'
+                  ? 'Available leads for the selected academic year will be assigned. Summary cards above use these filters on the Bulk tab.'
+                  : 'Only unassigned leads for the selected academic year will be assigned. Summary cards above use these filters on the Bulk tab.'}{' '}
+                &quot;Not Interested&quot; reclaim uses Target date when set.
+              </p>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div>
@@ -1612,11 +1679,14 @@ export default function AssignLeadsPage() {
                     disabled={!state}
                   >
                     <option value="">All Districts</option>
-                    {locationDistricts.map((d) => (
-                      <option key={d.id || d.name} value={d.name}>
-                        {d.name}
-                      </option>
-                    ))}
+                    {locationDistricts.map((d) => {
+                      const c = districtCountByName.get(String(d.name).trim().toLowerCase()) ?? { u: 0, a: 0 };
+                      return (
+                        <option key={d.id || d.name} value={d.name}>
+                          {d.name} — Unassigned: {c.u.toLocaleString()}, Assigned: {c.a.toLocaleString()}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -1630,11 +1700,14 @@ export default function AssignLeadsPage() {
                     disabled={!district}
                   >
                     <option value="">All Mandals</option>
-                    {locationMandals.map((m) => (
-                      <option key={m.id || m.name} value={m.name}>
-                        {m.name}
-                      </option>
-                    ))}
+                    {locationMandals.map((m) => {
+                      const c = mandalCountByName.get(String(m.name).trim().toLowerCase()) ?? { u: 0, a: 0 };
+                      return (
+                        <option key={m.id || m.name} value={m.name}>
+                          {m.name} — Unassigned: {c.u.toLocaleString()}, Assigned: {c.a.toLocaleString()}
+                        </option>
+                      );
+                    })}
                   </select>
                   <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
                     Filter by state → district → mandal. Leave blank for all.
@@ -1677,6 +1750,8 @@ export default function AssignLeadsPage() {
                     setDistrict('');
                     setStudentGroup('');
                     setAcademicYear(2025);
+                    setCycleNumber('');
+                    setTargetDate('');
                     setCount(1000);
                   }}
                   disabled={assignMutation.isPending}
