@@ -142,6 +142,8 @@ export default function ReportsPage() {
   const [performanceSearch, setPerformanceSearch] = useState('');
   const [performanceDepartment, setPerformanceDepartment] = useState('');
   const [performanceGroup, setPerformanceGroup] = useState('');
+  const [dailyDepartment, setDailyDepartment] = useState('');
+  const [dailyGroup, setDailyGroup] = useState('');
 
   useEffect(() => {
     const tabFromUrl = searchParams?.get('tab');
@@ -161,6 +163,7 @@ export default function ReportsPage() {
   const [exportSelectedDivision, setExportSelectedDivision] = useState<string[]>([]);
   const [exportSelectedDepartment, setExportSelectedDepartment] = useState<string[]>([]);
   const [exportSelectedGroup, setExportSelectedGroup] = useState<string[]>([]);
+  const isPrintingPerformanceRef = useRef(false);
 
   // Unified filters for all tabs (default to today)
   const [filters, setFilters] = useState({
@@ -307,11 +310,13 @@ export default function ReportsPage() {
 
   // Call Reports
   const { data: callReports, isLoading: isLoadingCalls, error: callReportsError } = useQuery({
-    queryKey: ['callReports', filters.startDate, filters.endDate, filters.userId],
+    queryKey: ['callReports', filters.startDate, filters.endDate, filters.userId, dailyDepartment, dailyGroup],
     queryFn: () => reportAPI.getDailyCallReports({
       startDate: filters.startDate,
       endDate: filters.endDate,
       userId: filters.userId || undefined,
+      department: dailyDepartment || undefined,
+      group: dailyGroup || undefined,
     }),
     enabled: activeTab === 'calls',
     retry: 2,
@@ -392,6 +397,114 @@ export default function ReportsPage() {
       return matchesSearch && matchesDepartment && matchesGroup;
     });
   }, [userAnalytics?.users, users, performanceSearch, performanceDepartment, performanceGroup]);
+
+  const getLeadStatusCount = (day: any, status: string) =>
+    Number(day?.leadStatusCounts?.[status] || 0);
+
+  const formatAssignedStudentGroups = (day: any) => {
+    const entries = Object.entries(day?.studentGroupCounts || {})
+      .map(([group, count]) => ({ group: String(group), count: Number(count) || 0 }))
+      .filter((x) => x.count > 0)
+      .sort((a, b) => b.count - a.count || a.group.localeCompare(b.group));
+    if (!entries.length) return filters.studentGroup || 'Unknown';
+    return entries.map((x) => `${x.group} (${x.count})`).join(', ');
+  };
+
+  const handlePrintPerformanceDetails = () => {
+    if (isPrintingPerformanceRef.current) return;
+    if (!filteredPerformanceUsers.length) {
+      showToast.error('No performance rows to print.');
+      return;
+    }
+    isPrintingPerformanceRef.current = true;
+    const printWindow = window.open('', 'user-performance-detail-report', 'width=1200,height=800');
+    if (!printWindow) {
+      isPrintingPerformanceRef.current = false;
+      showToast.error('Please allow pop-ups to print.');
+      return;
+    }
+
+    const generatedAt = new Date().toLocaleString();
+    const sections = filteredPerformanceUsers.map((user: any) => {
+      const rows = Array.isArray(user.assignmentsByDate) ? user.assignmentsByDate : [];
+      const userName = user.name || user.userName || 'Unknown';
+      const statusLabel = user.isActive ? 'Active' : 'Inactive';
+      const rowHtml = rows.length
+        ? rows.map((day: any) => {
+            const targetDateEntries = Object.entries(day.targetDateCounts || {})
+              .sort((a: any, b: any) => String(a[0]).localeCompare(String(b[0])));
+            const targetDateText = targetDateEntries.length
+              ? targetDateEntries.map(([dt, count]) => `${format(new Date(String(dt)), 'dd MMM yyyy')} (${Number(count) || 0})`).join(', ')
+              : '—';
+            return `
+              <tr>
+                <td>${day.date ? format(new Date(day.date), 'dd MMM yyyy') : 'Unknown'}</td>
+                <td>${targetDateText}</td>
+                <td>${formatAssignedStudentGroups(day)}</td>
+                <td>${getLeadStatusCount(day, 'Assigned')}</td>
+                <td>${getLeadStatusCount(day, 'Interested')}</td>
+                <td>${getLeadStatusCount(day, 'Not Interested')}</td>
+                <td>${getLeadStatusCount(day, 'Wrong Data')}</td>
+                <td>${getLeadStatusCount(day, 'Call Back')}</td>
+                <td>${getLeadStatusCount(day, 'Confirmed')}</td>
+              </tr>
+            `;
+          }).join('')
+        : `<tr><td colspan="9">No date-wise assignment history found.</td></tr>`;
+
+      return `
+        <section style="margin-bottom:20px; break-inside: avoid;">
+          <h3 style="margin:0 0 6px 0;">${userName} (${statusLabel})</h3>
+          <table style="width:100%; border-collapse: collapse; font-size:12px;">
+            <thead>
+              <tr>
+                <th>Allotted Date</th>
+                <th>Target Date</th>
+                <th>Student Group Assigned</th>
+                <th>Assigned</th>
+                <th>Interested</th>
+                <th>Not Interested</th>
+                <th>Wrong Data</th>
+                <th>Call Back</th>
+                <th>Confirmed</th>
+              </tr>
+            </thead>
+            <tbody>${rowHtml}</tbody>
+          </table>
+        </section>
+      `;
+    }).join('');
+
+    printWindow.document.open();
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>User Performance Detailed Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #0f172a; padding: 16px; }
+            h1 { margin: 0 0 8px 0; font-size: 20px; }
+            p.meta { margin: 0 0 14px 0; font-size: 12px; color: #475569; }
+            table, th, td { border: 1px solid #cbd5e1; }
+            th, td { padding: 6px 8px; text-align: left; vertical-align: top; }
+            th { background: #f1f5f9; font-weight: 600; }
+            @media print { body { padding: 8px; } }
+          </style>
+        </head>
+        <body>
+          <h1>User Performance Detailed Report</h1>
+          <p class="meta">Generated: ${generatedAt}</p>
+          ${sections}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      isPrintingPerformanceRef.current = false;
+    }, 250);
+  };
 
   // States for Abstract tab (state → districts → mandals)
   const { data: abstractStates } = useQuery({
@@ -1167,9 +1280,29 @@ export default function ReportsPage() {
                     </button>
                   </nav>
 
-                  {/* Export button — only on Daily Call Report sub-tab (Excel only, no CSV) */}
-                  {callSubTab === 'daily' && callReports?.reports && callReports.reports.length > 0 && (
+                  {/* Daily sub-tab controls */}
+                  {callSubTab === 'daily' && (
                     <div className="flex items-center gap-3 pb-1">
+                      <select
+                        value={dailyDepartment}
+                        onChange={(e) => setDailyDepartment(e.target.value)}
+                        className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                      >
+                        <option value="">All Departments</option>
+                        {performanceFilterOptions.departments.map((d) => (
+                          <option key={`daily-dept-${d}`} value={d}>{d}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={dailyGroup}
+                        onChange={(e) => setDailyGroup(e.target.value)}
+                        className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                      >
+                        <option value="">All Groups</option>
+                        {performanceFilterOptions.groups.map((g) => (
+                          <option key={`daily-group-${g}`} value={g}>{g}</option>
+                        ))}
+                      </select>
                       {/* Date range label */}
                       {filters.startDate && filters.endDate && (
                         <span className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded px-2 py-1 whitespace-nowrap">
@@ -1178,12 +1311,13 @@ export default function ReportsPage() {
                           {format(new Date(filters.endDate), 'dd MMM yyyy')}
                         </span>
                       )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const daily = callReports?.reports || [];
-                          if (daily.length === 0) return;
+                      {callReports?.reports && callReports.reports.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const daily = callReports?.reports || [];
+                            if (daily.length === 0) return;
 
                           // Group and sort data
                           const grouped: { userName: string; rows: any[]; fullUser: any }[] = [];
@@ -1258,11 +1392,12 @@ export default function ReportsPage() {
                           const workbook = XLSX.utils.book_new();
                           XLSX.utils.book_append_sheet(workbook, worksheet, 'Daily Call Report');
                           XLSX.writeFile(workbook, `daily-call-reports-${filters.startDate}-${filters.endDate}.xlsx`);
-                        }}
-                      >
-                        <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />
-                        Export Excel
-                      </Button>
+                          }}
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />
+                          Export Excel
+                        </Button>
+                      )}
                     </div>
                   )}
                   {callSubTab === 'performance' && (
@@ -1297,6 +1432,13 @@ export default function ReportsPage() {
                           <option key={g} value={g}>{g}</option>
                         ))}
                       </select>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handlePrintPerformanceDetails}
+                      >
+                        Print Detailed Report
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -1557,89 +1699,58 @@ export default function ReportsPage() {
                                       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/30 p-4">
                                         <div className="mb-3 flex items-center justify-between">
                                           <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                                            Date-wise assigned leads with current lead status
+                                            Date-wise simplified assignment summary
                                           </h4>
                                           <span className="text-xs text-slate-500 dark:text-slate-400">
                                             {assignmentsByDate.length} day{assignmentsByDate.length !== 1 ? 's' : ''}
                                           </span>
                                         </div>
-                                        <div className="space-y-3">
-                                          {assignmentsByDate.length === 0 && (
-                                            <div className="rounded-md border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/30 p-3">
-                                              <p className="text-xs text-slate-600 dark:text-slate-400">
-                                                No date-wise assignment history found for the selected filters.
-                                              </p>
-                                            </div>
-                                          )}
-                                          {assignmentsByDate.map((day: any) => {
-                                            const statusEntries = Object.entries(day.leadStatusCounts || {})
-                                              .sort((a: any, b: any) => Number(b[1] || 0) - Number(a[1] || 0));
-                                            const targetDateEntries = Object.entries(day.targetDateCounts || {})
-                                              .sort((a: any, b: any) => String(a[0]).localeCompare(String(b[0])));
-                                            return (
-                                              <div key={`${user.userId}-${day.date}`} className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 p-3">
-                                                <div className="mb-2 flex items-center justify-between gap-3">
-                                                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                                                    {day.date ? format(new Date(day.date), 'dd MMM yyyy') : 'Unknown date'}
-                                                  </span>
-                                                  <div className="flex items-center gap-2">
-                                                    <span className="inline-flex items-center rounded-full bg-orange-50 dark:bg-orange-900/20 px-2 py-0.5 text-xs font-semibold text-orange-700 dark:text-orange-300">
-                                                      Assigned: {day.totalAssigned || 0}
-                                                    </span>
-                                                    {Number(day.currentlyWithSameUser || 0) > 0 && (
-                                                      <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                                                        Currently With User: {Number(day.currentlyWithSameUser) || 0}
-                                                      </span>
-                                                    )}
-                                                    {Number(day.currentlyUnassigned || 0) > 0 && (
-                                                      <span className="inline-flex items-center rounded-full bg-rose-50 dark:bg-rose-900/20 px-2 py-0.5 text-xs font-semibold text-rose-700 dark:text-rose-300">
-                                                        Currently Unassigned: {Number(day.currentlyUnassigned) || 0}
-                                                      </span>
-                                                    )}
-                                                    {Number(day.movedToOtherUser || 0) > 0 && (
-                                                      <span className="inline-flex items-center rounded-full bg-violet-50 dark:bg-violet-900/20 px-2 py-0.5 text-xs font-semibold text-violet-700 dark:text-violet-300">
-                                                        Moved to Other User: {Number(day.movedToOtherUser) || 0}
-                                                      </span>
-                                                    )}
-                                                    {Number(day.reclaimedCount || 0) > 0 && (
-                                                      <span className="inline-flex items-center rounded-full bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
-                                                        Reclaimed: {Number(day.reclaimedCount) || 0}
-                                                      </span>
-                                                    )}
-                                                  </div>
-                                                </div>
-                                                <div className="flex flex-wrap gap-2">
-                                                  {statusEntries.length > 0 ? statusEntries.map(([status, count]) => (
-                                                    <span
-                                                      key={`${user.userId}-${day.date}-${status}`}
-                                                      className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-700 px-2.5 py-1 text-xs font-medium text-slate-700 dark:text-slate-200"
-                                                    >
-                                                      {status}: {Number(count) || 0}
-                                                    </span>
-                                                  )) : (
-                                                    <span className="text-xs text-slate-500 dark:text-slate-400">No status data</span>
-                                                  )}
-                                                </div>
-                                                {targetDateEntries.length > 0 && (
-                                                  <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                                                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                                                      Target Date Breakdown
-                                                    </p>
-                                                    <div className="flex flex-wrap gap-2">
-                                                      {targetDateEntries.map(([targetDate, count]) => (
-                                                        <span
-                                                          key={`${user.userId}-${day.date}-target-${targetDate}`}
-                                                          className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-900/20 px-2.5 py-1 text-xs font-medium text-blue-700 dark:text-blue-300"
-                                                        >
-                                                          {format(new Date(targetDate), 'dd MMM yyyy')}: {Number(count) || 0}
-                                                        </span>
-                                                      ))}
-                                                    </div>
-                                                  </div>
-                                                )}
-                                              </div>
-                                            );
-                                          })}
+                                        <div className="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60">
+                                          <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-xs">
+                                            <thead className="bg-slate-100 dark:bg-slate-800">
+                                              <tr>
+                                                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Allotted Date</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Target Date</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Student Group Assigned</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Assigned</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Interested</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Not Interested</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Wrong Data</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Call Back</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Confirmed</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                                              {assignmentsByDate.length > 0 ? assignmentsByDate.map((day: any) => {
+                                                const targetDateEntries = Object.entries(day.targetDateCounts || {})
+                                                  .sort((a: any, b: any) => String(a[0]).localeCompare(String(b[0])));
+                                                const targetDateText = targetDateEntries.length
+                                                  ? targetDateEntries
+                                                    .map(([targetDate, count]) => `${format(new Date(String(targetDate)), 'dd MMM yyyy')} (${Number(count) || 0})`)
+                                                    .join(', ')
+                                                  : '—';
+                                                return (
+                                                  <tr key={`${user.userId}-${day.date}`}>
+                                                    <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{day.date ? format(new Date(day.date), 'dd MMM yyyy') : 'Unknown'}</td>
+                                                    <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{targetDateText}</td>
+                                                    <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{formatAssignedStudentGroups(day)}</td>
+                                                    <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Assigned')}</td>
+                                                    <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Interested')}</td>
+                                                    <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Not Interested')}</td>
+                                                    <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Wrong Data')}</td>
+                                                    <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Call Back')}</td>
+                                                    <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Confirmed')}</td>
+                                                  </tr>
+                                                );
+                                              }) : (
+                                                <tr>
+                                                  <td colSpan={9} className="px-3 py-3 text-center text-slate-500 dark:text-slate-400">
+                                                    No date-wise assignment history found for the selected filters.
+                                                  </td>
+                                                </tr>
+                                              )}
+                                            </tbody>
+                                          </table>
                                         </div>
                                       </div>
                                     </td>
