@@ -497,6 +497,11 @@ export default function UserDashboard() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold text-slate-900 dark:text-slate-100 text-sm">{lead.name ?? '—'}</p>
+                      {lead.isYesterdayMissedCall && (
+                        <p className="mt-0.5 text-[11px] font-medium text-rose-600 dark:text-rose-400">
+                          Yesterday missed call
+                        </p>
+                      )}
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 dark:text-slate-400">
                         <span>{lead.enquiryNumber ?? '—'}</span>
                         {timeStr && (

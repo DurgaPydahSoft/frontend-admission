@@ -1445,11 +1445,15 @@ export default function ReportsPage() {
                       <table className="min-w-full divide-y divide-[#e2e8f0] dark:divide-[#475569]">
                         <thead>
                           <tr className="bg-[#475569] dark:bg-[#334155]">
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">User</th>
+                            <th className="w-52 px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">User</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Department</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Designation</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Group</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Total Leads</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">
+                            <th
+                              className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white"
+                              title="Unique leads contacted by the user in selected date range. This can include leads that were later reassigned."
+                            >
                               {datePreset === 'today' ? 'Today Calls/Visits Done' :
                                 datePreset === 'yesterday' ? 'Yesterday Calls/Visits Done' :
                                   datePreset === 'last7days' ? 'Last 7 Days Calls/Visits Done' :
@@ -1460,9 +1464,15 @@ export default function ReportsPage() {
                                             datePreset === 'custom' ? 'Custom Range Calls/Visits Done' :
                                               'Calls/Visits Done'}
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Balance</th>
+                            <th
+                              className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white"
+                              title="Pending leads from current portfolio only: Total Leads - Calls on currently assigned leads (minimum 0). Reclaimed shown below is distinct reclaimed leads."
+                            >
+                              Balance
+                            </th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Interested Leads</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Confirmed</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Admitted</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-800/50">
@@ -1472,6 +1482,7 @@ export default function ReportsPage() {
                             const userLabel = user.name || user.userName;
                             const isExpanded = expandedPerformanceUsers.has(user.userId);
                             const assignmentsByDate = Array.isArray(user.assignmentsByDate) ? user.assignmentsByDate : [];
+                            const reclaimedTotal = Number(user.reclaimedUniqueLeads || 0);
                             const canExpand = true;
                             const toggleExpand = () =>
                               setExpandedPerformanceUsers((prev) => {
@@ -1490,8 +1501,8 @@ export default function ReportsPage() {
                                   className={`${baseRowBg} hover:bg-slate-100 dark:hover:bg-slate-700/50 ${canExpand ? 'cursor-pointer' : ''}`}
                                   onClick={canExpand ? toggleExpand : undefined}
                                 >
-                                  <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
-                                    <div className="flex items-center gap-2">
+                                  <td className="w-52 px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
+                                    <div className="flex items-center gap-2 min-w-0">
                                       {canExpand ? (
                                         <button
                                           type="button"
@@ -1507,24 +1518,42 @@ export default function ReportsPage() {
                                       ) : (
                                         <span className="w-4 h-4 inline-block" />
                                       )}
-                                      {userLabel}
+                                      <span className="truncate">{userLabel}</span>
+                                      <span
+                                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                          user.isActive
+                                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+                                            : 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300'
+                                        }`}
+                                      >
+                                        {user.isActive ? 'Active' : 'Inactive'}
+                                      </span>
                                     </div>
                                   </td>
-                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{fu?.department || '—'}</td>
-                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{fu?.group || '—'}</td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{user.department || fu?.department || '—'}</td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{user.designation || fu?.designation || '—'}</td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{user.group || fu?.group || '—'}</td>
                                   <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.totalAssigned || 0}</td>
                                   <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.calls?.total ?? 0}</td>
                                   <td className="whitespace-nowrap px-6 py-4 text-sm">
-                                    <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-800 dark:bg-slate-900/30 dark:text-slate-400">
-                                      {(user.totalAssigned || 0) - (user.calls?.total ?? 0)}
-                                    </span>
+                                    <div className="flex flex-col items-start gap-1">
+                                      <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-800 dark:bg-slate-900/30 dark:text-slate-400">
+                                        {user.pendingBalance ?? Math.max((user.totalAssigned || 0) - (user.callsOnCurrentPortfolio ?? user.calls?.total ?? 0), 0)}
+                                      </span>
+                                      {reclaimedTotal > 0 && (
+                                        <span className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                                          Reclaimed: {reclaimedTotal}
+                                        </span>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.interested ?? 0}</td>
                                   <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.convertedLeads ?? 0}</td>
+                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.admittedLeads ?? user.statusBreakdown?.Admitted ?? 0}</td>
                                 </tr>
                                 {isExpanded && (
                                   <tr className={`${baseRowBg}`}>
-                                    <td colSpan={8} className="px-6 py-4 border-t border-slate-200/70 dark:border-slate-700">
+                                    <td colSpan={10} className="px-6 py-4 border-t border-slate-200/70 dark:border-slate-700">
                                       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/30 p-4">
                                         <div className="mb-3 flex items-center justify-between">
                                           <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">

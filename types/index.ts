@@ -219,6 +219,10 @@ export interface Lead {
   utmContent?: string;
   lastFollowUp?: string;
   nextScheduledCall?: string;
+  /** True when backend auto-moves a missed yesterday call into today's schedule */
+  isYesterdayMissedCall?: boolean;
+  /** Original scheduled date (YYYY-MM-DD) before auto-reschedule */
+  missedScheduledDate?: string;
   academicYear?: number;
   studentGroup?: string;
   needsManualUpdate?: number;

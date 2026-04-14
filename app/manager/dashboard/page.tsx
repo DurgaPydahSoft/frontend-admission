@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { auth } from '@/lib/auth';
 import { managerAPI, leadAPI } from '@/lib/api';
-import { User } from '@/types';
+import { Lead, User } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { CardSkeleton } from '@/components/ui/Skeleton';
@@ -215,10 +215,15 @@ export default function ManagerDashboard() {
           <p className="text-sm text-slate-500 dark:text-slate-400 py-4">No calls scheduled for today.</p>
         ) : (
           <ul className="divide-y divide-slate-200 dark:divide-slate-700 max-h-64 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
-            {scheduledLeads.map((lead: { _id: string; name?: string; enquiryNumber?: string; nextScheduledCall?: string }) => (
+            {scheduledLeads.map((lead: Lead) => (
               <li key={lead._id} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{lead.name ?? '—'}</p>
+                  {lead.isYesterdayMissedCall && (
+                    <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400">
+                      Yesterday missed call
+                    </p>
+                  )}
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     {lead.enquiryNumber && <span>{lead.enquiryNumber}</span>}
                     {lead.nextScheduledCall && (

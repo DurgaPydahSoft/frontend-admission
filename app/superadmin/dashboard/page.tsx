@@ -87,6 +87,7 @@ export default function SuperAdminDashboard() {
   const [dashboardAcademicYear, setDashboardAcademicYear] = useState<number | ''>('');
   const [dashboardStudentGroup, setDashboardStudentGroup] = useState<string>('');
   const [showAllCalls, setShowAllCalls] = useState(false);
+  const [scheduledTab, setScheduledTab] = useState<'today' | 'yesterdayMissed'>('today');
   const [recentLeadsDays, setRecentLeadsDays] = useState<3 | 7 | 10>(3);
 
   useEffect(() => {
@@ -135,7 +136,18 @@ export default function SuperAdminDashboard() {
   });
   const scheduledLeads = Array.isArray(scheduledLeadsData) ? scheduledLeadsData : [];
   const usersDirectory = Array.isArray(usersDirectoryData) ? usersDirectoryData : [];
-  const scheduledByUser = useMemo(() => {
+  const todayScheduledLeads = useMemo(
+    () => scheduledLeads.filter((lead: any) => !lead?.isYesterdayMissedCall),
+    [scheduledLeads]
+  );
+  const yesterdayMissedLeads = useMemo(
+    () => scheduledLeads.filter((lead: any) => !!lead?.isYesterdayMissedCall),
+    [scheduledLeads]
+  );
+
+  const selectedScheduledLeads = scheduledTab === 'today' ? todayScheduledLeads : yesterdayMissedLeads;
+
+  const scheduledByUserSelected = useMemo(() => {
     const userMetaByName = new Map<string, { department: string }>();
     usersDirectory.forEach((u: any) => {
       const name = String(u?.name || '').trim();
@@ -146,11 +158,16 @@ export default function SuperAdminDashboard() {
     });
 
     const counts = new Map<string, { userName: string; department: string; count: number }>();
-    scheduledLeads.forEach((lead: any) => {
-      const assigneeName =
-        (typeof lead?.assignedTo === 'object' && lead?.assignedTo?.name
+    selectedScheduledLeads.forEach((lead: any) => {
+      const assignedCounsellorName =
+        typeof lead?.assignedTo === 'object' && lead?.assignedTo?.name
           ? String(lead.assignedTo.name).trim()
-          : '') || 'Unassigned';
+          : '';
+      const assignedProName =
+        typeof lead?.assignedToPro === 'object' && lead?.assignedToPro?.name
+          ? String(lead.assignedToPro.name).trim()
+          : '';
+      const assigneeName = assignedCounsellorName || assignedProName || 'Unassigned';
       const key = assigneeName.toLowerCase();
       const existing = counts.get(key);
       if (existing) {
@@ -164,7 +181,7 @@ export default function SuperAdminDashboard() {
     });
     return Array.from(counts.values())
       .sort((a, b) => b.count - a.count || a.userName.localeCompare(b.userName));
-  }, [scheduledLeads, usersDirectory]);
+  }, [selectedScheduledLeads, usersDirectory]);
 
   const { data: filterOptionsData } = useQuery({
     queryKey: ['filterOptions'],
@@ -469,15 +486,43 @@ export default function SuperAdminDashboard() {
               View all
             </Link>
           </div>
+          <div className="flex items-center gap-2 px-1">
+            <button
+              onClick={() => {
+                setScheduledTab('today');
+                setShowAllCalls(false);
+              }}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                scheduledTab === 'today'
+                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+              }`}
+            >
+              Today ({todayScheduledLeads.length})
+            </button>
+            <button
+              onClick={() => {
+                setScheduledTab('yesterdayMissed');
+                setShowAllCalls(false);
+              }}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                scheduledTab === 'yesterdayMissed'
+                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+              }`}
+            >
+              Yesterday Missed ({yesterdayMissedLeads.length})
+            </button>
+          </div>
 
-          {scheduledByUser.length === 0 ? (
+          {scheduledByUserSelected.length === 0 ? (
             <div className="h-full rounded-lg border border-dashed border-[#e2e8f0] p-4 flex items-center justify-center text-xs text-[#64748b] dark:border-[#334155] dark:text-[#94a3b8]">
-              No calls scheduled for today.
+              {scheduledTab === 'today' ? 'No calls scheduled for today.' : 'No yesterday missed calls.'}
             </div>
           ) : (
             <>
               <ul className="divide-y divide-slate-100 dark:divide-slate-800 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 overflow-hidden">
-                {scheduledByUser.slice(0, showAllCalls ? undefined : 5).map((row) => (
+                {scheduledByUserSelected.slice(0, showAllCalls ? undefined : 5).map((row) => (
                   <li key={row.userName} className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
@@ -493,12 +538,12 @@ export default function SuperAdminDashboard() {
                   </li>
                 ))}
               </ul>
-              {scheduledByUser.length > 5 && (
+              {scheduledByUserSelected.length > 5 && (
                 <button
                   onClick={() => setShowAllCalls(!showAllCalls)}
                   className="mt-1 w-full rounded-md py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors border border-slate-200 dark:border-slate-800"
                 >
-                  {showAllCalls ? 'Show Less' : `Show ${scheduledByUser.length - 5} More`}
+                  {showAllCalls ? 'Show Less' : `Show ${scheduledByUserSelected.length - 5} More`}
                 </button>
               )}
             </>
