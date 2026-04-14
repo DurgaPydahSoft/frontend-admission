@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 export default function PwaInstallPrompt() {
     const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
     const [isVisible, setIsVisible] = useState(false);
+    const pathname = usePathname();
+    const hideOnLeadForm = pathname === "/lead-form";
 
     useEffect(() => {
         const handleBeforeInstallPrompt = (e: any) => {
@@ -44,7 +47,7 @@ export default function PwaInstallPrompt() {
         setIsVisible(false);
     };
 
-    if (!isVisible) return null;
+    if (!isVisible || hideOnLeadForm) return null;
 
     return (
         <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 shadow-lg flex items-center justify-between gap-4 animate-in slide-in-from-bottom-full duration-300">
