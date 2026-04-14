@@ -405,7 +405,7 @@ export default function ReportsPage() {
   const dailyCallSummary = useMemo(() => {
     const summaryRows = Array.isArray(callReports?.summary) ? callReports.summary : [];
     const ranking = summaryRows
-      .map((u) => ({
+      .map((u: any) => ({
         userId: u.userId || 'unknown',
         userName: u.userName || 'Unknown',
         calls: Number(u.totalCalls || 0),
@@ -413,7 +413,7 @@ export default function ReportsPage() {
         days: Number(u.days || 0),
         avgDuration: Number(u.averageDuration || 0),
       }))
-      .sort((a, b) => b.calls - a.calls || b.duration - a.duration || a.userName.localeCompare(b.userName));
+      .sort((a: any, b: any) => b.calls - a.calls || b.duration - a.duration || a.userName.localeCompare(b.userName));
     return {
       totalCalls: ranking.reduce((s: number, u: any) => s + Number(u.calls || 0), 0),
       totalDuration: ranking.reduce((s: number, u: any) => s + Number(u.duration || 0), 0),
