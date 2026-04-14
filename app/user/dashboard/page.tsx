@@ -485,6 +485,8 @@ export default function UserDashboard() {
                   channelStatusValue != null && String(channelStatusValue).trim() !== ''
                     ? String(channelStatusValue).trim()
                     : '—';
+                const cycleNum = Number(lead.cycleNumber ?? lead.cycle_number ?? 1);
+                const hasReclaimed = Number.isFinite(cycleNum) && cycleNum > 1;
                 return (
                   <button
                     key={lead._id}
@@ -504,6 +506,22 @@ export default function UserDashboard() {
                       )}
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 dark:text-slate-400">
                         <span>{lead.enquiryNumber ?? '—'}</span>
+                        {Number.isFinite(cycleNum) && cycleNum > 0 && (
+                          <>
+                            <span>•</span>
+                            <span className="text-[11px] font-medium text-violet-700 dark:text-violet-300">
+                              Cycle {cycleNum}
+                            </span>
+                          </>
+                        )}
+                        {hasReclaimed && (
+                          <>
+                            <span>•</span>
+                            <span className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                              Reclaimed
+                            </span>
+                          </>
+                        )}
                         {timeStr && (
                           <>
                             <span>•</span>

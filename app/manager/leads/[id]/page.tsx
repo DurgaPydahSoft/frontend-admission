@@ -1081,6 +1081,11 @@ export default function ManagerLeadDetailPage() {
                   <span className={`px-3 py-1.5 text-sm font-medium rounded-full border whitespace-nowrap flex-shrink-0 ${getStatusColor(lead.leadStatus)}`}>
                     {lead.leadStatus || 'New'}
                   </span>
+                  {Number(lead.cycleNumber ?? lead.cycle_number ?? 1) > 0 && (
+                    <span className="px-3 py-1.5 text-sm font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 rounded-full border border-violet-200 dark:border-violet-800 whitespace-nowrap flex-shrink-0">
+                      Cycle {Number(lead.cycleNumber ?? lead.cycle_number ?? 1)}
+                    </span>
+                  )}
                   {lead.source && (
                     <span className="px-3 py-1.5 text-sm font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-full border border-green-200 dark:border-green-800 whitespace-nowrap flex-shrink-0">
                       {lead.source}

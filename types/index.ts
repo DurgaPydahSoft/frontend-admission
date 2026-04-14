@@ -230,7 +230,9 @@ export interface Lead {
   uploadedBy?: User | string;
   uploadBatchId?: string;
   cycle_number?: number;
+  cycleNumber?: number;
   target_date?: string;
+  targetDate?: string;
   createdAt: string;
   updatedAt: string;
 }

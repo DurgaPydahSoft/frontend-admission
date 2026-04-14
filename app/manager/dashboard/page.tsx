@@ -215,7 +215,10 @@ export default function ManagerDashboard() {
           <p className="text-sm text-slate-500 dark:text-slate-400 py-4">No calls scheduled for today.</p>
         ) : (
           <ul className="divide-y divide-slate-200 dark:divide-slate-700 max-h-64 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
-            {scheduledLeads.map((lead: Lead) => (
+            {scheduledLeads.map((lead: Lead) => {
+              const cycleNum = Number(lead.cycleNumber ?? lead.cycle_number ?? 1);
+              const hasReclaimed = Number.isFinite(cycleNum) && cycleNum > 1;
+              return (
               <li key={lead._id} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{lead.name ?? '—'}</p>
@@ -224,10 +227,16 @@ export default function ManagerDashboard() {
                       Yesterday missed call
                     </p>
                   )}
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-2">
                     {lead.enquiryNumber && <span>{lead.enquiryNumber}</span>}
+                    {Number.isFinite(cycleNum) && cycleNum > 0 && (
+                      <span className="text-[11px] font-medium text-violet-700 dark:text-violet-300">Cycle {cycleNum}</span>
+                    )}
+                    {hasReclaimed && (
+                      <span className="text-[11px] font-medium text-amber-700 dark:text-amber-300">Reclaimed</span>
+                    )}
                     {lead.nextScheduledCall && (
-                      <span className="ml-2">
+                      <span>
                         {new Date(lead.nextScheduledCall).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     )}
@@ -237,7 +246,7 @@ export default function ManagerDashboard() {
                   <Button variant="outline" size="sm">Open</Button>
                 </Link>
               </li>
-            ))}
+            )})}
           </ul>
         )}
       </Card>

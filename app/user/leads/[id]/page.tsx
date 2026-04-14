@@ -1468,6 +1468,11 @@ export default function UserLeadDetailPage() {
                           </span>
                         )
                       )}
+                      {Number(lead.cycleNumber ?? lead.cycle_number ?? 1) > 0 && (
+                        <span className="inline-flex shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-500/30 text-white backdrop-blur">
+                          Cycle {Number(lead.cycleNumber ?? lead.cycle_number ?? 1)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
