@@ -161,6 +161,37 @@ export default function LeadFormPage() {
   const isSchoolOrCollegeField = (field: any) =>
     (field.fieldName || '').toLowerCase() === 'school_or_college_name';
 
+  const normalizeFieldOptions = (rawOptions: any): Array<{ value: string; label: string }> => {
+    let parsed = rawOptions;
+    if (typeof parsed === 'string') {
+      const trimmed = parsed.trim();
+      if (!trimmed) return [];
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        parsed = trimmed.split(',').map((x) => x.trim()).filter(Boolean);
+      }
+    }
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .map((option: any) => {
+        if (typeof option === 'string' || typeof option === 'number') {
+          const text = String(option).trim();
+          return text ? { value: text, label: text } : null;
+        }
+        if (option && typeof option === 'object') {
+          const value = String(option.value ?? option.label ?? '').trim();
+          const label = String(option.label ?? option.value ?? '').trim();
+          if (!value && !label) return null;
+          return { value: value || label, label: label || value };
+        }
+        return null;
+      })
+      .filter(Boolean) as Array<{ value: string; label: string }>;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -264,18 +295,6 @@ export default function LeadFormPage() {
       <div className="fixed inset-0 bg-gradient-to-br from-orange-50/40 via-amber-50/20 to-orange-50/30 pointer-events-none" />
 
       <div className="relative z-10">
-        {/* Header */}
-        <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200/50 sticky top-0 z-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex justify-between items-center">
-              <h1 className="text-2xl font-bold text-gray-900">Lead Submission Form</h1>
-              <Link href="/">
-                <Button variant="outline">Home</Button>
-              </Link>
-            </div>
-          </div>
-        </header>
-
         <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {showSuccess ? (
             <Card>
@@ -436,7 +455,7 @@ export default function LeadFormPage() {
 
                         // Other dropdowns (from field definition)
                         if (field.fieldType === 'dropdown') {
-                          const dropdownOptions: Array<{ value: string; label: string }> = field.options || [];
+                          const dropdownOptions = normalizeFieldOptions(field.options);
                           return (
                             <div key={field._id}>
                               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -449,9 +468,9 @@ export default function LeadFormPage() {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                               >
                                 <option value="">Select {field.fieldLabel}</option>
-                                {dropdownOptions.map((option: any) => {
-                                  const optionValue = typeof option === 'string' ? option : option.value;
-                                  const optionLabel = typeof option === 'string' ? option : option.label;
+                                {dropdownOptions.map((option) => {
+                                  const optionValue = option.value;
+                                  const optionLabel = option.label;
                                   return (
                                     <option key={optionValue} value={optionValue}>
                                       {optionLabel}
@@ -467,13 +486,14 @@ export default function LeadFormPage() {
                         }
 
                         if (field.fieldType === 'radio') {
+                          const radioOptions = normalizeFieldOptions(field.options);
                           return (
                             <div key={field._id}>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
                                 {field.fieldLabel} {isFieldRequired && <span className="text-red-500">*</span>}
                               </label>
                               <div className="space-y-2">
-                                {field.options && field.options.length > 0 && field.options.map((option: any) => (
+                                {radioOptions.length > 0 && radioOptions.map((option) => (
                                   <label key={option.value} className="flex items-center gap-2 cursor-pointer group">
                                     <input
                                       type="radio"
