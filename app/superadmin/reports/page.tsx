@@ -144,6 +144,8 @@ export default function ReportsPage() {
   const [performanceGroup, setPerformanceGroup] = useState('');
   const [dailyDepartment, setDailyDepartment] = useState('');
   const [dailyGroup, setDailyGroup] = useState('');
+  const [dailyPage, setDailyPage] = useState(1);
+  const [dailyLimit, setDailyLimit] = useState(50);
 
   useEffect(() => {
     const tabFromUrl = searchParams?.get('tab');
@@ -310,13 +312,15 @@ export default function ReportsPage() {
 
   // Call Reports
   const { data: callReports, isLoading: isLoadingCalls, error: callReportsError } = useQuery({
-    queryKey: ['callReports', filters.startDate, filters.endDate, filters.userId, dailyDepartment, dailyGroup],
+    queryKey: ['callReports', filters.startDate, filters.endDate, filters.userId, dailyDepartment, dailyGroup, dailyPage, dailyLimit],
     queryFn: () => reportAPI.getDailyCallReports({
       startDate: filters.startDate,
       endDate: filters.endDate,
       userId: filters.userId || undefined,
       department: dailyDepartment || undefined,
       group: dailyGroup || undefined,
+      page: dailyPage,
+      limit: dailyLimit,
     }),
     enabled: activeTab === 'calls',
     retry: 2,
@@ -376,8 +380,8 @@ export default function ReportsPage() {
       startDate: filters.startDate,
       endDate: filters.endDate,
       academicYear: filters.academicYear != null ? filters.academicYear : undefined,
-      // Keep assignment details available for Call Reports so expandable rows always have data.
-      includeAssignmentDetails: activeTab === 'calls',
+      // Assignment details are only needed in Performance sub-tab (heavy query).
+      includeAssignmentDetails: activeTab === 'calls' && callSubTab === 'performance',
     }),
     enabled: activeTab === 'calls' || activeTab === 'users',
     retry: 2,
@@ -397,6 +401,45 @@ export default function ReportsPage() {
       return matchesSearch && matchesDepartment && matchesGroup;
     });
   }, [userAnalytics?.users, users, performanceSearch, performanceDepartment, performanceGroup]);
+
+  const dailyCallSummary = useMemo(() => {
+    const summaryRows = Array.isArray(callReports?.summary) ? callReports.summary : [];
+    const ranking = summaryRows
+      .map((u) => ({
+        userId: u.userId || 'unknown',
+        userName: u.userName || 'Unknown',
+        calls: Number(u.totalCalls || 0),
+        duration: Number(u.totalDuration || 0),
+        days: Number(u.days || 0),
+        avgDuration: Number(u.averageDuration || 0),
+      }))
+      .sort((a, b) => b.calls - a.calls || b.duration - a.duration || a.userName.localeCompare(b.userName));
+    return {
+      totalCalls: ranking.reduce((s: number, u: any) => s + Number(u.calls || 0), 0),
+      totalDuration: ranking.reduce((s: number, u: any) => s + Number(u.duration || 0), 0),
+      usersCovered: ranking.length,
+      ranking,
+    };
+  }, [callReports?.summary]);
+
+  const performanceSummary = useMemo(() => {
+    const rows = Array.isArray(filteredPerformanceUsers) ? filteredPerformanceUsers : [];
+    const ranking = [...rows]
+      .sort((a: any, b: any) => (Number(b?.calls?.total || 0) - Number(a?.calls?.total || 0))
+        || (Number(b?.interested || 0) - Number(a?.interested || 0))
+        || String(a?.name || a?.userName || '').localeCompare(String(b?.name || b?.userName || '')));
+    return {
+      usersCovered: rows.length,
+      totalAssigned: rows.reduce((s: number, u: any) => s + Number(u.totalAssigned || 0), 0),
+      totalDone: rows.reduce((s: number, u: any) => s + Number(u?.calls?.total || 0), 0),
+      totalBalance: rows.reduce((s: number, u: any) => s + Number(u.pendingBalance || 0), 0),
+      ranking,
+    };
+  }, [filteredPerformanceUsers]);
+
+  useEffect(() => {
+    setDailyPage(1);
+  }, [filters.startDate, filters.endDate, filters.userId, dailyDepartment, dailyGroup, dailyLimit]);
 
   const getLeadStatusCount = (day: any, status: string) =>
     Number(day?.leadStatusCounts?.[status] || 0);
@@ -1303,6 +1346,20 @@ export default function ReportsPage() {
                           <option key={`daily-group-${g}`} value={g}>{g}</option>
                         ))}
                       </select>
+                      <select
+                        value={String(dailyLimit)}
+                        onChange={(e) => {
+                          const nextLimit = Number(e.target.value) || 50;
+                          setExpandedDailyUsers(new Set());
+                          setDailyLimit(nextLimit);
+                          setDailyPage(1);
+                        }}
+                        className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                      >
+                        <option value="25">25 / page</option>
+                        <option value="50">50 / page</option>
+                        <option value="100">100 / page</option>
+                      </select>
                       {/* Date range label */}
                       {filters.startDate && filters.endDate && (
                         <span className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded px-2 py-1 whitespace-nowrap">
@@ -1571,6 +1628,70 @@ export default function ReportsPage() {
                         </table>
                       </div>
                     </Card>
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Showing page {callReports?.pagination?.page || 1} of {callReports?.pagination?.pages || 1}
+                        {' '}({callReports?.pagination?.total || 0} rows)
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={(callReports?.pagination?.page || 1) <= 1}
+                          onClick={() => {
+                            setExpandedDailyUsers(new Set());
+                            setDailyPage((prev) => Math.max(prev - 1, 1));
+                          }}
+                        >
+                          Previous
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={(callReports?.pagination?.page || 1) >= (callReports?.pagination?.pages || 1)}
+                          onClick={() => {
+                            setExpandedDailyUsers(new Set());
+                            setDailyPage((prev) => prev + 1);
+                          }}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                      <Card className="p-4"><p className="text-xs text-slate-500">Users Covered</p><p className="text-xl font-bold">{dailyCallSummary.usersCovered}</p></Card>
+                      <Card className="p-4"><p className="text-xs text-slate-500">Total Calls</p><p className="text-xl font-bold">{dailyCallSummary.totalCalls}</p></Card>
+                      <Card className="p-4"><p className="text-xs text-slate-500">Total Duration</p><p className="text-xl font-bold">{formatSecondsToMMSS(dailyCallSummary.totalDuration)}</p></Card>
+                      <Card className="p-4"><p className="text-xs text-slate-500">Avg Calls / User</p><p className="text-xl font-bold">{dailyCallSummary.usersCovered > 0 ? (dailyCallSummary.totalCalls / dailyCallSummary.usersCovered).toFixed(1) : '0.0'}</p></Card>
+                    </div>
+                    <Card className="p-4 border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Daily Calls Ranking</h4>
+                        <span className="text-xs text-slate-500">Top to least by Calls/Visits Done</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-xs">
+                          <thead>
+                            <tr className="text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                              <th className="text-left py-2">Rank</th>
+                              <th className="text-left py-2">User</th>
+                              <th className="text-left py-2">Calls/Visits Done</th>
+                              <th className="text-left py-2">Avg Duration</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dailyCallSummary.ranking.map((u: any, idx: number) => (
+                              <tr key={`${u.userId}-${idx}`} className="border-b border-slate-100 dark:border-slate-800">
+                                <td className="py-2">{idx + 1}</td>
+                                <td className="py-2">{u.userName}</td>
+                                <td className="py-2 font-semibold">{u.calls}</td>
+                                <td className="py-2">{formatSecondsToMMSS(u.avgDuration)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </Card>
                   </>
                 ) : (
                   <Card className="p-8 text-center">
@@ -1762,6 +1883,42 @@ export default function ReportsPage() {
                         </tbody>
                       </table>
                     </div>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                      <Card className="p-4"><p className="text-xs text-slate-500">Users Covered</p><p className="text-xl font-bold">{performanceSummary.usersCovered}</p></Card>
+                      <Card className="p-4"><p className="text-xs text-slate-500">Total Leads</p><p className="text-xl font-bold">{performanceSummary.totalAssigned}</p></Card>
+                      <Card className="p-4"><p className="text-xs text-slate-500">Calls/Visits Done</p><p className="text-xl font-bold">{performanceSummary.totalDone}</p></Card>
+                      <Card className="p-4"><p className="text-xs text-slate-500">Total Balance</p><p className="text-xl font-bold">{performanceSummary.totalBalance}</p></Card>
+                    </div>
+                    <Card className="p-4 border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">User Performance Ranking</h4>
+                        <span className="text-xs text-slate-500">Top to least by Calls/Visits Done</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-xs">
+                          <thead>
+                            <tr className="text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                              <th className="text-left py-2">Rank</th>
+                              <th className="text-left py-2">User</th>
+                              <th className="text-left py-2">Calls/Visits Done</th>
+                              <th className="text-left py-2">Interested</th>
+                              <th className="text-left py-2">Balance</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {performanceSummary.ranking.map((u: any, idx: number) => (
+                              <tr key={`${u.userId}-${idx}`} className="border-b border-slate-100 dark:border-slate-800">
+                                <td className="py-2">{idx + 1}</td>
+                                <td className="py-2">{u.name || u.userName}</td>
+                                <td className="py-2 font-semibold">{u.calls?.total ?? 0}</td>
+                                <td className="py-2">{u.interested ?? 0}</td>
+                                <td className="py-2">{u.pendingBalance ?? 0}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </Card>
                   </div>
                 ) : (
                   <Card className="p-8 text-center">

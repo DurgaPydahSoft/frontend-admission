@@ -1083,6 +1083,8 @@ export const reportAPI = {
     division?: string;
     department?: string;
     group?: string;
+    page?: number;
+    limit?: number;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.startDate) queryParams.append('startDate', params.startDate);
@@ -1091,6 +1093,8 @@ export const reportAPI = {
     if (params?.division) queryParams.append('division', params.division);
     if (params?.department) queryParams.append('department', params.department);
     if (params?.group) queryParams.append('group', params.group);
+    if (params?.page) queryParams.append('page', String(params.page));
+    if (params?.limit) queryParams.append('limit', String(params.limit));
     const query = queryParams.toString();
     const response = await api.get(`/reports/calls/daily${query ? `?${query}` : ''}`);
     // Backend returns { success: true, data: { reports: [...], summary: [...] }, message: "..." }
