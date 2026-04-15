@@ -42,6 +42,7 @@ export default function AssignLeadsPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [filters, setFilters] = useState<FilterOptions | null>(null);
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [bulkSelectedRole, setBulkSelectedRole] = useState('');
   const [mandal, setMandal] = useState('');
   const [state, setState] = useState('');
   const [district, setDistrict] = useState('');
@@ -53,9 +54,15 @@ export default function AssignLeadsPage() {
   const [statsDistrict, setStatsDistrict] = useState('');
   const [statsMandal, setStatsMandal] = useState('');
   const [statsCycleNumber, setStatsCycleNumber] = useState<number | ''>('');
+  const [debouncedStatsState, setDebouncedStatsState] = useState('');
+  const [debouncedStatsDistrict, setDebouncedStatsDistrict] = useState('');
+  const [debouncedStatsMandal, setDebouncedStatsMandal] = useState('');
+  const [debouncedStatsAcademicYear, setDebouncedStatsAcademicYear] = useState<number | ''>('');
+  const [debouncedStatsStudentGroup, setDebouncedStatsStudentGroup] = useState('');
+  const [debouncedStatsCycleNumber, setDebouncedStatsCycleNumber] = useState<number | ''>('');
   const [statsLocationDistricts, setStatsLocationDistricts] = useState<LocationOption[]>([]);
   const [statsLocationMandals, setStatsLocationMandals] = useState<LocationOption[]>([]);
-  const [academicYear, setAcademicYear] = useState<number | ''>(2025);
+  const [academicYear, setAcademicYear] = useState<number | ''>(2026);
   const [studentGroup, setStudentGroup] = useState<string>('');
   const [count, setCount] = useState(1000);
   const [targetDate, setTargetDate] = useState<string>('');
@@ -103,7 +110,7 @@ export default function AssignLeadsPage() {
   // Institution-wise (school/college) allocation state
   const [institutionStudentGroup, setInstitutionStudentGroup] = useState<string>('');
   const [institutionName, setInstitutionName] = useState<string>('');
-  const [institutionAcademicYear, setInstitutionAcademicYear] = useState<number | ''>(2025);
+  const [institutionAcademicYear, setInstitutionAcademicYear] = useState<number | ''>(2026);
   const [institutionUserId, setInstitutionUserId] = useState<string>('');
   const [institutionCount, setInstitutionCount] = useState(1000);
   const [schoolsList, setSchoolsList] = useState<{ id: string; name: string }[]>([]);
@@ -178,7 +185,7 @@ export default function AssignLeadsPage() {
     const load = async () => {
       try {
         const [usersResponse, filtersResponse] = await Promise.all([
-          userAPI.getAll(),
+          userAPI.getAssignable(),
           leadAPI.getFilterOptions(),
         ]);
         setUsers(usersResponse.data || usersResponse);
@@ -379,17 +386,30 @@ export default function AssignLeadsPage() {
   }, [statsState, statsDistrict]);
 
   // Location context: "Unassigned by Location" tab uses its own dropdowns; bulk/single/remove use bulk form; institution has no geo on cards
-  const statsQueryState = mode === 'stats' ? statsState : mode === 'institution' ? '' : state;
-  const statsQueryDistrict = mode === 'stats' ? statsDistrict : mode === 'institution' ? '' : district;
-  const statsQueryMandal = mode === 'stats' ? statsMandal : mode === 'institution' ? '' : mandal;
+  useEffect(() => {
+    if (mode !== 'stats') return;
+    const t = setTimeout(() => {
+      setDebouncedStatsState(statsState);
+      setDebouncedStatsDistrict(statsDistrict);
+      setDebouncedStatsMandal(statsMandal);
+      setDebouncedStatsAcademicYear(statsAcademicYear);
+      setDebouncedStatsStudentGroup(statsStudentGroup);
+      setDebouncedStatsCycleNumber(statsCycleNumber);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [mode, statsState, statsDistrict, statsMandal, statsAcademicYear, statsStudentGroup, statsCycleNumber]);
+
+  const statsQueryState = mode === 'stats' ? debouncedStatsState : mode === 'institution' ? '' : state;
+  const statsQueryDistrict = mode === 'stats' ? debouncedStatsDistrict : mode === 'institution' ? '' : district;
+  const statsQueryMandal = mode === 'stats' ? debouncedStatsMandal : mode === 'institution' ? '' : mandal;
 
   // Top stats: bulk tab uses the bulk form filters; other tabs use the header (except institution).
   const statsQueryAcademicYear =
-    mode === 'institution' ? institutionAcademicYear : mode === 'bulk' ? academicYear : statsAcademicYear;
+    mode === 'institution' ? institutionAcademicYear : mode === 'bulk' ? academicYear : debouncedStatsAcademicYear;
   const statsQueryStudentGroup =
-    mode === 'institution' ? institutionStudentGroup : mode === 'bulk' ? studentGroup : statsStudentGroup;
+    mode === 'institution' ? institutionStudentGroup : mode === 'bulk' ? studentGroup : debouncedStatsStudentGroup;
   const statsQueryCycleNumber =
-    mode === 'institution' ? '' : mode === 'bulk' ? cycleNumber : statsCycleNumber;
+    mode === 'institution' ? '' : mode === 'bulk' ? cycleNumber : debouncedStatsCycleNumber;
 
   // Fetch assignment statistics (scoped by academic year, student group, and location)
   const activeUserId = mode === 'institution' ? institutionUserId : selectedUserId;
@@ -413,6 +433,7 @@ export default function AssignLeadsPage() {
         cycleNumber: statsQueryCycleNumber !== '' ? statsQueryCycleNumber : undefined,
         targetRole: targetRole || undefined,
         includeBreakdowns: mode === 'stats',
+        summaryOnly: mode === 'stats',
       });
       // Backend returns { success, data: { totalLeads, assignedCount, ... }, message }
       const payload = response?.data ?? response ?? {};
@@ -428,6 +449,36 @@ export default function AssignLeadsPage() {
   });
 
   const stats = statsData?.data;
+
+  const { data: statsBreakdownsData, isFetching: isBreakdownsFetching } = useQuery<{ data: AssignmentStats }>({
+    queryKey: ['assignmentStatsBreakdowns', statsQueryMandal, statsQueryDistrict, statsQueryState, statsQueryAcademicYear, statsQueryStudentGroup, statsQueryCycleNumber, targetRole],
+    queryFn: async () => {
+      const response = await leadAPI.getAssignmentStats({
+        mandal: statsQueryMandal || undefined,
+        district: statsQueryDistrict || undefined,
+        state: statsQueryState || undefined,
+        academicYear: statsQueryAcademicYear !== '' ? statsQueryAcademicYear : undefined,
+        studentGroup: statsQueryStudentGroup || undefined,
+        cycleNumber: statsQueryCycleNumber !== '' ? statsQueryCycleNumber : undefined,
+        targetRole: targetRole || undefined,
+        includeBreakdowns: true,
+      });
+      const payload = response?.data ?? response ?? {};
+      return { data: payload };
+    },
+    enabled: isReady && !!currentUser && mode === 'stats',
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const statsBreakdowns = statsBreakdownsData?.data;
+  const mergedStats = stats
+    ? {
+      ...stats,
+      stateBreakdown: statsBreakdowns?.stateBreakdown ?? stats.stateBreakdown ?? [],
+      mandalBreakdown: statsBreakdowns?.mandalBreakdown ?? stats.mandalBreakdown ?? [],
+    }
+    : undefined;
 
   const { data: districtGeoStatsRaw } = useQuery({
     queryKey: ['assignmentStatsGeo', 'district', mode, statsQueryState, statsQueryAcademicYear, statsQueryStudentGroup, statsQueryCycleNumber, targetRole],
@@ -718,7 +769,7 @@ export default function AssignLeadsPage() {
         setState('');
         setDistrict('');
         setStudentGroup('');
-        setAcademicYear(2025);
+        setAcademicYear(2026);
         setCycleNumber('');
         setTargetDate('');
         setCount(1000);
@@ -912,6 +963,16 @@ export default function AssignLeadsPage() {
     return { assignableUsers: assignable, usersByRole: byRole };
   }, [users]);
 
+  const bulkRoleOptions = useMemo(
+    () => ['Sub Super Admin', 'Student Counselor', 'Data Entry User', 'PRO'],
+    []
+  );
+
+  const bulkUsersBySelectedRole = useMemo(() => {
+    if (!bulkSelectedRole) return [];
+    return usersByRole[bulkSelectedRole as keyof typeof usersByRole] || [];
+  }, [bulkSelectedRole, usersByRole]);
+
   if (!isReady || !currentUser) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -933,7 +994,77 @@ export default function AssignLeadsPage() {
             Distribute leads to counsellors and sub-admins.
           </p> */}
         </div>
-
+        <div className="md:ml-auto">
+          <div className="rounded-xl border border-[#e2e8f0] bg-white/80 p-1 dark:border-[#334155] dark:bg-slate-900/60">
+            <nav className="flex flex-wrap items-center gap-1" aria-label="Tabs">
+              <button
+                onClick={() => {
+                  setMode('bulk');
+                  setSelectedLeadId('');
+                  setLeadSearch('');
+                  setSearchResults([]);
+                }}
+                className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${mode === 'bulk'
+                  ? 'bg-[#f97316] text-white'
+                  : 'text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#334155] dark:text-[#94a3b8] dark:hover:bg-[#1e293b] dark:hover:text-[#cbd5e1]'
+                  }`}
+              >
+                Bulk Assignment
+              </button>
+              <button
+                onClick={() => {
+                  setMode('single');
+                  setMandal('');
+                  setState('');
+                  setDistrict('');
+                  setCount(1000);
+                }}
+                className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${mode === 'single'
+                  ? 'bg-[#f97316] text-white'
+                  : 'text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#334155] dark:text-[#94a3b8] dark:hover:bg-[#1e293b] dark:hover:text-[#cbd5e1]'
+                  }`}
+              >
+                Single Assignment
+              </button>
+              <button
+                onClick={() => {
+                  setMode('remove');
+                  setSelectedUserId('');
+                  setSelectedLeadId('');
+                  setLeadSearch('');
+                  setSearchResults([]);
+                }}
+                className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${mode === 'remove'
+                  ? 'bg-[#f97316] text-white'
+                  : 'text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#334155] dark:text-[#94a3b8] dark:hover:bg-[#1e293b] dark:hover:text-[#cbd5e1]'
+                  }`}
+              >
+                Remove Assignment
+              </button>
+              <button
+                onClick={() => {
+                  setMode('institution');
+                  setInstitutionName('');
+                }}
+                className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${mode === 'institution'
+                  ? 'bg-[#f97316] text-white'
+                  : 'text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#334155] dark:text-[#94a3b8] dark:hover:bg-[#1e293b] dark:hover:text-[#cbd5e1]'
+                  }`}
+              >
+                School/College wise
+              </button>
+              <button
+                onClick={() => setMode('stats')}
+                className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${mode === 'stats'
+                  ? 'bg-[#f97316] text-white'
+                  : 'text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#334155] dark:text-[#94a3b8] dark:hover:bg-[#1e293b] dark:hover:text-[#cbd5e1]'
+                  }`}
+              >
+                Unassigned by Location
+              </button>
+            </nav>
+          </div>
+        </div>
       </div>
 
       {/* Statistics Cards — Remove tab: only the user selected below + filters in that form (not global header totals) */}
@@ -956,7 +1087,7 @@ export default function AssignLeadsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <Card className="p-4 bg-[#3b82f6] text-[#ffffff] border-none shadow-md dark:bg-[#2563eb]">
+            <Card className="p-3 bg-[#3b82f6] text-[#ffffff] border-none shadow-md dark:bg-[#2563eb]">
               <div className="text-sm font-medium text-[#f1f5f9]">Selected user</div>
               <div className="mt-1 text-lg font-bold leading-tight text-[#ffffff]">{removeTargetUser?.name ?? '—'}</div>
               <div className="mt-1 text-xs text-[#e2e8f0]">{removeTargetUser?.email ?? ''}</div>
@@ -964,9 +1095,9 @@ export default function AssignLeadsPage() {
                 <div className="mt-2 text-xs text-amber-200">User id does not match the loaded list — try refreshing the page.</div>
               ) : null}
             </Card>
-            <Card className="p-4 bg-[#10b981] text-[#ffffff] border-none shadow-md dark:bg-[#059669]">
+            <Card className="p-3 bg-[#10b981] text-[#ffffff] border-none shadow-md dark:bg-[#059669]">
               <div className="text-sm font-medium text-[#f1f5f9]">Assigned (matches tab filters)</div>
-              <div className="mt-1 text-2xl font-bold text-[#ffffff]">
+              <div className="mt-1 text-xl font-bold text-[#ffffff]">
                 {isRemoveUserCountError ? '—' : assignedToUserCount.toLocaleString()}
               </div>
               <div className="mt-1 text-xs text-[#d1fae5]">
@@ -975,7 +1106,7 @@ export default function AssignLeadsPage() {
                   : 'Maximum you can remove in one action (subject to the count you enter).'}
               </div>
             </Card>
-            <Card className="p-4 bg-[#f97316] text-[#ffffff] border-none shadow-md dark:bg-[#ea580c]">
+            <Card className="p-3 bg-[#f97316] text-[#ffffff] border-none shadow-md dark:bg-[#ea580c]">
               <div className="text-sm font-medium text-[#f1f5f9]">Role</div>
               <div className="mt-1 text-xl font-bold text-[#ffffff]">{removeTargetRoleLabel}</div>
               <div className="mt-1 text-xs text-[#ffedd5]">
@@ -993,95 +1124,24 @@ export default function AssignLeadsPage() {
             </Card>
           ))}
         </div>
-      ) : stats ? (
+      ) : mergedStats ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Card className="p-4 bg-[#3b82f6] text-[#ffffff] border-none shadow-md dark:bg-[#2563eb]">
+            <Card className="p-3 bg-[#3b82f6] text-[#ffffff] border-none shadow-md dark:bg-[#2563eb]">
             <div className="text-sm font-medium text-[#f1f5f9]">Total Leads</div>
-            <div className="mt-1 text-2xl font-bold text-[#ffffff]">{stats.totalLeads.toLocaleString()}</div>
+            <div className="mt-1 text-xl font-bold text-[#ffffff]">{mergedStats.totalLeads.toLocaleString()}</div>
           </Card>
-          <Card className="p-4 bg-[#10b981] text-[#ffffff] border-none shadow-md dark:bg-[#059669]">
+          <Card className="p-3 bg-[#10b981] text-[#ffffff] border-none shadow-md dark:bg-[#059669]">
             <div className="text-sm font-medium text-[#f1f5f9]">{targetRole === 'PRO' ? 'Assigned to PROs' : 'Assigned Leads'}</div>
-            <div className="mt-1 text-2xl font-bold text-[#ffffff]">{stats.assignedCount.toLocaleString()}</div>
+            <div className="mt-1 text-xl font-bold text-[#ffffff]">{mergedStats.assignedCount.toLocaleString()}</div>
           </Card>
-          <Card className="p-4 bg-[#f97316] text-[#ffffff] border-none shadow-md dark:bg-[#ea580c]">
+          <Card className="p-3 bg-[#f97316] text-[#ffffff] border-none shadow-md dark:bg-[#ea580c]">
             <div className="text-sm font-medium text-[#f1f5f9]">{targetRole === 'PRO' ? 'Available for Assignment' : 'Unassigned Leads'}</div>
-            <div className="mt-1 text-2xl font-bold text-[#ffffff]">{stats.unassignedCount.toLocaleString()}</div>
+            <div className="mt-1 text-xl font-bold text-[#ffffff]">{mergedStats.unassignedCount.toLocaleString()}</div>
           </Card>
         </div>
       ) : null}
 
-      {/* Mode Tabs */}
       <div>
-        <div className="border-b border-[#e2e8f0] dark:border-[#334155]">
-          <nav className="flex space-x-4 overflow-x-auto" aria-label="Tabs">
-            <button
-              onClick={() => {
-                setMode('bulk');
-                setSelectedLeadId('');
-                setLeadSearch('');
-                setSearchResults([]);
-              }}
-              className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${mode === 'bulk'
-                ? 'border-[#f97316] text-[#ea580c] dark:text-[#fb923c]'
-                : 'border-transparent text-[#64748b] hover:border-[#cbd5e1] hover:text-[#334155] dark:text-[#94a3b8] dark:hover:text-[#cbd5e1]'
-                }`}
-            >
-              Bulk Assignment
-            </button>
-            <button
-              onClick={() => {
-                setMode('single');
-                setMandal('');
-                setState('');
-                setDistrict('');
-                setCount(1000);
-              }}
-              className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${mode === 'single'
-                ? 'border-[#f97316] text-[#ea580c] dark:text-[#fb923c]'
-                : 'border-transparent text-[#64748b] hover:border-[#cbd5e1] hover:text-[#334155] dark:text-[#94a3b8] dark:hover:text-[#cbd5e1]'
-                }`}
-            >
-              Single Assignment
-            </button>
-            <button
-              onClick={() => {
-                setMode('remove');
-                setSelectedUserId('');
-                setSelectedLeadId('');
-                setLeadSearch('');
-                setSearchResults([]);
-              }}
-              className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${mode === 'remove'
-                ? 'border-[#f97316] text-[#ea580c] dark:text-[#fb923c]'
-                : 'border-transparent text-[#64748b] hover:border-[#cbd5e1] hover:text-[#334155] dark:text-[#94a3b8] dark:hover:text-[#cbd5e1]'
-                }`}
-            >
-              Remove Assignment
-            </button>
-            <button
-              onClick={() => {
-                setMode('institution');
-                setInstitutionName('');
-              }}
-              className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${mode === 'institution'
-                ? 'border-[#f97316] text-[#ea580c] dark:text-[#fb923c]'
-                : 'border-transparent text-[#64748b] hover:border-[#cbd5e1] hover:text-[#334155] dark:text-[#94a3b8] dark:hover:text-[#cbd5e1]'
-                }`}
-            >
-              School/College wise
-            </button>
-            <button
-              onClick={() => setMode('stats')}
-              className={`border-b-2 px-4 py-3 text-sm font-medium transition-colors ${mode === 'stats'
-                ? 'border-[#f97316] text-[#ea580c] dark:text-[#fb923c]'
-                : 'border-transparent text-[#64748b] hover:border-[#cbd5e1] hover:text-[#334155] dark:text-[#94a3b8] dark:hover:text-[#cbd5e1]'
-                }`}
-            >
-              Unassigned by Location
-            </button>
-          </nav>
-        </div>
-
         <div className="p-6">
           {mode === 'stats' ? (
             <div className="space-y-6">
@@ -1183,15 +1243,15 @@ export default function AssignLeadsPage() {
                   </select>
                 </div>
               </div>
-              {stats ? (
+              {mergedStats ? (
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                  {stats.stateBreakdown.length > 0 ? (
+                  {mergedStats.stateBreakdown.length > 0 ? (
                     <Card>
                       <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
                         Unassigned Leads by State
                       </h3>
                       <div className="max-h-80 space-y-2 overflow-y-auto">
-                        {stats.stateBreakdown.map((item) => (
+                        {mergedStats.stateBreakdown.map((item) => (
                           <div key={item.state} className="flex items-center justify-between text-sm">
                             <span className="text-gray-700 dark:text-slate-300">{item.state}</span>
                             <span className="font-medium text-slate-900 dark:text-slate-100">{item.count.toLocaleString()}</span>
@@ -1205,13 +1265,13 @@ export default function AssignLeadsPage() {
                       <p className="text-sm text-gray-500 dark:text-slate-400">No unassigned leads for the current filters.</p>
                     </Card>
                   )}
-                  {stats.mandalBreakdown.length > 0 ? (
+                  {mergedStats.mandalBreakdown.length > 0 ? (
                     <Card>
                       <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
                         Unassigned Leads by Mandal
                       </h3>
                       <div className="max-h-80 space-y-2 overflow-y-auto">
-                        {stats.mandalBreakdown.map((item) => (
+                        {mergedStats.mandalBreakdown.map((item) => (
                           <div key={item.mandal} className="flex items-center justify-between text-sm">
                             <span className="text-gray-700 dark:text-slate-300">{item.mandal}</span>
                             <span className="font-medium text-slate-900 dark:text-slate-100">{item.count.toLocaleString()}</span>
@@ -1231,13 +1291,14 @@ export default function AssignLeadsPage() {
                   <p className="text-sm text-gray-500 dark:text-slate-400">Loading stats…</p>
                 </div>
               )}
-              {stats && (
+              {mergedStats && (
                 <p className="text-xs text-gray-500 dark:text-slate-400">
                   Filters applied: Academic year {statsAcademicYear || 'All'}, Student group {statsStudentGroup || 'All'}
                   {statsState ? `, State: ${statsState}` : ''}{statsDistrict ? `, District: ${statsDistrict}` : ''}{statsMandal ? `, Mandal: ${statsMandal}` : ''}.
+                  {isBreakdownsFetching ? ' Updating breakdowns…' : ''}
                 </p>
               )}
-              {stats && (
+              {mergedStats && (
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <Card>
                     <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -1292,12 +1353,12 @@ export default function AssignLeadsPage() {
                       mandal: statsMandal || 'All',
                     }}
                     summary={{
-                      totalLeads: stats?.totalLeads || 0,
-                      assignedCount: stats?.assignedCount || 0,
-                      unassignedCount: stats?.unassignedCount || 0,
+                      totalLeads: mergedStats?.totalLeads || 0,
+                      assignedCount: mergedStats?.assignedCount || 0,
+                      unassignedCount: mergedStats?.unassignedCount || 0,
                     }}
-                    stateBreakdown={(stats?.stateBreakdown || []).map((x) => ({ name: x.state, count: x.count }))}
-                    mandalBreakdown={(stats?.mandalBreakdown || []).map((x) => ({ name: x.mandal, count: x.count }))}
+                    stateBreakdown={(mergedStats?.stateBreakdown || []).map((x) => ({ name: x.state, count: x.count }))}
+                    mandalBreakdown={(mergedStats?.mandalBreakdown || []).map((x) => ({ name: x.mandal, count: x.count }))}
                     districtAssignmentBreakdown={districtAssignmentRows}
                     mandalAssignmentBreakdown={mandalAssignmentRows}
                   />
@@ -1665,58 +1726,49 @@ export default function AssignLeadsPage() {
             </form>
           ) : mode === 'bulk' ? (
             <form onSubmit={handleBulkAssign} className="space-y-6">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
-                  Select User or Sub Admin *
-                </label>
-                <select
-                  className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
-                  value={selectedUserId}
-                  onChange={(event) => setSelectedUserId(event.target.value)}
-                  required
-                >
-                  <option value="">Choose a user or sub-admin…</option>
-                  {usersByRole['Sub Super Admin'].length > 0 && (
-                    <optgroup label="Sub Super Admins">
-                      {usersByRole['Sub Super Admin'].map((user) => (
-                        <option key={user.id || user._id} value={user.id || user._id}>
-                          {user.name} ({user.email}) - Sub Admin
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-
-                  {usersByRole['Student Counselor'].length > 0 && (
-                    <optgroup label="Student Counselors">
-                      {usersByRole['Student Counselor'].map((user) => (
-                        <option key={user.id || user._id} value={user.id || user._id}>
-                          {user.name} ({user.email})
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {usersByRole['Data Entry User'].length > 0 && (
-                    <optgroup label="Data Entry Users">
-                      {usersByRole['Data Entry User'].map((user) => (
-                        <option key={user.id || user._id} value={user.id || user._id}>
-                          {user.name} ({user.email})
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {usersByRole['PRO'].length > 0 && (
-                    <optgroup label="PRO Users">
-                      {usersByRole['PRO'].map((user) => (
-                        <option key={user.id || user._id} value={user.id || user._id}>
-                          {user.name} ({user.email})
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </select>
-                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                  Select a user or sub-admin to assign leads to.
-                </p>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                    Select Role *
+                  </label>
+                  <select
+                    className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100"
+                    value={bulkSelectedRole}
+                    onChange={(event) => {
+                      setBulkSelectedRole(event.target.value);
+                      setSelectedUserId('');
+                    }}
+                    required
+                  >
+                    <option value="">Choose role…</option>
+                    {bulkRoleOptions.map((role) => (
+                      <option key={role} value={role}>
+                        {role}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-200">
+                    Select User *
+                  </label>
+                  <select
+                    className="w-full rounded-lg border border-gray-300 bg-white/80 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={selectedUserId}
+                    onChange={(event) => setSelectedUserId(event.target.value)}
+                    disabled={!bulkSelectedRole}
+                    required
+                  >
+                    <option value="">
+                      {bulkSelectedRole ? 'Choose user…' : 'Select role first…'}
+                    </option>
+                    {bulkUsersBySelectedRole.map((user) => (
+                      <option key={user.id || user._id} value={user.id || user._id}>
+                        {user.name} ({user.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:items-end">
@@ -1889,11 +1941,12 @@ export default function AssignLeadsPage() {
                   variant="outline"
                   onClick={() => {
                     setSelectedUserId('');
+                    setBulkSelectedRole('');
                     setMandal('');
                     setState('');
                     setDistrict('');
                     setStudentGroup('');
-                    setAcademicYear(2025);
+                    setAcademicYear(2026);
                     setCycleNumber('');
                     setTargetDate('');
                     setCount(1000);

@@ -145,6 +145,10 @@ export const userAPI = {
     const response = await api.get('/users');
     return response.data;
   },
+  getAssignable: async () => {
+    const response = await api.get('/users/assignable');
+    return response.data;
+  },
   /** Super Admin only: Get all users' time tracking ON/OFF logs */
   getAllUserLoginLogs: async (params?: {
     page?: number;
@@ -479,6 +483,8 @@ export const leadAPI = {
     geoBreakdown?: 'district' | 'mandal';
     /** Skip heavy state/mandal grouped breakdown queries when false. */
     includeBreakdowns?: boolean;
+    /** Return only summary counts; skip grouped breakdown queries. */
+    summaryOnly?: boolean;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.mandal) queryParams.append('mandal', params.mandal);
@@ -492,6 +498,7 @@ export const leadAPI = {
     if (params?.targetRole) queryParams.append('targetRole', params.targetRole);
     if (params?.geoBreakdown) queryParams.append('geoBreakdown', params.geoBreakdown);
     if (params?.includeBreakdowns === false) queryParams.append('includeBreakdowns', 'false');
+    if (params?.summaryOnly === true) queryParams.append('summaryOnly', 'true');
     const query = queryParams.toString();
     const response = await api.get(`/leads/assign/stats${query ? `?${query}` : ''}`);
     return response.data;
