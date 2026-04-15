@@ -89,6 +89,7 @@ export default function SuperAdminDashboard() {
   const [showAllCalls, setShowAllCalls] = useState(false);
   const [scheduledTab, setScheduledTab] = useState<'today' | 'yesterdayMissed'>('today');
   const [recentLeadsDays, setRecentLeadsDays] = useState<3 | 7 | 10>(3);
+  const [shouldLoadUserPerformance, setShouldLoadUserPerformance] = useState(false);
 
   useEffect(() => {
     const currentUser = auth.getUser();
@@ -105,12 +106,14 @@ export default function SuperAdminDashboard() {
   const {
     data: userAnalyticsData,
     isLoading: isLoadingUserAnalytics,
+    error: userAnalyticsError,
   } = useQuery({
     queryKey: ['user-analytics'],
     queryFn: async () => {
       const response = await leadAPI.getUserAnalytics();
       return response.data || response;
     },
+    enabled: shouldLoadUserPerformance,
     staleTime: 120_000,
   });
 
@@ -391,7 +394,13 @@ export default function SuperAdminDashboard() {
   }, [recentLeadsData]);
 
   const isInitialLoad = !overviewData && isLoadingOverview;
-  if (isLoadingUserAnalytics || isInitialLoad) {
+  useEffect(() => {
+    if (!isInitialLoad) {
+      setShouldLoadUserPerformance(true);
+    }
+  }, [isInitialLoad]);
+
+  if (isInitialLoad) {
     return <SuperAdminDashboardSkeleton />;
   }
 
@@ -811,7 +820,27 @@ export default function SuperAdminDashboard() {
           </Link>
         </div>
         <div className="p-5">
-          {userAnalytics.length > 0 ? (
+          {!shouldLoadUserPerformance || isLoadingUserAnalytics ? (
+            <div className="space-y-3">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Loading user performance analytics in background...
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, idx) => (
+                  <div
+                    key={`user-performance-skeleton-${idx}`}
+                    className="h-40 animate-pulse rounded-xl border border-slate-200 bg-slate-100/70 dark:border-slate-700 dark:bg-slate-800/50"
+                  />
+                ))}
+              </div>
+            </div>
+          ) : userAnalyticsError ? (
+            <div className="py-8 text-center">
+              <p className="text-sm text-rose-600 dark:text-rose-300">
+                Failed to load user performance analytics. Please refresh and try again.
+              </p>
+            </div>
+          ) : userAnalytics.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {userAnalytics.map((user: any) => {
                 const statusEntries = Object.entries(user.statusBreakdown || {}).filter(([_, count]) => (count as number) > 0);
