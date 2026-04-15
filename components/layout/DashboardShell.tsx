@@ -47,6 +47,10 @@ export const HomeIcon = createIcon('M3 11.25l9-8.25 9 8.25V20a1 1 0 0 1-1 1h-5.5
 export const ListIcon = createIcon('M4 6h16M4 12h16M4 18h10');
 export const UploadIcon = createIcon('M12 4v12m0 0 4-4m-4 4-4-4M4 20h16');
 export const PhoneIcon = createIcon('M5 4h3l2 5-2 1a11.05 11.05 0 0 0 7 7l1-2 5 2v3a1 1 0 0 1-1 1A17 17 0 0 1 4 5a1 1 0 0 1 1-1z');
+/** Chat bubble — SMS / communications */
+export const CommunicationsIcon = createIcon(
+  'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z'
+);
 export const AcademicIcon = createIcon('M3 6.75 12 3l9 3.75-9 3.75L3 6.75zm18 6L12 17.5 3 12.75m18 0v4.5M3 12.75v4.5');
 export const TemplateIcon = createIcon('M6 4h8l4 4v12H6zM14 4v4h4');
 export const UserIcon = createIcon('M5.5 20a6.5 6.5 0 0 1 13 0m-6.5-8a4 4 0 1 1 0-8 4 4 0 0 1 0 8z');
@@ -193,6 +197,9 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
   // Pages where we want reduced vertical spacing but keep header visible
   const isReducedSpacingPage = ['/superadmin/users'].includes(pathname);
+
+  /** Full-width shell header hidden; page provides its own title (e.g. tabbed Communications). */
+  const hideMainTopHeader = pathname === '/superadmin/communications/templates';
 
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? window.localStorage.getItem('sidebar-collapsed') : null;
@@ -664,57 +671,76 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
             )}
 
             <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
-              <header
-                className={cn(
-                  'flex-shrink-0 px-4 z-10',
-                  isCompactPage ? 'pt-2 pb-0 lg:hidden' : (isReducedSpacingPage ? 'pt-6 pb-0' : 'pt-6 pb-4'),
-                  'sm:px-6 lg:px-8',
-                  useMobileBottomNav && 'hidden'
-                )}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-5 lg:px-6 transition-all duration-300">
-                  {/* Left Section: Mobile Menu, Back Icon, Header Content */}
-                  <div className="flex items-center gap-3 sm:gap-5 flex-1 min-w-0">
-                    <button
-                      type="button"
-                      className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-xl border border-slate-200/60 bg-white p-2.5 text-slate-500 shadow-sm transition hover:border-[#fed7aa] hover:text-[#ea580c] hover:shadow-md focus:outline-none lg:hidden dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200"
-                      onClick={() => setIsMobileOpen(true)}
-                      aria-label="Toggle navigation menu"
-                    >
-                      <MenuIcon className="h-5 w-5" />
-                    </button>
-
-                    {/* Back Icon - Hide on Dashboard and Leads root pages */}
-                    {!['/superadmin/dashboard', '/superadmin/leads', '/superadmin/reports', '/superadmin/users', '/superadmin/visitors'].includes(pathname) && (
+              {hideMainTopHeader ? (
+                <div
+                  className={cn(
+                    'flex-shrink-0 z-10 flex lg:hidden items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900',
+                    useMobileBottomNav && 'hidden'
+                  )}
+                >
+                  <button
+                    type="button"
+                    className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-xl border border-slate-200/60 bg-white p-2.5 text-slate-500 shadow-sm transition hover:border-[#fed7aa] hover:text-[#ea580c] hover:shadow-md focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200"
+                    onClick={() => setIsMobileOpen(true)}
+                    aria-label="Toggle navigation menu"
+                  >
+                    <MenuIcon className="h-5 w-5" />
+                  </button>
+                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Communications</span>
+                </div>
+              ) : (
+                <header
+                  className={cn(
+                    'flex-shrink-0 px-4 z-10',
+                    isCompactPage ? 'pt-2 pb-0 lg:hidden' : (isReducedSpacingPage ? 'pt-6 pb-0' : 'pt-6 pb-4'),
+                    'sm:px-6 lg:px-8',
+                    useMobileBottomNav && 'hidden'
+                  )}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-5 lg:px-6 transition-all duration-300">
+                    {/* Left Section: Mobile Menu, Back Icon, Header Content */}
+                    <div className="flex items-center gap-3 sm:gap-5 flex-1 min-w-0">
                       <button
                         type="button"
-                        onClick={handleBack}
-                        className="group relative inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-xl border border-slate-200/60 bg-white p-2.5 text-slate-500 shadow-sm transition-all hover:scale-105 hover:border-[#fed7aa] hover:text-[#ea580c] hover:shadow-md focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200 flex-shrink-0"
-                        aria-label="Go back"
-                        title="Back"
+                        className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-xl border border-slate-200/60 bg-white p-2.5 text-slate-500 shadow-sm transition hover:border-[#fed7aa] hover:text-[#ea580c] hover:shadow-md focus:outline-none lg:hidden dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200"
+                        onClick={() => setIsMobileOpen(true)}
+                        aria-label="Toggle navigation menu"
                       >
-                        <BackIcon className="h-5 w-5" />
+                        <MenuIcon className="h-5 w-5" />
                       </button>
-                    )}
 
-                    {/* Header Content (Lead Details, etc.) */}
-                    <div className="flex flex-col gap-1 text-left min-w-0 flex-1 ml-1">
-                      {headerContent ? (
-                        headerContent
-                      ) : (
-                        <>
-                          <h1 className="text-xl font-bold text-[#1e293b] dark:text-white truncate">
-                            {title}
-                          </h1>
-                          {description && (
-                            <p className="text-sm font-medium text-slate-500/90 dark:text-slate-400 truncate">{description}</p>
-                          )}
-                        </>
+                      {/* Back Icon - Hide on Dashboard and Leads root pages */}
+                      {!['/superadmin/dashboard', '/superadmin/leads', '/superadmin/reports', '/superadmin/users', '/superadmin/visitors'].includes(pathname) && (
+                        <button
+                          type="button"
+                          onClick={handleBack}
+                          className="group relative inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-xl border border-slate-200/60 bg-white p-2.5 text-slate-500 shadow-sm transition-all hover:scale-105 hover:border-[#fed7aa] hover:text-[#ea580c] hover:shadow-md focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200 flex-shrink-0"
+                          aria-label="Go back"
+                          title="Back"
+                        >
+                          <BackIcon className="h-5 w-5" />
+                        </button>
                       )}
+
+                      {/* Header Content (Lead Details, etc.) */}
+                      <div className="flex flex-col gap-1 text-left min-w-0 flex-1 ml-1">
+                        {headerContent ? (
+                          headerContent
+                        ) : (
+                          <>
+                            <h1 className="text-xl font-bold text-[#1e293b] dark:text-white truncate">
+                              {title}
+                            </h1>
+                            {description && (
+                              <p className="text-sm font-medium text-slate-500/90 dark:text-slate-400 truncate">{description}</p>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </header>
+                </header>
+              )}
 
               <main
                 className={cn(

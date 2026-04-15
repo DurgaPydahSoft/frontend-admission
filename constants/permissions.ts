@@ -41,8 +41,8 @@ export const PERMISSION_MODULES: PermissionModuleDefinition[] = [
   },
   {
     key: 'communications',
-    label: 'SMS Templates',
-    description: 'Author and maintain outbound communication templates.',
+    label: 'Communications',
+    description: 'Message templates and sending SMS to leads.',
   },
   {
     key: 'reports',

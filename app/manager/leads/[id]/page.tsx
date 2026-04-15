@@ -2306,7 +2306,7 @@ export default function ManagerLeadDetailPage() {
                   </div>
                 ) : filteredTemplates.length === 0 ? (
                   <p className="text-sm text-gray-500">
-                    No active templates available. Add templates from the communications admin page.
+                    No active templates available. Ask an admin to add templates under Communications → Message templates.
                   </p>
                 ) : (
                   <div className="space-y-3">

@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { auth } from '@/lib/auth';
-import { communicationAPI } from '@/lib/api';
-import { MessageTemplate, MessageTemplateVariable } from '@/types';
+import { communicationAPI, leadAPI } from '@/lib/api';
+import { Lead, MessageTemplate, MessageTemplateVariable } from '@/types';
+import { useModulePermission } from '@/components/layout/DashboardShell';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -318,6 +319,360 @@ const TemplatesSkeleton = () => (
   </div>
 );
 
+const MAX_BULK_LEADS = 80;
+
+function buildSmsVariablesForLead(lead: Lead, template: MessageTemplate): { key: string; value: string }[] {
+  const vars = template.variables && template.variables.length > 0 ? template.variables : [];
+  if (vars.length === 0) {
+    const n = template.variableCount || 0;
+    return Array.from({ length: n }).map((_, index) => ({
+      key: `var${index + 1}`,
+      value: index === 0 ? (lead.name || '').trim() : '',
+    }));
+  }
+  return vars.map((variable, index) => {
+    const key = variable.key || `var${index + 1}`;
+    let value = (variable.defaultValue || '').trim();
+    if (index === 0 && lead.name) {
+      value = lead.name.trim();
+    }
+    return { key, value };
+  });
+}
+
+function SendToLeadsTab() {
+  const { canWrite } = useModulePermission('communications');
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const limit = 25;
+  const [selectedById, setSelectedById] = useState<Record<string, Lead>>({});
+  const [templateId, setTemplateId] = useState('');
+  const [sendPrimary, setSendPrimary] = useState(true);
+  const [sendFather, setSendFather] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
+
+  const { data: templatesData, isLoading: loadingTemplates } = useQuery({
+    queryKey: ['activeTemplates', 'communications-broadcast'],
+    queryFn: async () => {
+      const response = await communicationAPI.getActiveTemplates();
+      const payload = (response as { data?: MessageTemplate[] })?.data ?? response;
+      return Array.isArray(payload) ? payload : [];
+    },
+  });
+  const activeTemplates: MessageTemplate[] = Array.isArray(templatesData) ? templatesData : [];
+
+  const selectedTemplate = useMemo(
+    () => activeTemplates.find((t) => t._id === templateId),
+    [activeTemplates, templateId]
+  );
+
+  const { data: leadsPayload, isLoading: loadingLeads } = useQuery({
+    queryKey: ['broadcastLeads', page, limit, debouncedSearch],
+    queryFn: async () => {
+      return await leadAPI.getAll({ page, limit, search: debouncedSearch || undefined });
+    },
+  });
+
+  const leads: Lead[] = leadsPayload?.leads ?? [];
+  const pagination = leadsPayload?.pagination ?? {
+    page: 1,
+    limit,
+    total: 0,
+    pages: 1,
+  };
+
+  const selectedCount = Object.keys(selectedById).length;
+
+  const leadHasRecipient = useCallback(
+    (lead: Lead) =>
+      Boolean(
+        (sendPrimary && lead.phone && String(lead.phone).replace(/\D/g, '').length >= 10) ||
+          (sendFather && lead.fatherPhone && String(lead.fatherPhone).replace(/\D/g, '').length >= 10)
+      ),
+    [sendFather, sendPrimary]
+  );
+
+  const toggleLead = useCallback((lead: Lead) => {
+    if (!leadHasRecipient(lead)) {
+      showToast.error('This lead has no phone for the selected recipient types.');
+      return;
+    }
+    setSelectedById((prev) => {
+      const next = { ...prev };
+      if (next[lead._id]) {
+        delete next[lead._id];
+      } else {
+        if (Object.keys(next).length >= MAX_BULK_LEADS) {
+          showToast.error(`You can select at most ${MAX_BULK_LEADS} leads per batch.`);
+          return prev;
+        }
+        next[lead._id] = lead;
+      }
+      return next;
+    });
+  }, [leadHasRecipient]);
+
+  const selectEligibleOnPage = useCallback(() => {
+    setSelectedById((prev) => {
+      const next = { ...prev };
+      let count = Object.keys(next).length;
+      for (const l of leads) {
+        if (!leadHasRecipient(l)) continue;
+        if (next[l._id]) continue;
+        if (count >= MAX_BULK_LEADS) {
+          showToast.error(`Maximum ${MAX_BULK_LEADS} leads per batch.`);
+          break;
+        }
+        next[l._id] = l;
+        count += 1;
+      }
+      return next;
+    });
+  }, [leadHasRecipient, leads]);
+
+  const clearSelection = useCallback(() => setSelectedById({}), []);
+
+  const sendMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedTemplate) throw new Error('Select a message template.');
+      const list = Object.values(selectedById);
+      if (list.length === 0) throw new Error('Select at least one lead.');
+      let ok = 0;
+      let fail = 0;
+      for (const lead of list) {
+        const numbers: string[] = [];
+        if (sendPrimary && lead.phone) numbers.push(lead.phone);
+        if (sendFather && lead.fatherPhone) numbers.push(lead.fatherPhone);
+        const uniq = [...new Set(numbers.map((n) => String(n).trim()).filter(Boolean))];
+        if (uniq.length === 0) {
+          fail += 1;
+          continue;
+        }
+        try {
+          const variables = buildSmsVariablesForLead(lead, selectedTemplate);
+          await communicationAPI.sendSms(lead._id, {
+            contactNumbers: uniq,
+            templates: [{ templateId: selectedTemplate._id, variables }],
+          });
+          ok += 1;
+        } catch {
+          fail += 1;
+        }
+      }
+      return { ok, fail };
+    },
+    onSuccess: ({ ok, fail }) => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      if (fail === 0) {
+        showToast.success(`SMS sent for ${ok} lead(s).`);
+      } else {
+        showToast.success(`Sent for ${ok} lead(s); ${fail} skipped or failed.`);
+      }
+      clearSelection();
+    },
+    onError: (e: Error) => {
+      showToast.error(e?.message || 'Failed to send');
+    },
+  });
+
+  const canSend =
+    canWrite &&
+    Boolean(templateId) &&
+    selectedCount > 0 &&
+    (sendPrimary || sendFather) &&
+    Boolean(selectedTemplate);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="p-4 space-y-3">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Message template</h2>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Pick the DLT template to send. The first template variable is filled with each lead&apos;s name (same
+            behaviour as on a lead&apos;s SMS panel).
+          </p>
+          {loadingTemplates ? (
+            <Skeleton className="h-10 w-full" />
+          ) : (
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 dark:bg-slate-900/50 dark:border-slate-700 dark:text-slate-100"
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+            >
+              <option value="">Select a template…</option>
+              {activeTemplates.map((t) => (
+                <option key={t._id} value={t._id}>
+                  {t.name} ({(t.language || 'en').toUpperCase()})
+                </option>
+              ))}
+            </select>
+          )}
+        </Card>
+        <Card className="p-4 space-y-3">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Recipients</h2>
+          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              checked={sendPrimary}
+              onChange={(e) => setSendPrimary(e.target.checked)}
+            />
+            Student / primary mobile
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              checked={sendFather}
+              onChange={(e) => setSendFather(e.target.checked)}
+            />
+            Father mobile
+          </label>
+          {!sendPrimary && !sendFather && (
+            <p className="text-sm text-amber-700 dark:text-amber-300">Select at least one recipient type.</p>
+          )}
+        </Card>
+      </div>
+
+      <Card className="p-4 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-end gap-4 justify-between">
+          <div className="flex-1 min-w-0 space-y-1">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Search leads</label>
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Name, phone, enquiry number…"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <Button variant="secondary" size="sm" type="button" onClick={selectEligibleOnPage} disabled={loadingLeads}>
+              Select eligible on page
+            </Button>
+            <Button variant="secondary" size="sm" type="button" onClick={clearSelection} disabled={selectedCount === 0}>
+              Clear selection ({selectedCount})
+            </Button>
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {selectedCount} selected (max {MAX_BULK_LEADS} per batch). Showing page {pagination.page} of{' '}
+          {pagination.pages} — {pagination.total} leads total.
+        </p>
+
+        <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-800 text-sm">
+            <thead className="bg-gray-50 dark:bg-slate-900/60">
+              <tr>
+                <th className="w-10 px-3 py-2 text-left" />
+                <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-400">Lead</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-400">Phone</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-400">District</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-400">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-slate-800 bg-white/60 dark:bg-slate-900/40">
+              {loadingLeads ? (
+                <tr>
+                  <td colSpan={5} className="px-3 py-6">
+                    <TemplatesSkeleton />
+                  </td>
+                </tr>
+              ) : leads.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-3 py-8 text-center text-slate-500">
+                    No leads match this search.
+                  </td>
+                </tr>
+              ) : (
+                leads.map((lead) => {
+                  const eligible = leadHasRecipient(lead);
+                  const checked = Boolean(selectedById[lead._id]);
+                  return (
+                    <tr key={lead._id} className={!eligible ? 'opacity-50' : undefined}>
+                      <td className="px-3 py-2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          checked={checked}
+                          disabled={!eligible}
+                          onChange={() => toggleLead(lead)}
+                          aria-label={`Select ${lead.name}`}
+                        />
+                      </td>
+                      <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">{lead.name}</td>
+                      <td className="px-3 py-2 text-slate-600 dark:text-slate-300 font-mono text-xs">{lead.phone || '—'}</td>
+                      <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{lead.district || '—'}</td>
+                      <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{lead.leadStatus || '—'}</td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {pagination.pages > 1 && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs text-slate-500">
+              Page {pagination.page} of {pagination.pages}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                disabled={page <= 1 || loadingLeads}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                disabled={page >= pagination.pages || loadingLeads}
+                onClick={() => setPage((p) => Math.min(pagination.pages, p + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+          {!canWrite && (
+            <p className="text-sm text-amber-700 dark:text-amber-300">You do not have permission to send SMS.</p>
+          )}
+          <Button
+            variant="primary"
+            type="button"
+            className="sm:ml-auto"
+            disabled={!canSend || sendMutation.isPending}
+            onClick={() => {
+              if (!window.confirm(`Send this template to ${selectedCount} lead(s)?`)) return;
+              sendMutation.mutate();
+            }}
+          >
+            {sendMutation.isPending ? 'Sending…' : `Send SMS to ${selectedCount} lead(s)`}
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+type CommunicationsTab = 'templates' | 'send';
+
 export default function TemplatesPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -328,6 +683,7 @@ export default function TemplatesPage() {
   const [showInactive, setShowInactive] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | undefined>();
+  const [activeTab, setActiveTab] = useState<CommunicationsTab>('templates');
 
   useEffect(() => {
     setIsMounted(true);
@@ -447,10 +803,52 @@ export default function TemplatesPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6">
+      <header className="flex flex-col gap-4 border-b border-slate-200 pb-6 dark:border-slate-800 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">Communications</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Manage SMS templates and send a template to multiple leads.
+          </p>
+        </div>
+        <nav
+          className="flex w-full shrink-0 flex-wrap justify-end gap-1 self-end rounded-xl border border-slate-200 bg-slate-100/80 p-1 dark:border-slate-700 dark:bg-slate-800/80 sm:w-auto"
+          aria-label="Communications sections"
+        >
+          <button
+            type="button"
+            onClick={() => setActiveTab('templates')}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors sm:px-4 ${
+              activeTab === 'templates'
+                ? 'bg-white text-[#c2410c] shadow-sm dark:bg-slate-900 dark:text-[#fb923c]'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            Message templates
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('send')}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors sm:px-4 ${
+              activeTab === 'send'
+                ? 'bg-white text-[#c2410c] shadow-sm dark:bg-slate-900 dark:text-[#fb923c]'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            Send to leads
+          </button>
+        </nav>
+      </header>
+
+      {activeTab === 'send' ? (
+        <SendToLeadsTab />
+      ) : null}
+
+      {activeTab === 'templates' ? (
+        <>
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Message Templates</h1>
-          <p className="text-gray-600">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-50">Message templates</h2>
+          <p className="text-sm text-gray-600 dark:text-slate-400">
             Manage DLT-approved SMS templates for automated communications.
           </p>
         </div>
@@ -617,6 +1015,8 @@ export default function TemplatesPage() {
           isProcessing={createMutation.isPending || updateMutation.isPending}
         />
       )}
+        </>
+      ) : null}
     </div>
   );
 }
