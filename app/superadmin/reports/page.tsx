@@ -374,7 +374,7 @@ export default function ReportsPage() {
   const activityLogsPagination = activityLogsData?.pagination;
 
   // User Analytics summary (light query for quick page load)
-  const { data: userAnalytics, isLoading: isLoadingUserAnalytics, error: userAnalyticsError } = useQuery({
+  const { data: userAnalytics, isLoading: isLoadingUserAnalytics, isFetching: isFetchingUserAnalytics, error: userAnalyticsError } = useQuery({
     queryKey: ['userAnalyticsSummary', filters.startDate, filters.endDate, filters.academicYear, activeTab],
     queryFn: () => leadAPI.getUserAnalytics({
       startDate: filters.startDate,
@@ -386,27 +386,44 @@ export default function ReportsPage() {
     retry: 2,
   });
 
-  // Heavy details for performance drilldown are loaded in background only when needed.
+  const expandedPerformanceUserIds = useMemo(
+    () => Array.from(expandedPerformanceUsers).sort(),
+    [expandedPerformanceUsers]
+  );
+
+  // Load heavy assignment details only for expanded users.
   const {
-    data: performanceAnalytics,
+    data: expandedPerformanceDetailsMap,
     isLoading: isLoadingPerformanceAnalytics,
     error: performanceAnalyticsError,
   } = useQuery({
-    queryKey: ['userAnalyticsPerformance', filters.startDate, filters.endDate, filters.academicYear, activeTab, callSubTab],
-    queryFn: () => leadAPI.getUserAnalytics({
-      startDate: filters.startDate,
-      endDate: filters.endDate,
-      academicYear: filters.academicYear != null ? filters.academicYear : undefined,
-      includeAssignmentDetails: true,
-    }),
-    enabled: activeTab === 'calls' && callSubTab === 'performance',
-    retry: 2,
+    queryKey: ['userAnalyticsPerformanceExpanded', filters.startDate, filters.endDate, filters.academicYear, expandedPerformanceUserIds.join(',')],
+    queryFn: async () => {
+      const map: Record<string, any> = {};
+      for (const userId of expandedPerformanceUserIds) {
+        try {
+          const data = await leadAPI.getUserAnalytics({
+            startDate: filters.startDate,
+            endDate: filters.endDate,
+            academicYear: filters.academicYear != null ? filters.academicYear : undefined,
+            userId,
+            includeAssignmentDetails: true,
+          });
+          const usersArr = Array.isArray(data?.users) ? data.users : [];
+          if (usersArr.length > 0) map[userId] = usersArr[0];
+        } catch {
+          // Keep UI functional even if one user detail request fails.
+        }
+      }
+      return map;
+    },
+    enabled: activeTab === 'calls' && callSubTab === 'performance' && expandedPerformanceUserIds.length > 0,
+    retry: 1,
+    staleTime: 60000,
   });
 
-  const analyticsForPerformance = performanceAnalytics || userAnalytics;
-
   const filteredPerformanceUsers = useMemo(() => {
-    const rawUsers = Array.isArray(analyticsForPerformance?.users) ? analyticsForPerformance.users : [];
+    const rawUsers = Array.isArray(userAnalytics?.users) ? userAnalytics.users : [];
     const searchTerm = performanceSearch.trim().toLowerCase();
     return rawUsers.filter((u: any) => {
       const name = String(u?.name || u?.userName || '').toLowerCase();
@@ -418,7 +435,7 @@ export default function ReportsPage() {
       const matchesGroup = !performanceGroup || group === performanceGroup;
       return matchesSearch && matchesDepartment && matchesGroup;
     });
-  }, [analyticsForPerformance?.users, users, performanceSearch, performanceDepartment, performanceGroup]);
+  }, [userAnalytics?.users, users, performanceSearch, performanceDepartment, performanceGroup]);
 
   const dailyCallSummary = useMemo(() => {
     const summaryRows = Array.isArray(callReports?.summary) ? callReports.summary : [];
@@ -496,7 +513,8 @@ export default function ReportsPage() {
 
     const generatedAt = new Date().toLocaleString();
     const sections = filteredPerformanceUsers.map((user: any) => {
-      const rows = Array.isArray(user.assignmentsByDate) ? user.assignmentsByDate : [];
+      const detailUser = expandedPerformanceDetailsMap?.[user.userId];
+      const rows = Array.isArray(detailUser?.assignmentsByDate) ? detailUser.assignmentsByDate : [];
       const userName = user.name || user.userName || 'Unknown';
       const statusLabel = user.isActive ? 'Active' : 'Inactive';
       const rowHtml = rows.length
@@ -1744,18 +1762,19 @@ export default function ReportsPage() {
 
               {/* User Performance Summary Sub-Tab */}
               {callSubTab === 'performance' && (
-                isLoadingPerformanceAnalytics && filteredPerformanceUsers.length === 0 ? (
-                  <Skeleton className="h-64" />
-                ) : performanceAnalyticsError && filteredPerformanceUsers.length === 0 ? (
-                  <Card className="p-8 text-center">
-                    <p className="text-red-600 dark:text-red-400">Failed to load detailed performance analytics. Please try again.</p>
+                (isLoadingUserAnalytics || isFetchingUserAnalytics) ? (
+                  <Card className="p-10">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="h-8 w-8 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Loading user performance summary...</p>
+                    </div>
                   </Card>
                 ) : filteredPerformanceUsers.length > 0 ? (
                   <div className="space-y-4">
-                    {isLoadingPerformanceAnalytics && (
+                    {performanceAnalyticsError && (
                       <Card className="p-3">
-                        <p className="text-xs text-slate-600 dark:text-slate-300">
-                          Loading detailed assignment analytics in background...
+                        <p className="text-xs text-red-600 dark:text-red-400">
+                          Some expanded user details failed to load. Collapse and expand again to retry.
                         </p>
                       </Card>
                     )}
@@ -1799,7 +1818,8 @@ export default function ReportsPage() {
                             const baseRowBg = rowIdx % 2 === 0 ? 'bg-[#ffffff] dark:bg-[#1e293b]/50' : 'bg-[#f8fafc]/80 dark:bg-[#334155]/30';
                             const userLabel = user.name || user.userName;
                             const isExpanded = expandedPerformanceUsers.has(user.userId);
-                            const assignmentsByDate = Array.isArray(user.assignmentsByDate) ? user.assignmentsByDate : [];
+                            const detailUser = expandedPerformanceDetailsMap?.[user.userId];
+                            const assignmentsByDate = Array.isArray(detailUser?.assignmentsByDate) ? detailUser.assignmentsByDate : [];
                             const reclaimedTotal = Number(user.reclaimedUniqueLeads || 0);
                             const canExpand = true;
                             const toggleExpand = () =>
@@ -1873,6 +1893,12 @@ export default function ReportsPage() {
                                   <tr className={`${baseRowBg}`}>
                                     <td colSpan={10} className="px-6 py-4 border-t border-slate-200/70 dark:border-slate-700">
                                       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/30 p-4">
+                                        {!detailUser ? (
+                                          <div className="py-5 text-center text-xs text-slate-500 dark:text-slate-400">
+                                            Loading date-wise assignment details...
+                                          </div>
+                                        ) : (
+                                          <>
                                         <div className="mb-3 flex items-center justify-between">
                                           <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                                             Date-wise simplified assignment summary
@@ -1930,6 +1956,8 @@ export default function ReportsPage() {
                                             </tbody>
                                           </table>
                                         </div>
+                                          </>
+                                        )}
                                       </div>
                                     </td>
                                   </tr>
