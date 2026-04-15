@@ -17,6 +17,13 @@ import {
   CartesianGrid,
 } from 'recharts';
 
+/** Public site origin for campaign links. Override with NEXT_PUBLIC_APP_ORIGIN when testing (e.g. http://localhost:3000). */
+const CANONICAL_APP_ORIGIN = (process.env.NEXT_PUBLIC_APP_ORIGIN || 'https://admissions.pydah.edu.in').replace(
+  /\/$/,
+  ''
+);
+const DEFAULT_LEAD_FORM_BASE_URL = `${CANONICAL_APP_ORIGIN}/lead-form`;
+
 // Copy Icon
 const CopyIcon = ({ className }: { className?: string }) => (
   <svg
@@ -116,7 +123,7 @@ const UrlClickTimelineChart = ({ clicks }: { clicks: Array<{ clickedAt: string }
 
 export default function UtmBuilderPage() {
   const [formData, setFormData] = useState({
-    baseUrl: typeof window !== 'undefined' ? `${window.location.origin}/lead-form` : '',
+    baseUrl: DEFAULT_LEAD_FORM_BASE_URL,
     utmSource: '',
     utmMedium: '',
     utmCampaign: '',
@@ -436,7 +443,7 @@ export default function UtmBuilderPage() {
                 name="baseUrl"
                 value={formData.baseUrl}
                 onChange={handleChange}
-                placeholder="https://yoursite.com/lead-form"
+                placeholder="https://admissions.pydah.edu.in/lead-form"
                 required
               />
               <p className="text-xs text-gray-500 mt-1">The base URL where your lead form is located</p>
