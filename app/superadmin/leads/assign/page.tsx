@@ -1764,7 +1764,7 @@ export default function AssignLeadsPage() {
                     value={cycleNumber}
                     onChange={(e) => setCycleNumber(e.target.value === '' ? '' : Number(e.target.value))}
                   >
-                    <option value="">Default (Cycle 1)</option>
+                    <option value="">All cycles</option>
                     {[1, 2, 3, 4, 5].map((c) => (
                       <option key={c} value={c}>
                         Cycle {c}
