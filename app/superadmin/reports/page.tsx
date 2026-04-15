@@ -373,22 +373,40 @@ export default function ReportsPage() {
   }>;
   const activityLogsPagination = activityLogsData?.pagination;
 
-  // User Analytics (used for Call reports tab stats + User Analytics tab detail; same date range)
+  // User Analytics summary (light query for quick page load)
   const { data: userAnalytics, isLoading: isLoadingUserAnalytics, error: userAnalyticsError } = useQuery({
-    queryKey: ['userAnalytics', filters.startDate, filters.endDate, filters.academicYear, activeTab, callSubTab],
+    queryKey: ['userAnalyticsSummary', filters.startDate, filters.endDate, filters.academicYear, activeTab],
     queryFn: () => leadAPI.getUserAnalytics({
       startDate: filters.startDate,
       endDate: filters.endDate,
       academicYear: filters.academicYear != null ? filters.academicYear : undefined,
-      // Assignment details are only needed in Performance sub-tab (heavy query).
-      includeAssignmentDetails: activeTab === 'calls' && callSubTab === 'performance',
+      includeAssignmentDetails: false,
     }),
     enabled: activeTab === 'calls' || activeTab === 'users',
     retry: 2,
   });
 
+  // Heavy details for performance drilldown are loaded in background only when needed.
+  const {
+    data: performanceAnalytics,
+    isLoading: isLoadingPerformanceAnalytics,
+    error: performanceAnalyticsError,
+  } = useQuery({
+    queryKey: ['userAnalyticsPerformance', filters.startDate, filters.endDate, filters.academicYear, activeTab, callSubTab],
+    queryFn: () => leadAPI.getUserAnalytics({
+      startDate: filters.startDate,
+      endDate: filters.endDate,
+      academicYear: filters.academicYear != null ? filters.academicYear : undefined,
+      includeAssignmentDetails: true,
+    }),
+    enabled: activeTab === 'calls' && callSubTab === 'performance',
+    retry: 2,
+  });
+
+  const analyticsForPerformance = performanceAnalytics || userAnalytics;
+
   const filteredPerformanceUsers = useMemo(() => {
-    const rawUsers = Array.isArray(userAnalytics?.users) ? userAnalytics.users : [];
+    const rawUsers = Array.isArray(analyticsForPerformance?.users) ? analyticsForPerformance.users : [];
     const searchTerm = performanceSearch.trim().toLowerCase();
     return rawUsers.filter((u: any) => {
       const name = String(u?.name || u?.userName || '').toLowerCase();
@@ -400,7 +418,7 @@ export default function ReportsPage() {
       const matchesGroup = !performanceGroup || group === performanceGroup;
       return matchesSearch && matchesDepartment && matchesGroup;
     });
-  }, [userAnalytics?.users, users, performanceSearch, performanceDepartment, performanceGroup]);
+  }, [analyticsForPerformance?.users, users, performanceSearch, performanceDepartment, performanceGroup]);
 
   const dailyCallSummary = useMemo(() => {
     const summaryRows = Array.isArray(callReports?.summary) ? callReports.summary : [];
@@ -453,6 +471,15 @@ export default function ReportsPage() {
     return entries.map((x) => `${x.group} (${x.count})`).join(', ');
   };
 
+  const formatAssignedMandals = (day: any) => {
+    const entries = Object.entries(day?.mandalCounts || {})
+      .map(([mandal, count]) => ({ mandal: String(mandal), count: Number(count) || 0 }))
+      .filter((x) => x.count > 0)
+      .sort((a, b) => b.count - a.count || a.mandal.localeCompare(b.mandal));
+    if (!entries.length) return '—';
+    return entries.map((x) => `${x.mandal} (${x.count})`).join(', ');
+  };
+
   const handlePrintPerformanceDetails = () => {
     if (isPrintingPerformanceRef.current) return;
     if (!filteredPerformanceUsers.length) {
@@ -484,6 +511,7 @@ export default function ReportsPage() {
                 <td>${day.date ? format(new Date(day.date), 'dd MMM yyyy') : 'Unknown'}</td>
                 <td>${targetDateText}</td>
                 <td>${formatAssignedStudentGroups(day)}</td>
+                <td>${formatAssignedMandals(day)}</td>
                 <td>${getLeadStatusCount(day, 'Assigned')}</td>
                 <td>${getLeadStatusCount(day, 'Interested')}</td>
                 <td>${getLeadStatusCount(day, 'Not Interested')}</td>
@@ -493,7 +521,7 @@ export default function ReportsPage() {
               </tr>
             `;
           }).join('')
-        : `<tr><td colspan="9">No date-wise assignment history found.</td></tr>`;
+        : `<tr><td colspan="10">No date-wise assignment history found.</td></tr>`;
 
       return `
         <section style="margin-bottom:20px; break-inside: avoid;">
@@ -504,6 +532,7 @@ export default function ReportsPage() {
                 <th>Allotted Date</th>
                 <th>Target Date</th>
                 <th>Student Group Assigned</th>
+                <th>Mandal Assigned</th>
                 <th>Assigned</th>
                 <th>Interested</th>
                 <th>Not Interested</th>
@@ -1264,18 +1293,24 @@ export default function ReportsPage() {
       {/* Call Reports Tab */}
       {activeTab === 'calls' && (
         <div className="space-y-6">
-          {isLoadingCalls || isLoadingUserAnalytics ? (
+          {isLoadingCalls ? (
             <ReportDashboardSkeleton />
-          ) : callReportsError || userAnalyticsError ? (
+          ) : callReportsError ? (
             <Card className="p-8 text-center">
               <p className="text-red-600 dark:text-red-400">
-                Failed to load reports. {callReportsError ? 'Call reports error.' : ''} {userAnalyticsError ? 'User analytics error.' : ''} Please try again.
+                Failed to load reports. {callReportsError ? 'Call reports error.' : ''} Please try again.
               </p>
             </Card>
           ) : (
             <>
               {/* Stats Cards – always visible */}
-              {userAnalytics?.users && Array.isArray(userAnalytics.users) && userAnalytics.users.length > 0 && (
+              {isLoadingUserAnalytics ? (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={`calls-stats-skeleton-${i}`} className="h-20 rounded-xl" />
+                  ))}
+                </div>
+              ) : userAnalytics?.users && Array.isArray(userAnalytics.users) && userAnalytics.users.length > 0 && (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                   {[
                     { label: 'Total Users', value: userAnalytics.users.length, style: CALL_REPORT_CARD_STYLES[0] },
@@ -1289,6 +1324,13 @@ export default function ReportsPage() {
                     </div>
                   ))}
                 </div>
+              )}
+              {!isLoadingUserAnalytics && userAnalyticsError && (
+                <Card className="p-3">
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    User performance stats are still loading. Please refresh if this persists.
+                  </p>
+                </Card>
               )}
 
               {/* Inner Sub-Tabs: Daily Call Report | User Performance Summary */}
@@ -1702,8 +1744,21 @@ export default function ReportsPage() {
 
               {/* User Performance Summary Sub-Tab */}
               {callSubTab === 'performance' && (
-                filteredPerformanceUsers.length > 0 ? (
+                isLoadingPerformanceAnalytics && filteredPerformanceUsers.length === 0 ? (
+                  <Skeleton className="h-64" />
+                ) : performanceAnalyticsError && filteredPerformanceUsers.length === 0 ? (
+                  <Card className="p-8 text-center">
+                    <p className="text-red-600 dark:text-red-400">Failed to load detailed performance analytics. Please try again.</p>
+                  </Card>
+                ) : filteredPerformanceUsers.length > 0 ? (
                   <div className="space-y-4">
+                    {isLoadingPerformanceAnalytics && (
+                      <Card className="p-3">
+                        <p className="text-xs text-slate-600 dark:text-slate-300">
+                          Loading detailed assignment analytics in background...
+                        </p>
+                      </Card>
+                    )}
                     <div className="overflow-x-auto rounded-lg border border-[#e2e8f0] dark:border-[#475569]">
                       <table className="min-w-full divide-y divide-[#e2e8f0] dark:divide-[#475569]">
                         <thead>
@@ -1833,6 +1888,7 @@ export default function ReportsPage() {
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Allotted Date</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Target Date</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Student Group Assigned</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Mandal Assigned</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Assigned</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Interested</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Not Interested</th>
@@ -1855,6 +1911,7 @@ export default function ReportsPage() {
                                                     <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{day.date ? format(new Date(day.date), 'dd MMM yyyy') : 'Unknown'}</td>
                                                     <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{targetDateText}</td>
                                                     <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{formatAssignedStudentGroups(day)}</td>
+                                                    <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{formatAssignedMandals(day)}</td>
                                                     <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Assigned')}</td>
                                                     <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Interested')}</td>
                                                     <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Not Interested')}</td>
@@ -1865,7 +1922,7 @@ export default function ReportsPage() {
                                                 );
                                               }) : (
                                                 <tr>
-                                                  <td colSpan={9} className="px-3 py-3 text-center text-slate-500 dark:text-slate-400">
+                                                  <td colSpan={10} className="px-3 py-3 text-center text-slate-500 dark:text-slate-400">
                                                     No date-wise assignment history found for the selected filters.
                                                   </td>
                                                 </tr>
