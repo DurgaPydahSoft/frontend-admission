@@ -480,7 +480,7 @@ export default function AssignLeadsPage() {
     }
     : undefined;
 
-  const { data: districtGeoStatsRaw } = useQuery({
+  const { data: districtGeoStatsRaw, isFetching: isDistrictGeoFetching } = useQuery({
     queryKey: ['assignmentStatsGeo', 'district', mode, statsQueryState, statsQueryAcademicYear, statsQueryStudentGroup, statsQueryCycleNumber, targetRole],
     queryFn: async () => {
       const response = await leadAPI.getAssignmentStats({
@@ -505,7 +505,7 @@ export default function AssignLeadsPage() {
     refetchOnWindowFocus: false,
   });
 
-  const { data: mandalGeoStatsRaw } = useQuery({
+  const { data: mandalGeoStatsRaw, isFetching: isMandalGeoFetching } = useQuery({
     queryKey: ['assignmentStatsGeo', 'mandal', mode, statsQueryState, statsQueryDistrict, statsQueryAcademicYear, statsQueryStudentGroup, statsQueryCycleNumber, targetRole],
     queryFn: async () => {
       const response = await leadAPI.getAssignmentStats({
@@ -1245,7 +1245,21 @@ export default function AssignLeadsPage() {
               </div>
               {mergedStats ? (
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                  {mergedStats.stateBreakdown.length > 0 ? (
+                  {isStatsFetching || isBreakdownsFetching ? (
+                    <Card className="p-6">
+                      <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        Unassigned Leads by State
+                      </h3>
+                      <div className="space-y-2">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                          <div key={`state-loading-${i}`} className="flex items-center justify-between">
+                            <div className="h-4 w-32 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                            <div className="h-4 w-14 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  ) : mergedStats.stateBreakdown.length > 0 ? (
                     <Card>
                       <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
                         Unassigned Leads by State
@@ -1265,7 +1279,21 @@ export default function AssignLeadsPage() {
                       <p className="text-sm text-gray-500 dark:text-slate-400">No unassigned leads for the current filters.</p>
                     </Card>
                   )}
-                  {mergedStats.mandalBreakdown.length > 0 ? (
+                  {isStatsFetching || isBreakdownsFetching ? (
+                    <Card className="p-6">
+                      <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        Unassigned Leads by Mandal
+                      </h3>
+                      <div className="space-y-2">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                          <div key={`mandal-loading-${i}`} className="flex items-center justify-between">
+                            <div className="h-4 w-36 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                            <div className="h-4 w-14 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  ) : mergedStats.mandalBreakdown.length > 0 ? (
                     <Card>
                       <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
                         Unassigned Leads by Mandal
@@ -1305,7 +1333,14 @@ export default function AssignLeadsPage() {
                       District Wise (Assigned vs Unassigned)
                     </h3>
                     <div className="max-h-80 space-y-2 overflow-y-auto">
-                      {(districtAssignmentRows || []).length > 0 ? (
+                      {isDistrictGeoFetching ? (
+                        Array.from({ length: 6 }).map((_, i) => (
+                          <div key={`district-geo-loading-${i}`} className="flex items-center justify-between gap-4 text-sm">
+                            <div className="h-4 w-32 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                            <div className="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                          </div>
+                        ))
+                      ) : (districtAssignmentRows || []).length > 0 ? (
                         districtAssignmentRows.map((row) => (
                           <div key={`dst-${row.label}`} className="flex items-center justify-between gap-4 text-sm">
                             <span className="text-gray-700 dark:text-slate-300">{row.label}</span>
@@ -1324,7 +1359,14 @@ export default function AssignLeadsPage() {
                       Mandal Wise (Assigned vs Unassigned)
                     </h3>
                     <div className="max-h-80 space-y-2 overflow-y-auto">
-                      {(mandalAssignmentRows || []).length > 0 ? (
+                      {isMandalGeoFetching ? (
+                        Array.from({ length: 6 }).map((_, i) => (
+                          <div key={`mandal-geo-loading-${i}`} className="flex items-center justify-between gap-4 text-sm">
+                            <div className="h-4 w-32 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                            <div className="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                          </div>
+                        ))
+                      ) : (mandalAssignmentRows || []).length > 0 ? (
                         mandalAssignmentRows.map((row) => (
                           <div key={`mnd-${row.label}`} className="flex items-center justify-between gap-4 text-sm">
                             <span className="text-gray-700 dark:text-slate-300">{row.label}</span>

@@ -132,7 +132,7 @@ export const SuperAdminDashboardSkeleton: React.FC<{ className?: string }> = ({ 
         </div>
       </div>
 
-      {/* 6 summary cards - Matches new centered layout */}
+      {/* 6 summary cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {[1, 2, 3, 4, 5, 6].map((i) => (
           <div
@@ -140,62 +140,109 @@ export const SuperAdminDashboardSkeleton: React.FC<{ className?: string }> = ({ 
             className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/80 dark:bg-slate-900"
           >
             <div className="h-1 w-full bg-slate-200 dark:bg-slate-700" aria-hidden />
-            <div className="p-3 flex flex-col items-center justify-center gap-1">
+            <div className="mt-2 flex flex-col items-center justify-center gap-1 p-3">
               <Skeleton className="h-3 w-24 rounded" />
-              <Skeleton className="h-7 sm:h-8 w-16 rounded" />
+              <Skeleton className="h-8 w-18 rounded" />
             </div>
           </div>
         ))}
       </div>
 
-      {/* Today's scheduled calls - Matches minimal list layout */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between px-1">
-          <Skeleton className="h-4 w-40 rounded" />
-          <Skeleton className="h-3 w-16 rounded" />
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 overflow-hidden">
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center justify-between gap-3 px-3 py-2">
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-3.5 w-32 rounded" />
-                    <Skeleton className="h-3 w-12 rounded" />
+      {/* Calls + Recent Sources + Lead Funnel */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="flex flex-col gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <Skeleton className="h-4 w-40 rounded" />
+              <Skeleton className="h-3 w-16 rounded" />
+            </div>
+            <div className="flex items-center gap-2 px-1">
+              <Skeleton className="h-6 w-20 rounded-md" />
+              <Skeleton className="h-6 w-28 rounded-md" />
+            </div>
+            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-3.5 w-28 rounded" />
+                        <Skeleton className="h-3 w-10 rounded" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-2.5 w-16 rounded" />
+                        <Skeleton className="h-2.5 w-20 rounded" />
+                      </div>
+                    </div>
+                    <Skeleton className="h-5 w-9 rounded-full" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-2.5 w-20 rounded" />
-                    <Skeleton className="h-2.5 w-24 rounded" />
-                  </div>
-                </div>
-                <Skeleton className="h-6 w-6 rounded-full" />
+                ))}
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Charts row 1: Lead pipeline funnel (2 cols) + Joining Funnel (1 col) */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900 lg:col-span-2">
-          <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800 space-y-1">
-            <Skeleton className="h-4 w-40 rounded" />
-            <Skeleton className="h-3 w-52 rounded" />
-          </div>
-          <div className="h-96 px-4 pb-4 flex items-center justify-center">
-            <Skeleton className="h-80 w-full rounded-lg" />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <Skeleton className="h-4 w-40 rounded" />
+              <Skeleton className="h-3 w-16 rounded" />
+            </div>
+            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+              <div className="flex items-center gap-2 border-b border-slate-100 p-2 dark:border-slate-800">
+                <Skeleton className="h-6 w-16 rounded-md" />
+                <Skeleton className="h-6 w-16 rounded-md" />
+                <Skeleton className="h-6 w-16 rounded-md" />
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex items-center justify-between px-3 py-2">
+                    <Skeleton className="h-3.5 w-32 rounded" />
+                    <Skeleton className="h-5 w-12 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
+
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800 space-y-1">
-            <Skeleton className="h-4 w-44 rounded" />
-            <Skeleton className="h-3 w-40 rounded" />
+          <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+            <Skeleton className="h-4 w-40 rounded" />
           </div>
-          <div className="h-96 px-4 py-4 flex items-center justify-center">
-            <Skeleton className="h-64 w-64 rounded-full mx-auto" />
-          </div>
-          <div className="mx-4 mb-4 rounded-xl border border-slate-100 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-800/40">
-            <Skeleton className="h-3 w-full rounded" />
+          <div className="min-h-72 px-3 py-3 sm:px-4">
+            <div className="grid grid-cols-[minmax(6.5rem,1fr)_minmax(0,2.7fr)_minmax(6.5rem,1fr)] items-start gap-2">
+              <div className="space-y-3">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={`funnel-left-${i}`} className="flex h-14 items-center justify-end pr-1 sm:h-16 sm:pr-2">
+                    <Skeleton className="h-3 w-20 rounded" />
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-3">
+                {[
+                  'w-[92%]',
+                  'w-[76%]',
+                  'w-[62%]',
+                  'w-[50%]',
+                  'w-[38%]',
+                ].map((width, i) => (
+                  <div key={`funnel-mid-${i}`} className="flex h-14 items-center justify-center sm:h-16">
+                    <div className={`h-full ${width} flex items-center justify-center`}>
+                      <Skeleton className="h-full w-full rounded-md" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-3">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={`funnel-right-${i}`} className="flex h-14 items-center justify-start pl-1 sm:h-16 sm:pl-2">
+                    <div className="space-y-1">
+                      <Skeleton className="h-3 w-20 rounded" />
+                      <Skeleton className="h-2.5 w-24 rounded" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -235,30 +282,16 @@ export const SuperAdminDashboardSkeleton: React.FC<{ className?: string }> = ({ 
           <Skeleton className="h-9 w-32 rounded-lg shrink-0" />
         </div>
         <div className="p-5">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) => (
-              <div
-                key={i}
-                className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-700 dark:bg-slate-800/30"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="space-y-1">
-                    <Skeleton className="h-4 w-28 rounded" />
-                    <Skeleton className="h-3 w-40 rounded" />
-                  </div>
-                  <Skeleton className="h-5 w-14 rounded-full" />
-                </div>
-                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 space-y-2">
-                  <div className="flex justify-between">
-                    <Skeleton className="h-3 w-24 rounded" />
-                    <Skeleton className="h-5 w-12 rounded" />
-                  </div>
-                  <Skeleton className="h-3 w-full rounded" />
-                  <Skeleton className="h-3 w-4/5 rounded" />
-                  <Skeleton className="h-3 w-3/4 rounded" />
-                </div>
-              </div>
-            ))}
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-64 rounded" />
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div
+                  key={i}
+                  className="h-40 rounded-xl border border-slate-200 bg-slate-100/70 dark:border-slate-700 dark:bg-slate-800/50"
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -469,7 +502,7 @@ export const UserDashboardSkeleton: React.FC<{ className?: string }> = ({ classN
         {[1, 2, 3, 4].map((i) => (
           <div
             key={i}
-            className="overflow-hidden rounded-xl border-0 bg-slate-100 dark:bg-slate-800 p-3 sm:p-4 min-h-[72px] sm:min-h-[80px]"
+            className="overflow-hidden rounded-xl border-0 bg-slate-100 dark:bg-slate-800 p-3 sm:p-4 min-h-[72px] sm:min-h-20"
           >
             <Skeleton className="h-3 w-16 mb-2 opacity-50" />
             <Skeleton className="h-6 w-12 mb-1" />
