@@ -131,6 +131,7 @@ export default function FormBuilderPage() {
   const { stateNames } = useLocations();
   const [draggedDraftFieldId, setDraggedDraftFieldId] = useState<string | null>(null);
   const [dragOverDraftIndex, setDragOverDraftIndex] = useState<number | null>(null);
+  const [selectedFormDetailsDraft, setSelectedFormDetailsDraft] = useState({ name: '', description: '' });
 
   useEffect(() => {
     setHeaderContent(
@@ -193,6 +194,26 @@ export default function FormBuilderPage() {
     return [...selectedForm.fields].sort((a, b) => a.displayOrder - b.displayOrder);
   }, [selectedForm]);
 
+  useEffect(() => {
+    if (!selectedForm) {
+      setSelectedFormDetailsDraft({ name: '', description: '' });
+      return;
+    }
+    setSelectedFormDetailsDraft({
+      name: selectedForm.name ?? '',
+      description: selectedForm.description ?? '',
+    });
+  }, [selectedFormId, selectedForm?.name, selectedForm?.description]);
+
+  const formDetailsDirty = useMemo(() => {
+    if (!selectedForm) return false;
+    const nameDraft = selectedFormDetailsDraft.name.trim();
+    const descDraft = (selectedFormDetailsDraft.description || '').trim();
+    const nameOrig = (selectedForm.name || '').trim();
+    const descOrig = (selectedForm.description || '').trim();
+    return nameDraft !== nameOrig || descDraft !== descOrig;
+  }, [selectedForm, selectedFormDetailsDraft]);
+
   const createFormMutation = useMutation({
     mutationFn: (data: { name: string; description?: string }) => formBuilderAPI.createForm(data),
     onSuccess: () => {
@@ -219,6 +240,25 @@ export default function FormBuilderPage() {
       showToast.error(error?.response?.data?.message || 'Failed to update form');
     },
   });
+
+  const handleSaveFormDetails = () => {
+    if (!canEditForms || !selectedFormId || !selectedForm) {
+      showToast.error('You do not have permission to edit forms');
+      return;
+    }
+    const name = selectedFormDetailsDraft.name.trim();
+    if (!name) {
+      showToast.error('Form name is required');
+      return;
+    }
+    updateFormMutation.mutate({
+      formId: selectedFormId,
+      data: {
+        name,
+        description: selectedFormDetailsDraft.description.trim(),
+      },
+    });
+  };
 
   const deleteFormMutation = useMutation({
     mutationFn: (formId: string) => formBuilderAPI.deleteForm(formId),
@@ -875,20 +915,69 @@ export default function FormBuilderPage() {
           ) : (
             <div className="space-y-4">
               <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                      {selectedForm?.name}
-                    </h3>
-                    {selectedForm?.description && (
-                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                        {selectedForm.description}
-                      </p>
+                <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1 space-y-3">
+                    {canEditForms ? (
+                      <>
+                        <div>
+                          <label
+                            htmlFor="form-builder-form-name"
+                            className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400"
+                          >
+                            Form name
+                          </label>
+                          <Input
+                            id="form-builder-form-name"
+                            value={selectedFormDetailsDraft.name}
+                            onChange={(e) =>
+                              setSelectedFormDetailsDraft((d) => ({ ...d, name: e.target.value }))
+                            }
+                            placeholder="Form name"
+                          />
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="form-builder-form-description"
+                            className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400"
+                          >
+                            Description <span className="font-normal text-slate-400">(optional)</span>
+                          </label>
+                          <Input
+                            id="form-builder-form-description"
+                            value={selectedFormDetailsDraft.description}
+                            onChange={(e) =>
+                              setSelectedFormDetailsDraft((d) => ({ ...d, description: e.target.value }))
+                            }
+                            placeholder="Short description for this form"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleSaveFormDetails}
+                          disabled={!formDetailsDirty || updateFormMutation.isPending}
+                        >
+                          {updateFormMutation.isPending ? 'Saving…' : 'Save form details'}
+                        </Button>
+                      </>
+                    ) : (
+                      <div>
+                        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                          {selectedForm?.name}
+                        </h3>
+                        {selectedForm?.description && (
+                          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                            {selectedForm.description}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                   <Button
                     variant="primary"
                     size="sm"
+                    className="shrink-0 self-start"
                     onClick={() => {
                       if (!canEditForms) {
                         showToast.error('You do not have permission to create fields');
