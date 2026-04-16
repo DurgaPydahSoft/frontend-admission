@@ -322,7 +322,7 @@ export default function ReportsPage() {
       page: dailyPage,
       limit: dailyLimit,
     }),
-    enabled: activeTab === 'calls',
+    enabled: activeTab === 'calls' && callSubTab === 'daily',
     retry: 2,
   });
 
@@ -1311,9 +1311,9 @@ export default function ReportsPage() {
       {/* Call Reports Tab */}
       {activeTab === 'calls' && (
         <div className="space-y-6">
-          {isLoadingCalls ? (
+          {callSubTab === 'daily' && isLoadingCalls ? (
             <ReportDashboardSkeleton />
-          ) : callReportsError ? (
+          ) : callSubTab === 'daily' && callReportsError ? (
             <Card className="p-8 text-center">
               <p className="text-red-600 dark:text-red-400">
                 Failed to load reports. {callReportsError ? 'Call reports error.' : ''} Please try again.
