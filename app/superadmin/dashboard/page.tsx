@@ -14,8 +14,6 @@ import { showToast } from '@/lib/toast';
 import { useTheme } from '@/app/providers';
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
   LineChart,
   Line,
   RadialBarChart,
@@ -34,14 +32,6 @@ import {
 } from 'recharts';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
-
-const formatShortDate = (isoDate: string) => {
-  try {
-    return new Date(isoDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
-  } catch {
-    return isoDate;
-  }
-};
 
 const formatDateWithToday = (isoDate: string) => {
   try {
@@ -233,26 +223,6 @@ export default function SuperAdminDashboard() {
     [theme],
   );
 
-  const leadsTrend = overviewAnalytics?.daily.leadsCreated ?? [];
-  const admissionsTrend = overviewAnalytics?.daily.admissions ?? [];
-  const admissionsMap = useMemo(() => {
-    const map = new Map<string, number>();
-    admissionsTrend.forEach((entry) => {
-      map.set(entry.date, entry.count);
-    });
-    return map;
-  }, [admissionsTrend]);
-
-  const leadsAdmissionsData = useMemo(() => {
-    return leadsTrend.map((point) => ({
-      date: formatDateWithToday(point.date),
-      dateKey: point.date,
-      isToday: isToday(point.date),
-      leads: point.count,
-      admissions: admissionsMap.get(point.date) ?? 0,
-    }));
-  }, [leadsTrend, admissionsMap]);
-
   const statusChanges = overviewAnalytics?.daily.statusChanges ?? [];
   const statusKeys = useMemo(() => {
     const collector = new Set<string>();
@@ -325,6 +295,66 @@ export default function SuperAdminDashboard() {
     return Object.entries(overviewAnalytics.leadStatusBreakdown)
       .map(([name, value]) => ({ name, value }))
       .filter((item) => item.value > 0);
+  }, [overviewAnalytics]);
+
+  /** Pipeline funnel: one aggregated overview query (same filters as summary cards). */
+  const pipelineFunnelStages = useMemo(() => {
+    const t = overviewAnalytics?.totals;
+    if (!t) return [];
+
+    const total = Number(t.leads) || 0;
+    const assigned = Number(t.assignedLeads ?? 0) || 0;
+    const sc = Number(t.assignedLeadsToCounselor ?? 0) || 0;
+    const pro = Number(t.assignedLeadsToPro ?? 0) || 0;
+    const contact = Number(t.callOrVisitDone ?? 0) || 0;
+    const interested = Number(t.interestedLeads ?? 0) || 0;
+    const confirmed = Number(t.confirmedLeads ?? 0) || 0;
+
+    const baseStages = [
+      {
+        key: 'total',
+        label: 'Overall Leads',
+        value: total,
+        hint: 'All leads matching selected filters',
+        color: '#3b82f6',
+      },
+      {
+        key: 'assigned',
+        label: 'Assigned Leads',
+        value: assigned,
+        hint: `Counsellor ${formatNumber(sc)} | PRO ${formatNumber(pro)}`,
+        color: '#2dd4bf',
+      },
+      {
+        key: 'contact',
+        label: 'Calls / Visits Done',
+        value: contact,
+        hint: 'Statuses progressed beyond initial Assigned',
+        color: '#facc15',
+      },
+      {
+        key: 'interested',
+        label: 'Interested',
+        value: interested,
+        hint: 'Interested + CET Applied',
+        color: '#f97316',
+      },
+      {
+        key: 'confirmed',
+        label: 'Confirmed',
+        value: confirmed,
+        hint: 'Lead status Confirmed',
+        color: '#c084fc',
+      },
+    ];
+
+    const fixedShapeWidths = [100, 82, 66, 52, 40];
+
+    return baseStages.map((stage, index) => ({
+        ...stage,
+        // Keep funnel geometry consistent irrespective of data values.
+        widthPct: fixedShapeWidths[index] ?? 36,
+      }));
   }, [overviewAnalytics]);
 
   const summaryCards = useMemo(() => ([
@@ -466,7 +496,7 @@ export default function SuperAdminDashboard() {
                   <p className={`text-xs font-semibold uppercase tracking-wider whitespace-nowrap ${style.label}`}>
                     {card.label}
                   </p>
-                  <div className="mt-1 flex items-center justify-center min-h-[2.25rem]">
+                  <div className="mt-1 flex min-h-9 items-center justify-center">
                     {isFetchingOverview ? (
                       <span
                         className={`inline-block h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent opacity-70 ${style.value}`}
@@ -485,176 +515,201 @@ export default function SuperAdminDashboard() {
         </div>
       </div>
 
-      {/* Today's scheduled calls & User Role Counts */}
+      {/* Calls + Recent Sources + Lead Funnel */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Today's scheduled calls (user-wise) - Left Column */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-m font-semibold text-[#0f172a] dark:text-[#f1f5f9]">Today&apos;s scheduled calls</h2>
-            <Link href="/superadmin/leads" className="text-xs font-medium text-[#ea580c] hover:text-[#c2410c] dark:text-[#f97316]">
-              View all
-            </Link>
-          </div>
-          <div className="flex items-center gap-2 px-1">
-            <button
-              onClick={() => {
-                setScheduledTab('today');
-                setShowAllCalls(false);
-              }}
-              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
-                scheduledTab === 'today'
-                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-              }`}
-            >
-              Today ({todayScheduledLeads.length})
-            </button>
-            <button
-              onClick={() => {
-                setScheduledTab('yesterdayMissed');
-                setShowAllCalls(false);
-              }}
-              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
-                scheduledTab === 'yesterdayMissed'
-                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-              }`}
-            >
-              Yesterday Missed ({yesterdayMissedLeads.length})
-            </button>
-          </div>
-
-          {scheduledByUserSelected.length === 0 ? (
-            <div className="h-full rounded-lg border border-dashed border-[#e2e8f0] p-4 flex items-center justify-center text-xs text-[#64748b] dark:border-[#334155] dark:text-[#94a3b8]">
-              {scheduledTab === 'today' ? 'No calls scheduled for today.' : 'No yesterday missed calls.'}
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="text-m font-semibold text-[#0f172a] dark:text-[#f1f5f9]">Today&apos;s scheduled calls</h2>
+              <Link href="/superadmin/leads" className="text-xs font-medium text-[#ea580c] hover:text-[#c2410c] dark:text-[#f97316]">
+                View all
+              </Link>
             </div>
-          ) : (
-            <>
-              <ul className="divide-y divide-slate-100 dark:divide-slate-800 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 overflow-hidden">
-                {scheduledByUserSelected.slice(0, showAllCalls ? undefined : 5).map((row) => (
-                  <li key={row.userName} className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
-                        {row.userName}
-                        <span className="ml-2 text-xs font-normal text-[#64748b] dark:text-[#94a3b8]">
-                          {row.department}
-                        </span>
-                      </p>
-                    </div>
-                    <span className="inline-flex items-center rounded-full bg-orange-50 dark:bg-orange-900/20 px-2 py-0.5 text-xs font-semibold text-orange-700 dark:text-orange-300">
-                      {formatNumber(row.count)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {scheduledByUserSelected.length > 5 && (
-                <button
-                  onClick={() => setShowAllCalls(!showAllCalls)}
-                  className="mt-1 w-full rounded-md py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors border border-slate-200 dark:border-slate-800"
-                >
-                  {showAllCalls ? 'Show Less' : `Show ${scheduledByUserSelected.length - 5} More`}
-                </button>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Recent Leads by Source - Right Column */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-m font-semibold text-[#0f172a] dark:text-[#f1f5f9]">Recent Leads by Source</h2>
-            <Link href="/superadmin/leads" className="text-xs font-medium text-[#ea580c] hover:text-[#c2410c] dark:text-[#f97316]">
-              View leads
-            </Link>
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 overflow-hidden">
-            <div className="flex items-center gap-2 p-2 border-b border-slate-100 dark:border-slate-800">
-              {[3, 7, 10].map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setRecentLeadsDays(d as 3 | 7 | 10)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
-                    recentLeadsDays === d
-                      ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  Last {d} days
-                </button>
-              ))}
+            <div className="flex items-center gap-2 px-1">
+              <button
+                onClick={() => {
+                  setScheduledTab('today');
+                  setShowAllCalls(false);
+                }}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                  scheduledTab === 'today'
+                    ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                }`}
+              >
+                Today ({todayScheduledLeads.length})
+              </button>
+              <button
+                onClick={() => {
+                  setScheduledTab('yesterdayMissed');
+                  setShowAllCalls(false);
+                }}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                  scheduledTab === 'yesterdayMissed'
+                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                }`}
+              >
+                Yesterday Missed ({yesterdayMissedLeads.length})
+              </button>
             </div>
-            {recentLeadsSourceCounts.length === 0 ? (
-              <div className="p-4 text-center text-xs text-slate-500 dark:text-slate-400">
-                No recent leads found.
+
+            {scheduledByUserSelected.length === 0 ? (
+              <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-[#e2e8f0] p-4 text-xs text-[#64748b] dark:border-[#334155] dark:text-[#94a3b8]">
+                {scheduledTab === 'today' ? 'No calls scheduled for today.' : 'No yesterday missed calls.'}
               </div>
             ) : (
-              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-                {recentLeadsSourceCounts.slice(0, 8).map((row) => (
-                  <li key={row.source} className="flex items-center justify-between px-3 py-2">
-                    <Link
-                      href={`/superadmin/leads?source=${encodeURIComponent(row.source)}`}
-                      className="text-sm text-slate-700 dark:text-slate-200 truncate hover:text-orange-600 dark:hover:text-orange-300"
-                    >
-                      {row.source}
-                    </Link>
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                      {formatNumber(row.count)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul className="overflow-hidden rounded-lg border border-slate-200 bg-white divide-y divide-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:divide-slate-800">
+                  {scheduledByUserSelected.slice(0, showAllCalls ? undefined : 5).map((row) => (
+                    <li key={row.userName} className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                          {row.userName}
+                          <span className="ml-2 text-xs font-normal text-[#64748b] dark:text-[#94a3b8]">
+                            {row.department}
+                          </span>
+                        </p>
+                      </div>
+                      <span className="inline-flex items-center rounded-full bg-orange-50 dark:bg-orange-900/20 px-2 py-0.5 text-xs font-semibold text-orange-700 dark:text-orange-300">
+                        {formatNumber(row.count)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {scheduledByUserSelected.length > 5 && (
+                  <button
+                    onClick={() => setShowAllCalls(!showAllCalls)}
+                    className="mt-1 w-full rounded-md border border-slate-200 py-1.5 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-100 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800/50"
+                  >
+                    {showAllCalls ? 'Show Less' : `Show ${scheduledByUserSelected.length - 5} More`}
+                  </button>
+                )}
+              </>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* Charts row 1: Leads vs Admissions + Joining Funnel */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm lg:col-span-2">
-          <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Leads vs Admissions</h2>
-            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-              Trailing 14-day trend. Today is highlighted.
-            </p>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="text-m font-semibold text-[#0f172a] dark:text-[#f1f5f9]">Recent Leads by Source</h2>
+              <Link href="/superadmin/leads" className="text-xs font-medium text-[#ea580c] hover:text-[#c2410c] dark:text-[#f97316]">
+                View leads
+              </Link>
+            </div>
+            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+              <div className="flex items-center gap-2 border-b border-slate-100 p-2 dark:border-slate-800">
+                {[3, 7, 10].map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setRecentLeadsDays(d as 3 | 7 | 10)}
+                    className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                      recentLeadsDays === d
+                        ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    Last {d} days
+                  </button>
+                ))}
+              </div>
+              {recentLeadsSourceCounts.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-500 dark:text-slate-400">
+                  No recent leads found.
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {recentLeadsSourceCounts.slice(0, 8).map((row) => (
+                    <li key={row.source} className="flex items-center justify-between px-3 py-2">
+                      <Link
+                        href={`/superadmin/leads?source=${encodeURIComponent(row.source)}`}
+                        className="truncate text-sm text-slate-700 hover:text-orange-600 dark:text-slate-200 dark:hover:text-orange-300"
+                      >
+                        {row.source}
+                      </Link>
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                        {formatNumber(row.count)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
-          <div className="h-72 px-4 pb-4">
-            <ResponsiveContainer>
-              <AreaChart data={leadsAdmissionsData}>
-                <defs>
-                  <linearGradient id="leadsGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="admissionsGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="6 4" stroke={chartGridColor} />
-                <XAxis
-                  dataKey="date"
-                  stroke={chartTextColor}
-                  tick={{ fill: chartTextColor }}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis stroke={chartTextColor} tick={{ fill: chartTextColor }} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  labelFormatter={(label, payload) => {
-                    const data = payload?.[0]?.payload;
-                    return data?.isToday ? `📅 ${label} (Live)` : label;
-                  }}
-                />
-                <Legend />
-                <Area type="monotone" dataKey="leads" stroke="#3b82f6" fill="url(#leadsGradient)" strokeWidth={2.5} />
-                <Area type="monotone" dataKey="admissions" stroke="#22c55e" fill="url(#admissionsGradient)" strokeWidth={2.5} />
-              </AreaChart>
-            </ResponsiveContainer>
+        </div>
+
+        <Card className="overflow-hidden border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Lead pipeline funnel</h2>
+            {/* <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+              Counts from the same snapshot as the stat cards. Use Academic Year and Student Group above to filter.
+            </p> */}
+          </div>
+          <div className="min-h-72 px-3 py-3 sm:px-4">
+            <div className="grid grid-cols-[minmax(6.5rem,1fr)_minmax(0,2.7fr)_minmax(6.5rem,1fr)] items-start gap-2">
+              <div className="space-y-3">
+                {pipelineFunnelStages.map((stage) => (
+                  <div key={`left-${stage.key}`} className="flex h-14 items-center justify-end pr-1 sm:h-16 sm:pr-2">
+                    <p className="text-right text-[11px] font-semibold leading-tight text-slate-700 dark:text-slate-300 sm:text-xs">
+                      {stage.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className={`space-y-3 transition-opacity duration-200 ${isFetchingOverview ? 'opacity-80' : 'opacity-100'}`}>
+                {pipelineFunnelStages.map((stage, index) => {
+                  const taperLimit = 100 - index * 9;
+                  const stageWidth = Math.max(16, Math.min(taperLimit, stage.widthPct));
+                  const bottomInset = Math.min(28, 12 + index * 4);
+                  const topInset = Math.min(20, 3 + index * 2);
+                  return (
+                    <div key={stage.key} className="relative h-14 sm:h-16">
+                      <div
+                        className="mx-auto h-full rounded-md shadow-sm transition-all duration-500"
+                        style={{
+                          width: `${stageWidth}%`,
+                          background: `linear-gradient(180deg, ${stage.color} 0%, ${stage.color}cc 100%)`,
+                          clipPath: `polygon(${topInset}% 0%, ${100 - topInset}% 0%, ${100 - bottomInset}% 100%, ${bottomInset}% 100%)`,
+                        }}
+                        title={isFetchingOverview ? `Updating ${stage.label}...` : `${stage.label}: ${formatNumber(stage.value)}`}
+                      >
+                        <div className="flex h-full items-center justify-center">
+                          {isFetchingOverview ? (
+                            <span
+                              className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-slate-900/70 border-t-transparent"
+                              aria-label={`Updating ${stage.label}`}
+                            />
+                          ) : (
+                            <span className="text-sm font-bold tracking-wide text-slate-900/80 sm:text-base">
+                              {formatNumber(stage.value)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="space-y-3">
+                {pipelineFunnelStages.map((stage) => (
+                  <div key={`right-${stage.key}`} className="flex h-14 items-center justify-start pl-1 sm:h-16 sm:pl-2">
+                    <div className="text-left leading-tight">
+                      <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 sm:text-xs">
+                        {stage.label}
+                      </p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 sm:text-[11px]">{stage.hint}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </Card>
+      </div>
 
+      {/* Charts row 1: Joining Funnel Snapshot */}
+      <div className="grid gap-6 lg:grid-cols-1">
         <Card className="overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
           <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Joining Funnel Snapshot</h2>

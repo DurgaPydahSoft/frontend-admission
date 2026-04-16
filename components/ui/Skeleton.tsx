@@ -175,7 +175,7 @@ export const SuperAdminDashboardSkeleton: React.FC<{ className?: string }> = ({ 
         </div>
       </div>
 
-      {/* Charts row 1: Leads vs Admissions (2 cols) + Joining Funnel (1 col) */}
+      {/* Charts row 1: Lead pipeline funnel (2 cols) + Joining Funnel (1 col) */}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900 lg:col-span-2">
           <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800 space-y-1">

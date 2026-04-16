@@ -499,7 +499,13 @@ export interface OverviewAnalyticsTotals {
   confirmedLeads: number;
   admittedLeads: number;
   assignedLeads?: number;
+  assignedLeadsToCounselor?: number;
+  assignedLeadsToPro?: number;
   unassignedLeads?: number;
+  /** Leads with counselor call_status or PRO visit_status beyond initial "Assigned" */
+  callOrVisitDone?: number;
+  /** lead_status in Interested, CET Applied */
+  interestedLeads?: number;
   joinings: {
     draft: number;
     pendingApproval: number;
@@ -777,6 +783,8 @@ export interface OverviewAnalytics {
       dataEntry: number;
       subAdmins: number;
     };
+    callOrVisitDone?: number;
+    interestedLeads?: number;
   };
   leadStatusBreakdown: Record<string, number>;
   joiningStatusBreakdown: Record<string, number>;
