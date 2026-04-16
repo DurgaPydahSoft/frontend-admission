@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formBuilderAPI } from '@/lib/api';
 import { showToast } from '@/lib/toast';
-import { useDashboardHeader, useModulePermission } from '@/components/layout/DashboardShell';
+import { useModulePermission } from '@/components/layout/DashboardShell';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { useLocations } from '@/lib/useLocations';
@@ -105,7 +105,6 @@ const toSnakeCase = (str: string): string => {
 };
 
 export default function FormBuilderPage() {
-  const { setHeaderContent, clearHeaderContent } = useDashboardHeader();
   const router = useRouter();
   const { hasAccess: canAccessFormBuilder, canWrite: canEditForms } = useModulePermission('formBuilder');
   const [currentUser, setCurrentUser] = useState(auth.getUser());
@@ -132,18 +131,6 @@ export default function FormBuilderPage() {
   const [draggedDraftFieldId, setDraggedDraftFieldId] = useState<string | null>(null);
   const [dragOverDraftIndex, setDragOverDraftIndex] = useState<number | null>(null);
   const [selectedFormDetailsDraft, setSelectedFormDetailsDraft] = useState({ name: '', description: '' });
-
-  useEffect(() => {
-    setHeaderContent(
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Lead Form Builder</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Create and manage dynamic lead forms. Forms can be used in UTM Builder and lead capture.
-        </p>
-      </div>
-    );
-    return () => clearHeaderContent();
-  }, [setHeaderContent, clearHeaderContent]);
 
   useEffect(() => {
     setCurrentUser(auth.getUser());
@@ -813,9 +800,6 @@ export default function FormBuilderPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={() => refetchForms()} disabled={isLoadingForms}>
-            Refresh
-          </Button>
           <Button
             variant="primary"
             onClick={() => {
@@ -953,7 +937,7 @@ export default function FormBuilderPage() {
                         </div>
                         <Button
                           type="button"
-                          variant="secondary"
+                          variant="primary"
                           size="sm"
                           onClick={handleSaveFormDetails}
                           disabled={!formDetailsDirty || updateFormMutation.isPending}

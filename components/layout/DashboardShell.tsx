@@ -198,8 +198,16 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   // Pages where we want reduced vertical spacing but keep header visible
   const isReducedSpacingPage = ['/superadmin/users'].includes(pathname);
 
-  /** Full-width shell header hidden; page provides its own title (e.g. tabbed Communications). */
-  const hideMainTopHeader = pathname === '/superadmin/communications/templates';
+  /** Full-width shell header hidden; page provides its own title (e.g. tabbed Communications, Form Builder). */
+  const hideMainTopHeader =
+    pathname === '/superadmin/communications/templates' || pathname === '/superadmin/form-builder';
+
+  const minimalMobileHeaderTitle =
+    pathname === '/superadmin/form-builder'
+      ? 'Lead Form Builder'
+      : pathname === '/superadmin/communications/templates'
+        ? 'Communications'
+        : 'Menu';
 
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? window.localStorage.getItem('sidebar-collapsed') : null;
@@ -686,7 +694,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   >
                     <MenuIcon className="h-5 w-5" />
                   </button>
-                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Communications</span>
+                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{minimalMobileHeaderTitle}</span>
                 </div>
               ) : (
                 <header
