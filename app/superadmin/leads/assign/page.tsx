@@ -1882,7 +1882,8 @@ export default function AssignLeadsPage() {
                 {targetRole === 'PRO'
                   ? 'Available leads for the selected academic year will be assigned. Summary cards above use these filters on the Bulk tab.'
                   : 'Only unassigned leads for the selected academic year will be assigned. Summary cards above use these filters on the Bulk tab.'}{' '}
-                &quot;Not Interested&quot; reclaim uses Target date when set.
+                &quot;Not Interested&quot; reclaim uses Target date when set. Reclaim behavior by status at target date:
+                &nbsp;&quot;Assigned&quot; keeps the same cycle, while &quot;Not Interested&quot; and &quot;Wrong Data&quot; move to the next cycle.
               </p>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
