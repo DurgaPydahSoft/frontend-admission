@@ -156,6 +156,7 @@ export default function UserDashboard() {
   const {
     data: analyticsData,
     isLoading: isLoadingAnalytics,
+    isFetching: isFetchingAnalytics,
   } = useQuery({
     queryKey: ['user-analytics-summary', user?._id, dashboardAcademicYear, dashboardStudentGroup],
     queryFn: async () => {
@@ -167,7 +168,9 @@ export default function UserDashboard() {
       return response.data || response;
     },
     enabled: !!user?._id,
-    staleTime: 60_000,
+    staleTime: 20_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,
   });
 
@@ -179,7 +182,9 @@ export default function UserDashboard() {
       return res?.leads ?? [];
     },
     enabled: !!user?._id,
-    staleTime: 60_000,
+    staleTime: 15_000,
+    refetchInterval: 20_000,
+    refetchOnWindowFocus: true,
   });
   const scheduledLeads = useMemo(() => {
     const list = Array.isArray(scheduledLeadsData) ? scheduledLeadsData : [];
@@ -429,13 +434,17 @@ export default function UserDashboard() {
         {summaryCards.map((card, index) => (
           <div
             key={card.label}
-            className={`overflow-hidden rounded-xl border-0 bg-gradient-to-br ${STATS_CARD_STYLES[index % STATS_CARD_STYLES.length]} p-3 sm:p-4 shadow-md flex flex-col justify-center min-h-[72px] sm:min-h-[80px]`}
+            className={`overflow-hidden rounded-xl border-0 bg-linear-to-br ${STATS_CARD_STYLES[index % STATS_CARD_STYLES.length]} p-3 sm:p-4 shadow-md flex flex-col justify-center min-h-[72px] sm:min-h-20`}
           >
             <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-white/85">
               {card.label}
             </p>
             <p className="mt-0.5 sm:mt-1 text-lg sm:text-xl font-bold text-white drop-shadow-sm">
-              {formatNumber(card.value)}
+              {isFetchingAnalytics ? (
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/80 border-t-transparent" />
+              ) : (
+                formatNumber(card.value)
+              )}
             </p>
             <p className="mt-0.5 text-[10px] sm:text-xs text-white/75">{card.helper}</p>
           </div>
@@ -447,7 +456,7 @@ export default function UserDashboard() {
       {true && (
         <div className="w-full space-y-3 pt-2">
           <div className="flex items-center gap-3 px-1">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-100 to-amber-100 text-orange-600 dark:from-orange-900/40 dark:to-amber-900/30 dark:text-orange-400">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-orange-100 to-amber-100 text-orange-600 dark:from-orange-900/40 dark:to-amber-900/30 dark:text-orange-400">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
