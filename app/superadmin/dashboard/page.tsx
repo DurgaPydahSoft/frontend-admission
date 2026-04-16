@@ -16,8 +16,6 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
-  RadialBarChart,
-  RadialBar,
   BarChart,
   Bar,
   PieChart,
@@ -28,7 +26,6 @@ import {
   CartesianGrid,
   Legend,
   Cell,
-  PolarAngleAxis,
 } from 'recharts';
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
@@ -259,36 +256,6 @@ export default function SuperAdminDashboard() {
       return row;
     });
   }, [statusChanges, statusKeys]);
-
-  const joiningProgress = overviewAnalytics?.daily.joiningProgress ?? [];
-  const joiningProgressData = useMemo(() => {
-    return joiningProgress.map((entry) => ({
-      date: formatDateWithToday(entry.date),
-      dateKey: entry.date,
-      isToday: isToday(entry.date),
-      draft: entry.draft,
-      pending: entry.pending_approval,
-      approved: entry.approved,
-    }));
-  }, [joiningProgress]);
-
-  const radialJoiningData = [
-    {
-      name: 'Draft',
-      value: overviewAnalytics?.totals.joinings.draft ?? 0,
-      fill: '#60a5fa',
-    },
-    {
-      name: 'Pending',
-      value: overviewAnalytics?.totals.joinings.pendingApproval ?? 0,
-      fill: '#fbbf24',
-    },
-    {
-      name: 'Approved',
-      value: overviewAnalytics?.totals.joinings.approved ?? 0,
-      fill: '#34d399',
-    },
-  ];
 
   const leadStatusData = useMemo(() => {
     if (!overviewAnalytics?.leadStatusBreakdown) return [];
@@ -704,40 +671,6 @@ export default function SuperAdminDashboard() {
                 ))}
               </div>
             </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Charts row 1: Joining Funnel Snapshot */}
-      <div className="grid gap-6 lg:grid-cols-1">
-        <Card className="overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Joining Funnel Snapshot</h2>
-            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-              Status breakdown of all joining forms
-            </p>
-          </div>
-          <div className="h-72 px-4 py-4">
-            <ResponsiveContainer>
-              <RadialBarChart
-                cx="50%"
-                cy="50%"
-                innerRadius="20%"
-                outerRadius="90%"
-                barSize={22}
-                data={radialJoiningData}
-              >
-                <PolarAngleAxis type="number" domain={[0, Math.max(...radialJoiningData.map((item) => item.value || 1))]} tick={false} />
-                <RadialBar background dataKey="value" cornerRadius={16} />
-                <Legend iconType="circle" verticalAlign="bottom" height={80} />
-                {radialJoiningData.map((entry) => (
-                  <Cell key={entry.name} fill={entry.fill} />
-                ))}
-              </RadialBarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mx-4 mb-4 rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-300">
-            Approved joining forms become Admissions and get sequential admission numbers.
           </div>
         </Card>
       </div>
