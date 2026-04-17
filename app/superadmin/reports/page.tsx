@@ -477,7 +477,7 @@ export default function ReportsPage() {
   }, [filters.startDate, filters.endDate, filters.userId, dailyDepartment, dailyGroup, dailyLimit]);
 
   const getLeadStatusCount = (day: any, status: string) =>
-    Number(day?.leadStatusCounts?.[status] || 0);
+    Number((day?.statusBeforeReclaimCounts?.[status] ?? day?.leadStatusCounts?.[status]) || 0);
 
   const formatAssignedStudentGroups = (day: any) => {
     const entries = Object.entries(day?.studentGroupCounts || {})
@@ -536,10 +536,11 @@ export default function ReportsPage() {
                 <td>${getLeadStatusCount(day, 'Wrong Data')}</td>
                 <td>${getLeadStatusCount(day, 'Call Back')}</td>
                 <td>${getLeadStatusCount(day, 'Confirmed')}</td>
+                <td>${Number(day?.reclaimedCount || 0)}</td>
               </tr>
             `;
           }).join('')
-        : `<tr><td colspan="10">No date-wise assignment history found.</td></tr>`;
+        : `<tr><td colspan="11">No date-wise assignment history found.</td></tr>`;
 
       return `
         <section style="margin-bottom:20px; break-inside: avoid;">
@@ -557,6 +558,7 @@ export default function ReportsPage() {
                 <th>Wrong Data</th>
                 <th>Call Back</th>
                 <th>Confirmed</th>
+                <th>Reclaimed</th>
               </tr>
             </thead>
             <tbody>${rowHtml}</tbody>
@@ -1921,6 +1923,7 @@ export default function ReportsPage() {
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Wrong Data</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Call Back</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Confirmed</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Reclaimed</th>
                                               </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
@@ -1944,11 +1947,12 @@ export default function ReportsPage() {
                                                     <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Wrong Data')}</td>
                                                     <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Call Back')}</td>
                                                     <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Confirmed')}</td>
+                                                    <td className="px-3 py-2 text-amber-700 dark:text-amber-300">{Number(day?.reclaimedCount || 0)}</td>
                                                   </tr>
                                                 );
                                               }) : (
                                                 <tr>
-                                                  <td colSpan={10} className="px-3 py-3 text-center text-slate-500 dark:text-slate-400">
+                                                  <td colSpan={11} className="px-3 py-3 text-center text-slate-500 dark:text-slate-400">
                                                     No date-wise assignment history found for the selected filters.
                                                   </td>
                                                 </tr>
