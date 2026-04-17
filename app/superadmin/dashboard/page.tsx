@@ -137,7 +137,7 @@ export default function SuperAdminDashboard() {
     [scheduledLeads]
   );
 
-  const selectedScheduledLeads = scheduledTab === 'today' ? todayScheduledLeads : yesterdayMissedLeads;
+  const selectedScheduledLeads = scheduledTab === 'today' ? scheduledLeads : yesterdayMissedLeads;
 
   const scheduledByUserSelected = useMemo(() => {
     const userMetaByName = new Map<string, { department: string }>();
@@ -160,6 +160,7 @@ export default function SuperAdminDashboard() {
           ? String(lead.assignedToPro.name).trim()
           : '';
       const assigneeName = assignedCounsellorName || assignedProName || 'Unassigned';
+      if (assigneeName === 'Unassigned') return;
       const key = assigneeName.toLowerCase();
       const existing = counts.get(key);
       if (existing) {
@@ -514,7 +515,7 @@ export default function SuperAdminDashboard() {
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
                 }`}
               >
-                Today ({todayScheduledLeads.length})
+                Today ({todayScheduledLeads.length} + {yesterdayMissedLeads.length})
               </button>
               <button
                 onClick={() => {
