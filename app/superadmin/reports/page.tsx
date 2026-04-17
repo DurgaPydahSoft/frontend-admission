@@ -1785,9 +1785,6 @@ export default function ReportsPage() {
                         <thead>
                           <tr className="bg-[#475569] dark:bg-[#334155]">
                             <th className="w-52 px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">User</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Department</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Designation</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Group</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Total Leads</th>
                             <th
                               className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white"
@@ -1858,21 +1855,25 @@ export default function ReportsPage() {
                                       ) : (
                                         <span className="w-4 h-4 inline-block" />
                                       )}
-                                      <span className="truncate">{userLabel}</span>
-                                      <span
-                                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                          user.isActive
-                                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
-                                            : 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300'
-                                        }`}
-                                      >
-                                        {user.isActive ? 'Active' : 'Inactive'}
-                                      </span>
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <span className="truncate">{userLabel}</span>
+                                          <span
+                                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                              user.isActive
+                                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+                                                : 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300'
+                                            }`}
+                                          >
+                                            {user.isActive ? 'Active' : 'Inactive'}
+                                          </span>
+                                        </div>
+                                        <div className="mt-1 text-xs font-normal text-slate-500 dark:text-slate-400">
+                                          {(user.department || fu?.department || '—')} | {(user.designation || fu?.designation || '—')} | {(user.group || fu?.group || '—')}
+                                        </div>
+                                      </div>
                                     </div>
                                   </td>
-                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{user.department || fu?.department || '—'}</td>
-                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{user.designation || fu?.designation || '—'}</td>
-                                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{user.group || fu?.group || '—'}</td>
                                   <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.totalAssigned || 0}</td>
                                   <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100">{user.calls?.total ?? 0}</td>
                                   <td className="whitespace-nowrap px-6 py-4 text-sm">
@@ -1893,7 +1894,7 @@ export default function ReportsPage() {
                                 </tr>
                                 {isExpanded && (
                                   <tr className={`${baseRowBg}`}>
-                                    <td colSpan={10} className="px-6 py-4 border-t border-slate-200/70 dark:border-slate-700">
+                                    <td colSpan={7} className="px-6 py-4 border-t border-slate-200/70 dark:border-slate-700">
                                       <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/30 p-4">
                                         {!detailUser ? (
                                           <div className="py-5 text-center text-xs text-slate-500 dark:text-slate-400">
