@@ -73,6 +73,8 @@ export default function SuperAdminDashboard() {
   const { theme } = useTheme();
   const [dashboardAcademicYear, setDashboardAcademicYear] = useState<number | ''>('');
   const [dashboardStudentGroup, setDashboardStudentGroup] = useState<string>('');
+  const [dashboardFunnelSource, setDashboardFunnelSource] = useState('');
+  const [dashboardFunnelCycle, setDashboardFunnelCycle] = useState<number | ''>('');
   const [showAllCalls, setShowAllCalls] = useState(false);
   const [scheduledTab, setScheduledTab] = useState<'today' | 'yesterdayMissed'>('today');
   const [recentLeadsDays, setRecentLeadsDays] = useState<3 | 7 | 10>(3);
@@ -189,12 +191,20 @@ export default function SuperAdminDashboard() {
     isLoading: isLoadingOverview,
     isFetching: isFetchingOverview,
   } = useQuery({
-    queryKey: ['overview-analytics', dashboardAcademicYear, dashboardStudentGroup],
+    queryKey: [
+      'overview-analytics',
+      dashboardAcademicYear,
+      dashboardStudentGroup,
+      dashboardFunnelSource,
+      dashboardFunnelCycle,
+    ],
     queryFn: async () => {
       const response = await leadAPI.getOverviewAnalytics({
         days: 14,
         ...(dashboardAcademicYear !== '' && { academicYear: dashboardAcademicYear }),
         ...(dashboardStudentGroup && { studentGroup: dashboardStudentGroup }),
+        ...(dashboardFunnelSource && { source: dashboardFunnelSource }),
+        ...(dashboardFunnelCycle !== '' && dashboardFunnelCycle != null && { cycleNumber: dashboardFunnelCycle }),
       });
       return response.data || response;
     },
@@ -606,10 +616,44 @@ export default function SuperAdminDashboard() {
 
         <Card className="overflow-hidden border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Lead pipeline funnel</h2>
-            {/* <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-              Counts from the same snapshot as the stat cards. Use Academic Year and Student Group above to filter.
-            </p> */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Lead pipeline funnel</h2>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+                  <span className="shrink-0">Source</span>
+                  <select
+                    value={dashboardFunnelSource}
+                    onChange={(e) => setDashboardFunnelSource(e.target.value)}
+                    className="max-w-[10.5rem] cursor-pointer truncate rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 sm:max-w-[12rem]"
+                  >
+                    <option value="">All sources</option>
+                    {(filterOptions?.sources ?? []).map((src: string) => (
+                      <option key={src} value={src}>
+                        {src}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+                  <span className="shrink-0">Cycle</span>
+                  <select
+                    value={dashboardFunnelCycle === '' ? '' : String(dashboardFunnelCycle)}
+                    onChange={(e) =>
+                      setDashboardFunnelCycle(e.target.value ? Number(e.target.value) : '')
+                    }
+                    className="cursor-pointer rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  >
+                    <option value="">All cycles</option>
+                    {[1, 2, 3, 4, 5].map((c) => (
+                      <option key={c} value={c}>
+                        Cycle {c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
+            
           </div>
           <div className="min-h-72 px-3 py-3 sm:px-4">
             <div className="grid grid-cols-[minmax(6.5rem,1fr)_minmax(0,2.7fr)_minmax(6.5rem,1fr)] items-start gap-2">

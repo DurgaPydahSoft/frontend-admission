@@ -564,7 +564,14 @@ export const leadAPI = {
     const response = await api.get(`/leads/analytics/${userId}${suffix}`);
     return response.data;
   },
-  getOverviewAnalytics: async (params?: { days?: number; tz?: string; academicYear?: number | string; studentGroup?: string }) => {
+  getOverviewAnalytics: async (params?: {
+    days?: number;
+    tz?: string;
+    academicYear?: number | string;
+    studentGroup?: string;
+    source?: string;
+    cycleNumber?: number | string;
+  }) => {
     const query = new URLSearchParams();
     if (params?.days) {
       query.append('days', String(params.days));
@@ -577,6 +584,12 @@ export const leadAPI = {
     }
     if (params?.studentGroup) {
       query.append('studentGroup', params.studentGroup);
+    }
+    if (params?.source) {
+      query.append('source', params.source);
+    }
+    if (params?.cycleNumber != null && params.cycleNumber !== '') {
+      query.append('cycleNumber', String(params.cycleNumber));
     }
     const suffix = query.toString() ? `?${query.toString()}` : '';
     const response = await api.get(`/leads/analytics/overview${suffix}`);
