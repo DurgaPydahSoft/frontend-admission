@@ -20,7 +20,6 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { showToast } from '@/lib/toast';
-import { useDashboardHeader } from '@/components/layout/DashboardShell';
 import { useLocations } from '@/lib/useLocations';
 
 // Timeline item type
@@ -38,7 +37,6 @@ export default function LeadDetailPage() {
   const router = useRouter();
   const params = useParams();
   const queryClient = useQueryClient();
-  const { setHeaderContent, clearHeaderContent } = useDashboardHeader();
   const leadId = params?.id as string;
   const [user, setUser] = useState<User | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -441,48 +439,6 @@ export default function LeadDetailPage() {
       new Date(b.date).getTime() - new Date(a.date).getTime()
     );
   }, [lead, activityLogs, communications]);
-
-  // Set header
-  useEffect(() => {
-    if (!lead) {
-      return () => clearHeaderContent();
-    }
-
-    setHeaderContent(
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link href={getLeadsPageUrl()}>
-            <Button size="sm" variant="outline">
-              ← Back to Leads
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Lead Details
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              <span className="flex items-center gap-2">
-                <span>{lead.name}</span>
-                {lead.isNRI && (
-                  <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded">
-                    NRI
-                  </span>
-                )}
-                {lead.needsManualUpdate && (
-                  <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 rounded" title="District or mandal may not match master data. Please update manually.">
-                    Needs update
-                  </span>
-                )}
-              </span>
-              {lead.enquiryNumber ? ` · Enquiry #${lead.enquiryNumber}` : ''}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-
-    return () => clearHeaderContent();
-  }, [lead, user, isSuperAdmin, isManager, router, setHeaderContent, clearHeaderContent]);
 
   // Normalize state/district for API lookup (e.g. "AP" -> "Andhra Pradesh", "Guntur District" -> "Guntur")
   const normalizeStateForLookup = (s: string) => {
@@ -975,8 +931,41 @@ export default function LeadDetailPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[98vw] space-y-6 px-4 pb-16 pt-6 sm:px-6 lg:px-8">
-      {lead?.needsManualUpdate && (
+    <div className="mx-auto w-full space-y-6 pb-12 pt-1 sm:pt-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/90 pb-4 dark:border-slate-800">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+          <Link href={getLeadsPageUrl()}>
+            <Button size="sm" variant="outline">
+              ← Back to Leads
+            </Button>
+          </Link>
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 sm:text-2xl">Lead Details</h1>
+            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+              <span className="inline-flex flex-wrap items-center gap-2">
+                <span className="font-medium text-slate-700 dark:text-slate-300">{lead.name}</span>
+                {lead.isNRI && (
+                  <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded">
+                    NRI
+                  </span>
+                )}
+                {Number(lead.needsManualUpdate) > 0 && (
+                  <span
+                    className="px-1.5 py-0.5 text-[9px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 rounded"
+                    title="District or mandal may not match master data. Please update manually."
+                  >
+                    Needs update
+                  </span>
+                )}
+              </span>
+              {lead.enquiryNumber ? (
+                <span className="text-slate-500 dark:text-slate-400"> · Enquiry #{lead.enquiryNumber}</span>
+              ) : null}
+            </p>
+          </div>
+        </div>
+      </div>
+      {Number(lead?.needsManualUpdate) > 0 && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200" role="alert">
           <strong>Details need manual update.</strong> This lead was bulk-uploaded and district or mandal may not match master data. Please review and correct in the form below.
         </div>
@@ -1206,11 +1195,11 @@ export default function LeadDetailPage() {
                   {isDetailsExpanded && (
                     <div className="space-y-6 pb-6">
                       {/* Student Additional Details */}
-                      {(lead.rank || lead.interCollege || lead.hallTicketNumber) && (
+                      {(lead.rank != null || lead.interCollege || lead.hallTicketNumber) && (
                         <div>
                           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Additional Student Details</h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {lead.rank && (
+                            {lead.rank != null && (
                               <div>
                                 <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Rank</label>
                                 <p className="text-sm text-gray-900 dark:text-gray-100">{lead.rank}</p>
@@ -1557,9 +1546,9 @@ export default function LeadDetailPage() {
                                   Outcome: {item.metadata.outcome}
                                 </p>
                               )}
-                              {item.metadata?.duration && (
+                              {Number(item.metadata?.duration) > 0 && (
                                 <p className="text-xs text-gray-500 dark:text-slate-400">
-                                  Duration: {item.metadata.duration}s
+                                  Duration: {item.metadata?.duration}s
                                 </p>
                               )}
                             </>
@@ -1894,7 +1883,7 @@ export default function LeadDetailPage() {
                               Outcome: {call.callOutcome}
                             </span>
                           )}
-                          {call.durationSeconds && (
+                          {Number(call.durationSeconds) > 0 && (
                             <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
                               Duration: {call.durationSeconds}s
                             </span>

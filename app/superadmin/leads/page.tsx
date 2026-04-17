@@ -792,8 +792,13 @@ export default function LeadsPage() {
 
   return (
     <div className="w-full space-y-4">
-      <div className="flex items-center justify-between mb-0">
-        <h1 className="text-3xl mb-3 font-bold text-slate-900 dark:text-slate-100">Leads Management</h1>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-3">
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Leads Management</h1>
+        {!isError && leadsData != null && (
+          <span className="text-sm font-semibold text-slate-500 dark:text-slate-400 tabular-nums">
+            {pagination.total.toLocaleString()} total leads
+          </span>
+        )}
       </div>
 
       <div className="mb-2">
@@ -1022,6 +1027,23 @@ export default function LeadsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-200 mb-1">
+                  Source
+                </label>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm dark:bg-slate-900/50 dark:border-slate-700 dark:text-slate-100"
+                  value={filters.source || ''}
+                  onChange={(e) => handleFilterChange('source', e.target.value)}
+                >
+                  <option value="">All Sources</option>
+                  {filterOptions?.sources?.map((src) => (
+                    <option key={src} value={src}>
+                      {src}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-200 mb-1">
                   Academic Year
                 </label>
                 <select
@@ -1101,9 +1123,9 @@ export default function LeadsPage() {
       </div>
 
       <section className="space-y-6">
-        {/* Results Summary */}
-        <div className="mb-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
+        {/* Results Summary + pagination (right) */}
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-2 min-w-0 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2">
             <p className="text-sm text-gray-600 dark:text-slate-300">
               Showing {leads.length} of {pagination.total} leads
               {pagination.total > 0 && (
@@ -1111,13 +1133,8 @@ export default function LeadsPage() {
                   (Page {pagination.page} of {pagination.pages})
                 </span>
               )}
-              {needsUpdateCount > 0 && (
-                <span className="ml-3 inline-flex items-center rounded-md bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-200 ring-1 ring-inset ring-amber-600/20">
-                  {needsUpdateCount} need{needsUpdateCount === 1 ? 's' : ''} update
-                </span>
-              )}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {pagination.total > 0 && (
                 <Button
                   variant="outline"
@@ -1138,7 +1155,7 @@ export default function LeadsPage() {
               )}
               {selectedLeads.size > 0 && (
                 <>
-                  <span className="text-sm text-gray-700 font-medium">
+                  <span className="text-sm text-gray-700 dark:text-slate-200 font-medium">
                     {selectedLeads.size} selected
                   </span>
                   <Button
@@ -1162,10 +1179,134 @@ export default function LeadsPage() {
               )}
             </div>
           </div>
-          {isLoading && (
-            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-300">
-              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-              Loading...
+
+          {!isError && (
+            <div className="flex flex-wrap items-center justify-start lg:justify-end gap-2 lg:shrink-0">
+              {isLoading && (
+                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-300 mr-1">
+                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  Loading...
+                </div>
+              )}
+              {pagination.pages > 1 && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage(1)}
+                    disabled={page === 1 || isLoading}
+                    size="sm"
+                    className="p-2"
+                    title="First Page"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                    </svg>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage((p: number) => Math.max(1, p - 1))}
+                    disabled={page === 1 || isLoading}
+                    size="sm"
+                    className="p-2"
+                    title="Previous Page"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </Button>
+                  <div className="flex gap-1">
+                    {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                      let pageNum;
+                      if (pagination.pages <= 5) {
+                        pageNum = i + 1;
+                      } else if (page <= 3) {
+                        pageNum = i + 1;
+                      } else if (page >= pagination.pages - 2) {
+                        pageNum = pagination.pages - 4 + i;
+                      } else {
+                        pageNum = page - 2 + i;
+                      }
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={page === pageNum ? 'primary' : 'outline'}
+                          onClick={() => setPage(pageNum)}
+                          disabled={isLoading}
+                          size="sm"
+                          className="min-w-10"
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage((p: number) => Math.min(pagination.pages, p + 1))}
+                    disabled={page === pagination.pages || isLoading}
+                    size="sm"
+                    className="p-2"
+                    title="Next Page"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage(pagination.pages)}
+                    disabled={page === pagination.pages || isLoading}
+                    size="sm"
+                    className="p-2"
+                    title="Last Page"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                    </svg>
+                  </Button>
+                </>
+              )}
+              {pagination.pages > 50 && (
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600 dark:text-slate-300 whitespace-nowrap">Jump to:</label>
+                  <select
+                    value={page}
+                    onChange={(e) => setPage(Number(e.target.value))}
+                    disabled={isLoading}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm text-sm dark:bg-slate-900/50 dark:border-slate-700 dark:text-slate-100"
+                  >
+                    {Array.from({ length: Math.ceil(pagination.pages / 50) }, (_, i) => {
+                      const pageValue = (i + 1) * 50;
+                      if (pageValue <= pagination.pages) {
+                        return (
+                          <option key={pageValue} value={pageValue}>
+                            Page {pageValue}
+                          </option>
+                        );
+                      }
+                      return null;
+                    })}
+                    {!Array.from({ length: Math.ceil(pagination.pages / 50) }, (_, i) => (i + 1) * 50).includes(page) && (
+                      <option value={page}>Page {page} (Current)</option>
+                    )}
+                  </select>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600 dark:text-slate-300 whitespace-nowrap">Rows per page:</label>
+                <select
+                  value={limit}
+                  onChange={(e) => setLimit(Number(e.target.value))}
+                  disabled={isLoading}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm text-sm dark:bg-slate-900/50 dark:border-slate-700 dark:text-slate-100"
+                >
+                  {pageSizeOptions.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
         </div>
@@ -1552,147 +1693,6 @@ export default function LeadsPage() {
               </div>
             </div>
           </>
-        )}
-
-        {/* Pagination - Moved to bottom beside page selection */}
-        {pagination.pages > 1 && (
-          <div className="mt-6 pt-4 border-t border-gray-200 flex justify-between items-center gap-4">
-            <div className="flex items-center gap-2">
-              {/* First Page Button (Icon Only) */}
-              <Button
-                variant="outline"
-                onClick={() => setPage(1)}
-                disabled={page === 1 || isLoading}
-                size="sm"
-                className="p-2"
-                title="First Page"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-                </svg>
-              </Button>
-
-              {/* Previous Page Button (Icon Only) */}
-              <Button
-                variant="outline"
-                onClick={() => setPage((p: number) => Math.max(1, p - 1))}
-                disabled={page === 1 || isLoading}
-                size="sm"
-                className="p-2"
-                title="Previous Page"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </Button>
-
-              {/* Page Numbers */}
-              <div className="flex gap-1">
-                {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-                  let pageNum;
-                  if (pagination.pages <= 5) {
-                    pageNum = i + 1;
-                  } else if (page <= 3) {
-                    pageNum = i + 1;
-                  } else if (page >= pagination.pages - 2) {
-                    pageNum = pagination.pages - 4 + i;
-                  } else {
-                    pageNum = page - 2 + i;
-                  }
-                  return (
-                    <Button
-                      key={pageNum}
-                      variant={page === pageNum ? 'primary' : 'outline'}
-                      onClick={() => setPage(pageNum)}
-                      disabled={isLoading}
-                      size="sm"
-                      className="min-w-[40px]"
-                    >
-                      {pageNum}
-                    </Button>
-                  );
-                })}
-              </div>
-
-              {/* Next Page Button (Icon Only) */}
-              <Button
-                variant="outline"
-                onClick={() => setPage((p: number) => Math.min(pagination.pages, p + 1))}
-                disabled={page === pagination.pages || isLoading}
-                size="sm"
-                className="p-2"
-                title="Next Page"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Button>
-
-              {/* Last Page Button (Icon Only) */}
-              <Button
-                variant="outline"
-                onClick={() => setPage(pagination.pages)}
-                disabled={page === pagination.pages || isLoading}
-                size="sm"
-                className="p-2"
-                title="Last Page"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                </svg>
-              </Button>
-            </div>
-
-            {/* Jump to Page Dropdown (only if pages > 50) */}
-            {pagination.pages > 50 && (
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-gray-600 dark:text-slate-300">Jump to:</label>
-                <select
-                  value={page}
-                  onChange={(e) => setPage(Number(e.target.value))}
-                  disabled={isLoading}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm text-sm dark:bg-slate-900/50 dark:border-slate-700 dark:text-slate-100"
-                >
-                  {Array.from({ length: Math.ceil(pagination.pages / 50) }, (_, i) => {
-                    const pageValue = (i + 1) * 50;
-                    if (pageValue <= pagination.pages) {
-                      return (
-                        <option key={pageValue} value={pageValue}>
-                          Page {pageValue}
-                        </option>
-                      );
-                    }
-                    return null;
-                  })}
-                  {/* Add current page if not in the list */}
-                  {!Array.from({ length: Math.ceil(pagination.pages / 50) }, (_, i) => (i + 1) * 50).includes(page) && (
-                    <option value={page}>Page {page} (Current)</option>
-                  )}
-                </select>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600 dark:text-slate-300">Rows per page:</label>
-              <select
-                value={limit}
-                onChange={(e) => setLimit(Number(e.target.value))}
-                disabled={isLoading}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80 backdrop-blur-sm text-sm dark:bg-slate-900/50 dark:border-slate-700 dark:text-slate-100"
-              >
-                {pageSizeOptions.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Page Info */}
-            <div className="text-sm text-gray-600 dark:text-slate-300">
-              Page {pagination.page} of {pagination.pages}
-            </div>
-          </div>
         )}
       </section>
 

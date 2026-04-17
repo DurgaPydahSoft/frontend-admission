@@ -934,7 +934,7 @@ export default function UserLeadsPage() {
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusColor(displayStatusForLead(lead))}`}>
                           {displayStatusForLead(lead)}
                         </span>
-                        {lead.needsManualUpdate && (
+                        {Number(lead.needsManualUpdate) > 0 && (
                           <span className="rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-700" title="Details need manual update">
                             Update
                           </span>
@@ -987,7 +987,7 @@ export default function UserLeadsPage() {
                         >
                           {lead.name || '—'}
                         </Link>
-                        {lead.needsManualUpdate && (
+                        {Number(lead.needsManualUpdate) > 0 && (
                           <span className="mt-1 inline-block rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-700" title="Details need manual update">
                             Update
                           </span>

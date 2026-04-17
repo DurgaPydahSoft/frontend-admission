@@ -1462,7 +1462,8 @@ export default function UserLeadDetailPage() {
                           {displayPrimaryStatusText(lead)}
                         </span>
                       ) : (
-                        lead.leadStatus && (
+                        lead.leadStatus != null &&
+                        String(lead.leadStatus).trim() !== '' && (
                           <span className="inline-flex shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold bg-white/25 text-white backdrop-blur">
                             {lead.leadStatus}
                           </span>
@@ -1530,7 +1531,8 @@ export default function UserLeadDetailPage() {
                           Call: {displayPrimaryStatusText(lead)}
                         </p>
                       ) : (
-                        lead.leadStatus && (
+                        lead.leadStatus != null &&
+                        String(lead.leadStatus).trim() !== '' && (
                           <p className="flex items-center gap-2">
                             <svg className="h-4 w-4 shrink-0 text-amber-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1688,7 +1690,8 @@ export default function UserLeadDetailPage() {
               </span>
             </div>
           ) : (
-            lead.leadStatus && (
+            lead.leadStatus != null &&
+            String(lead.leadStatus).trim() !== '' && (
               <div className="hidden sm:block">
                 <p className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Lead status</p>
                 <span className={`inline-block px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium ${getStatusColor(lead.leadStatus)}`}>
@@ -1909,11 +1912,19 @@ export default function UserLeadDetailPage() {
                                   <p className="text-xs text-gray-700 dark:text-slate-200 whitespace-pre-wrap line-clamp-3">
                                     {item.description}
                                   </p>
-                                  {(item.metadata?.outcome || item.metadata?.duration) && (
+                                  {(Boolean(item.metadata?.outcome && String(item.metadata.outcome).trim()) ||
+                                    Number(item.metadata?.duration) > 0) && (
                                     <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">
-                                      {item.metadata?.outcome && <>Outcome: {item.metadata.outcome}</>}
-                                      {item.metadata?.outcome && item.metadata?.duration && ' · '}
-                                      {item.metadata?.duration != null && <>Duration: {formatSecondsToMMSS(item.metadata.duration)}</>}
+                                      {item.metadata?.outcome && String(item.metadata.outcome).trim() !== '' && (
+                                        <>Outcome: {item.metadata.outcome}</>
+                                      )}
+                                      {item.metadata?.outcome &&
+                                        String(item.metadata.outcome).trim() !== '' &&
+                                        Number(item.metadata?.duration) > 0 &&
+                                        ' · '}
+                                      {Number(item.metadata?.duration) > 0 && (
+                                        <>Duration: {formatSecondsToMMSS(Number(item.metadata?.duration))}</>
+                                      )}
                                     </p>
                                   )}
                                 </>
@@ -2139,9 +2150,9 @@ export default function UserLeadDetailPage() {
                                 {call.callOutcome}
                               </span>
                             )}
-                            {call.durationSeconds && (
+                            {Number(call.durationSeconds) > 0 && (
                               <span className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
-                                {formatSecondsToMMSS(call.durationSeconds)}
+                                {formatSecondsToMMSS(Number(call.durationSeconds))}
                               </span>
                             )}
                           </div>

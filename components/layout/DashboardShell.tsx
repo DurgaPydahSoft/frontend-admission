@@ -156,6 +156,14 @@ export type DashboardNavItem = {
   permissionKey?: string;
 };
 
+/** `/superadmin/leads/:id` (dynamic lead), not the list or static sub-routes */
+function isSuperadminLeadDetailPath(pathname: string): boolean {
+  const m = pathname.match(/^\/superadmin\/leads\/([^/]+)$/);
+  if (!m) return false;
+  const segment = m[1];
+  return !['assign', 'individual', 'group-update', 'upload'].includes(segment);
+}
+
 interface DashboardShellProps {
   children: React.ReactNode;
   navItems: DashboardNavItem[];
@@ -189,25 +197,33 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   const [headerContent, setHeaderContent] = useState<ReactNode>(null);
   const [mobileTopBar, setMobileTopBarState] = useState<MobileTopBarOptions | null>(null);
 
+  const isSuperadminLeadDetail = isSuperadminLeadDetailPath(pathname);
+
   // Pages where we want minimal top spacing (compact header)
-  const isCompactPage = ['/superadmin/dashboard', '/superadmin/leads', '/superadmin/reports', '/superadmin/leads/assign'].includes(pathname);
+  const isCompactPage =
+    ['/superadmin/dashboard', '/superadmin/leads', '/superadmin/reports', '/superadmin/leads/assign'].includes(pathname) ||
+    isSuperadminLeadDetail;
 
   // Pages where we want full width (no max-width constraint)
-  const isFullWidthPage = ['/superadmin/leads/assign'].includes(pathname);
+  const isFullWidthPage = ['/superadmin/leads/assign'].includes(pathname) || isSuperadminLeadDetail;
 
   // Pages where we want reduced vertical spacing but keep header visible
   const isReducedSpacingPage = ['/superadmin/users'].includes(pathname);
 
-  /** Full-width shell header hidden; page provides its own title (e.g. tabbed Communications, Form Builder). */
+  /** Full-width shell header hidden; page provides its own title (e.g. tabbed Communications, Form Builder, lead detail). */
   const hideMainTopHeader =
-    pathname === '/superadmin/communications/templates' || pathname === '/superadmin/form-builder';
+    pathname === '/superadmin/communications/templates' ||
+    pathname === '/superadmin/form-builder' ||
+    isSuperadminLeadDetail;
 
   const minimalMobileHeaderTitle =
     pathname === '/superadmin/form-builder'
       ? 'Lead Form Builder'
       : pathname === '/superadmin/communications/templates'
         ? 'Communications'
-        : 'Menu';
+        : isSuperadminLeadDetail
+          ? 'Lead details'
+          : 'Menu';
 
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? window.localStorage.getItem('sidebar-collapsed') : null;

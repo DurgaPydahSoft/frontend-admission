@@ -228,6 +228,7 @@ export const leadAPI = {
     district?: string;
     village?: string;
     state?: string;
+    source?: string;
     quota?: string;
     leadStatus?: string;
     callStatus?: string;
@@ -264,6 +265,7 @@ export const leadAPI = {
     mandal?: string;
     district?: string;
     state?: string;
+    source?: string;
     quota?: string;
     leadStatus?: string;
     applicationStatus?: string;
@@ -401,6 +403,7 @@ export const leadAPI = {
     mandal?: string;
     state?: string;
     district?: string;
+    source?: string;
     quota?: string;
     leadStatus?: string;
     applicationStatus?: string;

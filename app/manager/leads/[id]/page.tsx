@@ -1109,7 +1109,7 @@ export default function ManagerLeadDetailPage() {
                           {lead.gender.charAt(0).toUpperCase()}
                         </span>
                       )}
-                      {lead.needsManualUpdate && (
+                      {Number(lead.needsManualUpdate) > 0 && (
                         <span className="px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 rounded whitespace-nowrap" title="Details need manual update">Needs update</span>
                       )}
                     </div>
@@ -1489,14 +1489,14 @@ export default function ManagerLeadDetailPage() {
                               <p className="text-sm text-gray-700 dark:text-slate-200 whitespace-pre-wrap">
                                 {item.description}
                               </p>
-                              {item.metadata?.outcome && (
+                              {item.metadata?.outcome != null && String(item.metadata.outcome).trim() !== '' && (
                                 <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">
                                   Outcome: {item.metadata.outcome}
                                 </p>
                               )}
-                              {item.metadata?.duration && (
+                              {Number(item.metadata?.duration) > 0 && (
                                 <p className="text-xs text-gray-500 dark:text-slate-400">
-                                  Duration: {item.metadata.duration}s
+                                  Duration: {item.metadata?.duration}s
                                 </p>
                               )}
                             </>
@@ -1608,7 +1608,7 @@ export default function ManagerLeadDetailPage() {
 
               {/* Edit and Delete - Not available for managers */}
             </div>
-            {lead.leadStatus && (
+            {lead.leadStatus != null && String(lead.leadStatus).trim() !== '' && (
               <div className="mt-4 text-center">
                 <span className={`px-4 py-2 rounded-full text-sm font-semibold ${getStatusColor(lead.leadStatus)}`}>
                   Current: {lead.leadStatus}
@@ -1771,7 +1771,7 @@ export default function ManagerLeadDetailPage() {
                               Outcome: {call.callOutcome}
                             </span>
                           )}
-                          {call.durationSeconds && (
+                          {Number(call.durationSeconds) > 0 && (
                             <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
                               Duration: {call.durationSeconds}s
                             </span>

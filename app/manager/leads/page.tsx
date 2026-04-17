@@ -406,7 +406,7 @@ export default function ManagerLeadsPage() {
                       <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                         <span className="flex items-center gap-1.5">
                           {lead.name}
-                          {lead.needsManualUpdate && (
+                          {Number(lead.needsManualUpdate) > 0 && (
                             <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 rounded" title="Details need manual update">Needs update</span>
                           )}
                         </span>

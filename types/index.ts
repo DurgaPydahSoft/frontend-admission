@@ -702,6 +702,7 @@ export interface LeadFilters {
   state?: string;
   district?: string;
   village?: string;
+  source?: string;
   quota?: string;
   status?: string;
   leadStatus?: string;
@@ -734,6 +735,7 @@ export interface FilterOptions {
   districts: string[];
   villages?: string[];
   states: string[];
+  sources?: string[];
   quotas: string[];
   statuses?: string[];
   leadStatuses: string[];
