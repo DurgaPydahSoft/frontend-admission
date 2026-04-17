@@ -1325,18 +1325,16 @@ export default function UserLeadDetailPage() {
 
           {/* Action Icons */}
           <div className="flex items-center justify-center gap-2.5">
-            {user.roleName !== 'PRO' && (
-              <button
-                type="button"
-                onClick={() => lead && setShowCallNumberModal(true)}
-                className="flex items-center justify-center size-10 rounded-xl bg-green-500 hover:bg-green-600 active:scale-95 text-white shadow-sm"
-                aria-label="Call"
-              >
-                <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                </svg>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => lead && setShowCallNumberModal(true)}
+              className="flex items-center justify-center size-10 rounded-xl bg-green-500 hover:bg-green-600 active:scale-95 text-white shadow-sm"
+              aria-label="Call"
+            >
+              <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+              </svg>
+            </button>
             {user.roleName !== 'PRO' && (
               <button
                 type="button"
@@ -1593,18 +1591,16 @@ export default function UserLeadDetailPage() {
           <div className="hidden sm:block">
             <p className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 mb-2">Actions</p>
             <div className="flex flex-wrap gap-2 sm:gap-3">
-              {user.roleName !== 'PRO' && (
-                <button
-                  type="button"
-                  onClick={() => lead && setShowCallNumberModal(true)}
-                  className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-green-50 hover:bg-green-100 border border-green-200 dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 text-xs sm:text-sm font-medium"
-                >
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                  </svg>
-                  Call
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => lead && setShowCallNumberModal(true)}
+                className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-green-50 hover:bg-green-100 border border-green-200 dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 text-xs sm:text-sm font-medium"
+              >
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+                Call
+              </button>
               {user.roleName !== 'PRO' && (
                 <button
                   type="button"
@@ -1739,21 +1735,19 @@ export default function UserLeadDetailPage() {
                       </div>
                       {/* Call/SMS buttons - hidden on mobile (sticky action bar used there) */}
                       <div className="hidden sm:flex gap-2 mt-3">
-                        {user.roleName !== 'PRO' && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCallData({ contactNumber: option.number, remarks: '', outcome: '', durationSeconds: 0 });
-                              setShowCallNumberModal(true);
-                            }}
-                            className="flex items-center justify-center w-9 h-9 rounded-lg bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 text-slate-700 dark:text-slate-200"
-                            aria-label="Call"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                            </svg>
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCallData({ contactNumber: option.number, remarks: '', outcome: '', durationSeconds: 0 });
+                            setShowCallNumberModal(true);
+                          }}
+                          className="flex items-center justify-center w-9 h-9 rounded-lg bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 text-slate-700 dark:text-slate-200"
+                          aria-label="Call"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                          </svg>
+                        </button>
                         <button
                           type="button"
                           onClick={() => {
@@ -2523,10 +2517,12 @@ export default function UserLeadDetailPage() {
                     setShowCallNumberModal(false);
                     callStartTime.current = Date.now();
                     window.location.href = `tel:${selectedCallNumber.replace(/\s/g, '')}`;
-                    setTimeout(() => {
-                      setCallData({ contactNumber: selectedCallNumber, remarks: '', outcome: '', durationSeconds: 0 });
-                      setShowCallRemarksModal(true);
-                    }, 1000);
+                    if (user?.roleName === 'Student Counselor') {
+                      setTimeout(() => {
+                        setCallData({ contactNumber: selectedCallNumber, remarks: '', outcome: '', durationSeconds: 0 });
+                        setShowCallRemarksModal(true);
+                      }, 1000);
+                    }
                   }}
                   disabled={!selectedCallNumber}
                 >
