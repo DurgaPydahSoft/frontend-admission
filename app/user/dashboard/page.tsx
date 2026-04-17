@@ -33,6 +33,7 @@ interface Analytics {
   mandalBreakdown: Array<{ mandal: string; count: number }>;
   stateBreakdown: Array<{ state: string; count: number }>;
   studentGroupBreakdown: Array<{ group: string; count: number }>;
+  upcomingTargetDates?: Array<{ date: string; count: number }>;
   recentActivity: {
     leadsUpdatedLast7Days: number;
   };
@@ -194,8 +195,17 @@ export default function UserDashboard() {
       return tA - tB;
     });
   }, [scheduledLeadsData]);
-
   const analytics = (analyticsData?.data || analyticsData) as Analytics | null;
+  const upcomingTargetDateSummary = useMemo(() => {
+    const list = Array.isArray(analytics?.upcomingTargetDates) ? analytics.upcomingTargetDates : [];
+    return list
+      .map((item) => ({
+        date: String(item.date || '').slice(0, 10),
+        count: Number(item.count || 0),
+      }))
+      .filter((item) => item.date && item.count > 0)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [analytics?.upcomingTargetDates]);
 
   const chartGridColor = theme === 'dark' ? 'rgba(148, 163, 184, 0.2)' : '#e2e8f0';
   const chartTextColor = theme === 'dark' ? '#cbd5f5' : '#475569';
@@ -455,6 +465,23 @@ export default function UserDashboard() {
       {/* Today's scheduled calls - simple list, no card background */}
       {true && (
         <div className="w-full space-y-3 pt-2">
+          {upcomingTargetDateSummary.length > 0 && (
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-2.5 dark:border-indigo-900/40 dark:bg-indigo-950/20">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                Upcoming target dates
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-indigo-700 dark:text-indigo-300">
+                {upcomingTargetDateSummary.map((item) => (
+                  <span key={item.date} className="inline-flex items-center gap-1">
+                    <span className="font-medium">
+                      {new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </span>
+                    <span>({item.count})</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-3 px-1">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-orange-100 to-amber-100 text-orange-600 dark:from-orange-900/40 dark:to-amber-900/30 dark:text-orange-400">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -477,6 +504,14 @@ export default function UserDashboard() {
               {scheduledLeads.map((lead: Lead) => {
                 const timeStr = lead.nextScheduledCall
                   ? new Date(lead.nextScheduledCall).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                  : null;
+                const targetDateValue = lead.targetDate ?? lead.target_date;
+                const targetDateText = targetDateValue
+                  ? new Date(String(targetDateValue)).toLocaleDateString('en-IN', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  })
                   : null;
                 const channelStatusLabel =
                   user?.roleName === 'PRO'
