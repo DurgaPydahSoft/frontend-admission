@@ -843,6 +843,10 @@ export const communicationAPI = {
     const response = await api.delete(`/communications/templates/${id}`);
     return response.data;
   },
+  hardDeleteTemplate: async (id: string) => {
+    const response = await api.delete(`/communications/templates/${id}/hard`);
+    return response.data;
+  },
   logCall: async (
     leadId: string,
     data: { contactNumber: string; remarks?: string; outcome?: string; durationSeconds?: number }

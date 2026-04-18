@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { auth } from '@/lib/auth';
-import { communicationAPI, leadAPI } from '@/lib/api';
+import { communicationAPI, leadAPI, userAPI } from '@/lib/api';
 import { Lead, MessageTemplate, MessageTemplateVariable } from '@/types';
-import { useModulePermission } from '@/components/layout/DashboardShell';
+import { useModulePermission, TemplateIcon, UserIcon } from '@/components/layout/DashboardShell';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -77,6 +77,7 @@ const TemplateModal = ({
   initialData?: MessageTemplate;
   isProcessing: boolean;
 }) => {
+  const [isEditMode, setIsEditMode] = useState(mode === 'create');
   const [formState, setFormState] = useState<TemplateFormState>(() => {
     if (initialData) {
       return {
@@ -150,10 +151,12 @@ const TemplateModal = ({
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-2xl font-semibold">
-              {mode === 'create' ? 'Create Template' : 'Edit Template'}
+              {!isEditMode ? 'View Template' : mode === 'create' ? 'Create Template' : 'Edit Template'}
             </h2>
             <p className="text-sm text-gray-500">
-              Configure template details and map placeholders to friendly labels.
+              {!isEditMode 
+                ? 'Review template details and placeholders.' 
+                : 'Configure template details and map placeholders to friendly labels.'}
             </p>
           </div>
           <button
@@ -173,6 +176,7 @@ const TemplateModal = ({
               value={formState.name}
               onChange={(e) => setFormState((prev) => ({ ...prev, name: e.target.value }))}
               placeholder="Counselling started for Degree"
+              disabled={!isEditMode}
             />
           </div>
           <div>
@@ -183,6 +187,7 @@ const TemplateModal = ({
                 setFormState((prev) => ({ ...prev, dltTemplateId: e.target.value }))
               }
               placeholder="1607100000000129152"
+              disabled={!isEditMode}
             />
           </div>
           <div>
@@ -198,6 +203,7 @@ const TemplateModal = ({
                   isUnicode: language !== 'en' ? true : prev.isUnicode,
                 }));
               }}
+              disabled={!isEditMode}
             >
               {SUPPORTED_LANGUAGES.map((lang) => (
                 <option key={lang.value} value={lang.value}>
@@ -215,6 +221,7 @@ const TemplateModal = ({
                 setFormState((prev) => ({ ...prev, isUnicode: e.target.checked }))
               }
               className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              disabled={!isEditMode}
             />
             <label htmlFor="unicode-toggle" className="text-sm text-gray-700">
               Unicode (non-English) message
@@ -228,6 +235,7 @@ const TemplateModal = ({
             value={formState.description}
             onChange={(e) => setFormState((prev) => ({ ...prev, description: e.target.value }))}
             placeholder="Short summary for internal reference"
+            disabled={!isEditMode}
           />
         </div>
 
@@ -245,6 +253,7 @@ const TemplateModal = ({
               }))
             }
             placeholder="Use {#var#} for placeholder values"
+            disabled={!isEditMode}
           />
           <p className="text-xs text-gray-500 mt-1">
             Detected placeholders: <span className="font-semibold">{variableCount}</span>
@@ -268,6 +277,7 @@ const TemplateModal = ({
                       value={variable.key}
                       onChange={(e) => handleVariableChange(index, 'key', e.target.value)}
                       placeholder={`var${index + 1}`}
+                      disabled={!isEditMode}
                     />
                   </div>
                   <div>
@@ -278,6 +288,7 @@ const TemplateModal = ({
                       value={variable.label}
                       onChange={(e) => handleVariableChange(index, 'label', e.target.value)}
                       placeholder={index === 0 ? 'Lead Name' : `Variable ${index + 1}`}
+                      disabled={!isEditMode}
                     />
                   </div>
                   <div>
@@ -290,6 +301,7 @@ const TemplateModal = ({
                         handleVariableChange(index, 'defaultValue', e.target.value)
                       }
                       placeholder="Optional"
+                      disabled={!isEditMode}
                     />
                   </div>
                 </div>
@@ -300,11 +312,17 @@ const TemplateModal = ({
 
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" onClick={onClose} disabled={isProcessing}>
-            Cancel
+            {isEditMode ? 'Cancel' : 'Close'}
           </Button>
-          <Button variant="primary" onClick={handleSubmit} disabled={isProcessing}>
-            {isProcessing ? 'Saving…' : mode === 'create' ? 'Create Template' : 'Save Changes'}
-          </Button>
+          {!isEditMode ? (
+            <Button variant="primary" onClick={() => setIsEditMode(true)}>
+              Edit Template
+            </Button>
+          ) : (
+            <Button variant="primary" onClick={handleSubmit} disabled={isProcessing}>
+              {isProcessing ? 'Saving…' : mode === 'create' ? 'Create Template' : 'Save Changes'}
+            </Button>
+          )}
         </div>
       </Card>
     </div>
@@ -318,6 +336,67 @@ const TemplatesSkeleton = () => (
     ))}
   </div>
 );
+
+function hydrateTemplateContent(content: string, variables: { key: string; value: string }[]): string {
+  if (!content) return '';
+  let index = 0;
+  return content.replace(VAR_REGEX, () => {
+    const val = variables[index]?.value || '[Variable]';
+    index++;
+    return val;
+  });
+}
+
+function MessagePreviewCard({ 
+  template, 
+  lead,
+  isBulk = false
+}: { 
+  template?: MessageTemplate; 
+  lead?: Lead;
+  isBulk?: boolean;
+}) {
+  if (!template) {
+    return (
+      <Card className="p-6 border-dashed border-2 flex flex-col items-center justify-center text-slate-400 min-h-[160px]">
+        <TemplateIcon className="h-8 w-8 mb-2 opacity-20" />
+        <p className="text-sm">Select a template to see preview</p>
+      </Card>
+    );
+  }
+
+  const variables = lead ? buildSmsVariablesForLead(lead, template) : [];
+  const preview = hydrateTemplateContent(template.content, variables);
+
+  return (
+    <Card className="overflow-hidden border-blue-100 dark:border-blue-900 shadow-md">
+      <div className="bg-blue-50 dark:bg-blue-900/30 px-4 py-2 border-b border-blue-100 dark:border-blue-900 flex justify-between items-center">
+        <span className="text-xs font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wider">
+          {isBulk ? 'Sample Preview (First Lead)' : 'Message Preview'}
+        </span>
+        <span className="text-[10px] bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-200 px-2 py-0.5 rounded-full">
+          {template.language?.toUpperCase() || 'EN'}
+        </span>
+      </div>
+      <div className="p-4 bg-white dark:bg-slate-950">
+        {lead && (
+          <div className="mb-3 flex items-center gap-2 text-xs text-slate-500">
+            <UserIcon className="h-3 w-3" />
+            <span>To: <span className="font-medium text-slate-700 dark:text-slate-200">{lead.name}</span> ({lead.phone})</span>
+          </div>
+        )}
+        <div className="relative p-3 bg-slate-50 dark:bg-slate-900 rounded-lg text-sm text-slate-800 dark:text-slate-200 font-sans leading-relaxed border border-slate-100 dark:border-slate-800 whitespace-pre-wrap italic">
+           &quot;{preview || 'No content'}&quot;
+           <div className="absolute -left-1 top-4 w-2 h-2 bg-slate-50 dark:bg-slate-900 border-l border-b border-slate-100 dark:border-slate-800 rotate-45 transform -translate-x-1/2"></div>
+        </div>
+        <div className="mt-3 flex justify-between items-center">
+           <span className="text-[10px] text-slate-400">DLT ID: {template.dltTemplateId || '—'}</span>
+           <span className="text-[10px] text-slate-400">{preview.length} chars</span>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 const MAX_BULK_LEADS = 80;
 
@@ -542,6 +621,13 @@ function SendToLeadsTab() {
             <p className="text-sm text-amber-700 dark:text-amber-300">Select at least one recipient type.</p>
           )}
         </Card>
+        <div className="lg:col-span-2">
+           <MessagePreviewCard 
+              template={selectedTemplate} 
+              lead={Object.values(selectedById)[0]}
+              isBulk={selectedCount > 1}
+           />
+        </div>
       </div>
 
       <Card className="p-4 space-y-4">
@@ -671,7 +757,278 @@ function SendToLeadsTab() {
   );
 }
 
-type CommunicationsTab = 'templates' | 'send';
+function UserLeadsTab() {
+  const { canWrite } = useModulePermission('communications');
+  const queryClient = useQueryClient();
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const limit = 25;
+  const [selectedById, setSelectedById] = useState<Record<string, Lead>>({});
+  const [templateId, setTemplateId] = useState('');
+  const [sendPrimary, setSendPrimary] = useState(true);
+  const [sendFather, setSendFather] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, selectedUserId]);
+
+  const { data: usersData, isLoading: loadingUsers } = useQuery({
+    queryKey: ['allUsers', 'communications'],
+    queryFn: async () => {
+      const resp = await userAPI.getAll();
+      return resp?.data || resp;
+    },
+  });
+  const users: any[] = Array.isArray(usersData) ? usersData : [];
+
+  const { data: templatesData, isLoading: loadingTemplates } = useQuery({
+    queryKey: ['activeTemplates', 'communications-user-bulk'],
+    queryFn: async () => {
+      const response = await communicationAPI.getActiveTemplates();
+      const payload = (response as { data?: MessageTemplate[] })?.data ?? response;
+      return Array.isArray(payload) ? payload : [];
+    },
+  });
+  const activeTemplates: MessageTemplate[] = Array.isArray(templatesData) ? templatesData : [];
+
+  const selectedTemplate = useMemo(
+    () => activeTemplates.find((t) => t._id === templateId),
+    [activeTemplates, templateId]
+  );
+
+  const { data: leadsPayload, isLoading: loadingLeads } = useQuery({
+    queryKey: ['userLeadsSpecific', selectedUserId, page, limit, debouncedSearch],
+    queryFn: async () => {
+      if (!selectedUserId) return { leads: [], pagination: { total: 0, pages: 1, page: 1, limit } };
+      return await leadAPI.getAll({ 
+        assignedTo: selectedUserId, 
+        page, 
+        limit, 
+        search: debouncedSearch || undefined 
+      });
+    },
+    enabled: Boolean(selectedUserId),
+  });
+
+  const leads: Lead[] = leadsPayload?.leads ?? [];
+  const pagination = leadsPayload?.pagination ?? { page: 1, limit, total: 0, pages: 1 };
+
+  const selectedCount = Object.keys(selectedById).length;
+
+  const leadHasRecipient = useCallback(
+    (lead: Lead) =>
+      Boolean(
+        (sendPrimary && lead.phone && String(lead.phone).replace(/\D/g, '').length >= 10) ||
+          (sendFather && lead.fatherPhone && String(lead.fatherPhone).replace(/\D/g, '').length >= 10)
+      ),
+    [sendFather, sendPrimary]
+  );
+
+  const toggleLead = useCallback((lead: Lead) => {
+    if (!leadHasRecipient(lead)) {
+      showToast.error('This lead has no phone for the recipient types.');
+      return;
+    }
+    setSelectedById((prev) => {
+      const next = { ...prev };
+      if (next[lead._id]) delete next[lead._id];
+      else {
+        if (Object.keys(next).length >= MAX_BULK_LEADS) {
+          showToast.error(`Max ${MAX_BULK_LEADS} per batch.`);
+          return prev;
+        }
+        next[lead._id] = lead;
+      }
+      return next;
+    });
+  }, [leadHasRecipient]);
+
+  const selectEligibleOnPage = useCallback(() => {
+    setSelectedById((prev) => {
+      const next = { ...prev };
+      let count = Object.keys(next).length;
+      for (const l of leads) {
+        if (!leadHasRecipient(l)) continue;
+        if (next[l._id]) continue;
+        if (count >= MAX_BULK_LEADS) break;
+        next[l._id] = l;
+        count += 1;
+      }
+      return next;
+    });
+  }, [leadHasRecipient, leads]);
+
+  const clearSelection = useCallback(() => setSelectedById({}), []);
+
+  const sendMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedTemplate) throw new Error('Select a template.');
+      const list = Object.values(selectedById);
+      if (list.length === 0) throw new Error('Select leads.');
+      let ok = 0; let fail = 0;
+      for (const lead of list) {
+        const numbers: string[] = [];
+        if (sendPrimary && lead.phone) numbers.push(lead.phone);
+        if (sendFather && lead.fatherPhone) numbers.push(lead.fatherPhone);
+        if (numbers.length === 0) { fail++; continue; }
+        try {
+          const variables = buildSmsVariablesForLead(lead, selectedTemplate);
+          await communicationAPI.sendSms(lead._id, {
+            contactNumbers: [...new Set(numbers)],
+            templates: [{ templateId: selectedTemplate._id, variables }],
+          });
+          ok++;
+        } catch { fail++; }
+      }
+      return { ok, fail };
+    },
+    onSuccess: ({ ok, fail }) => {
+      showToast.success(`Sent to ${ok} lead(s). ${fail > 0 ? `${fail} failed.` : ''}`);
+      clearSelection();
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+    },
+    onError: (e: Error) => showToast.error(e.message),
+  });
+
+  const canSend = canWrite && !!templateId && selectedCount > 0 && !!selectedUserId && (sendPrimary || sendFather);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="p-4 space-y-3">
+          <h2 className="text-lg font-semibold">Step 1: Select User</h2>
+          <p className="text-sm text-slate-500">Find the Counsellor/PRO whose leads you want to message.</p>
+          {loadingUsers ? <Skeleton className="h-10 w-full" /> : (
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+            >
+              <option value="">Select User…</option>
+              {users.map(u => (
+                <option key={u.id} value={u.id}>{u.name} ({u.role_name})</option>
+              ))}
+            </select>
+          )}
+        </Card>
+        <Card className="p-4 space-y-3">
+          <h2 className="text-lg font-semibold">Step 2: Template</h2>
+          {loadingTemplates ? <Skeleton className="h-10 w-full" /> : (
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+            >
+              <option value="">Select template…</option>
+              {activeTemplates.map(t => (
+                <option key={t._id} value={t._id}>{t.name}</option>
+              ))}
+            </select>
+          )}
+        </Card>
+        <Card className="p-4 space-y-3">
+          <h2 className="text-lg font-semibold">Step 3: Recipients</h2>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={sendPrimary} onChange={e => setSendPrimary(e.target.checked)} />
+              Primary
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={sendFather} onChange={e => setSendFather(e.target.checked)} />
+              Father
+            </label>
+          </div>
+        </Card>
+        <div className="lg:col-span-3">
+           <MessagePreviewCard 
+              template={selectedTemplate} 
+              lead={Object.values(selectedById)[0]}
+              isBulk={selectedCount > 1}
+           />
+        </div>
+      </div>
+
+      <Card className="p-4 space-y-4">
+        <div className="flex flex-col lg:flex-row gap-4 justify-between lg:items-end">
+          <div className="flex-1 min-w-0">
+            <label className="text-sm font-medium">Search leads assigned to user</label>
+            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..." />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm" onClick={selectEligibleOnPage} disabled={!selectedUserId}>Select Page</Button>
+            <Button variant="secondary" size="sm" onClick={clearSelection} disabled={selectedCount === 0}>Clear ({selectedCount})</Button>
+          </div>
+        </div>
+
+        {!selectedUserId ? (
+          <div className="p-12 text-center border-2 border-dashed rounded-lg bg-slate-50">
+            <p className="text-slate-500">Please select a user above to see their assigned leads.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="min-w-full divide-y text-sm">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="w-10 px-3 py-2" />
+                  <th className="px-3 py-2 text-left">Lead Info</th>
+                  <th className="px-3 py-2 text-left">District</th>
+                  <th className="px-3 py-2 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {loadingLeads ? (
+                  <tr><td colSpan={4} className="p-4"><TemplatesSkeleton /></td></tr>
+                ) : leads.length === 0 ? (
+                  <tr><td colSpan={4} className="p-8 text-center text-slate-500">No leads found.</td></tr>
+                ) : (
+                  leads.map(lead => {
+                    const eligible = leadHasRecipient(lead);
+                    const checked = !!selectedById[lead._id];
+                    return (
+                      <tr key={lead._id} className={!eligible ? 'opacity-40' : undefined}>
+                        <td className="px-3 py-2">
+                          <input type="checkbox" checked={checked} disabled={!eligible} onChange={() => toggleLead(lead)} />
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="font-medium">{lead.name}</div>
+                          <div className="text-xs text-slate-500">{lead.phone}</div>
+                        </td>
+                        <td className="px-3 py-2">{lead.district || '—'}</td>
+                        <td className="px-3 py-2">{lead.leadStatus || '—'}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {pagination.pages > 1 && (
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</Button>
+            <Button size="sm" variant="secondary" disabled={page >= pagination.pages} onClick={() => setPage(p => p + 1)}>Next</Button>
+          </div>
+        )}
+
+        <div className="flex justify-end pt-4 border-t">
+          <Button variant="primary" disabled={!canSend || sendMutation.isPending} onClick={() => sendMutation.mutate()}>
+            {sendMutation.isPending ? 'Sending...' : `Send to ${selectedCount} Lead(s)`}
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+type CommunicationsTab = 'templates' | 'send' | 'user-leads';
 
 export default function TemplatesPage() {
   const router = useRouter();
@@ -781,6 +1138,18 @@ export default function TemplatesPage() {
     },
   });
 
+  const hardDeleteMutation = useMutation({
+    mutationFn: (id: string) => communicationAPI.hardDeleteTemplate(id),
+    onSuccess: () => {
+      showToast.success('Template permanently deleted');
+      queryClient.invalidateQueries({ queryKey: ['communicationTemplates'] });
+    },
+    onError: (error: any) => {
+      console.error('Error hard deleting template:', error);
+      showToast.error(error.response?.data?.message || 'Failed to permanently delete template');
+    },
+  });
+
   const handleAddTemplate = () => {
     setModalMode('create');
     setEditingTemplate(undefined);
@@ -836,12 +1205,27 @@ export default function TemplatesPage() {
           >
             Send to leads
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('user-leads')}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors sm:px-4 ${
+              activeTab === 'user-leads'
+                ? 'bg-white text-[#c2410c] shadow-sm dark:bg-slate-900 dark:text-[#fb923c]'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            User Specific Leads
+          </button>
         </nav>
       </header>
 
-      {activeTab === 'send' ? (
+      {activeTab === 'send' && (
         <SendToLeadsTab />
-      ) : null}
+      )}
+
+      {activeTab === 'user-leads' && (
+        <UserLeadsTab />
+      )}
 
       {activeTab === 'templates' ? (
         <>
@@ -943,9 +1327,13 @@ export default function TemplatesPage() {
                 </tr>
               ) : (
                 templates.map((template) => (
-                  <tr key={template._id}>
+                  <tr 
+                    key={template._id} 
+                    className="hover:bg-slate-50 dark:hover:bg-slate-900/80 cursor-pointer transition-colors"
+                    onClick={() => handleEditTemplate(template)}
+                  >
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-gray-900 dark:text-slate-100">
+                      <div className="font-semibold text-gray-900 dark:text-slate-100 hover:text-blue-600 transition-colors">
                         {template.name}
                       </div>
                       {template.description && (
@@ -974,23 +1362,51 @@ export default function TemplatesPage() {
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {new Date(template.updatedAt).toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 text-right space-x-2">
+                    <td className="px-4 py-3 text-right space-x-2" onClick={(e) => e.stopPropagation()}>
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => handleEditTemplate(template)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditTemplate(template);
+                        }}
                       >
                         Edit
                       </Button>
                       {canDeactivateTemplates && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => deleteMutation.mutate(template._id)}
-                          disabled={!template.isActive || deleteMutation.isPending}
-                        >
-                          {deleteMutation.isPending ? 'Processing…' : 'Deactivate'}
-                        </Button>
+                        <>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm('Are you sure you want to deactivate this template? It will no longer be available for sending but will remain in history.')) {
+                                deleteMutation.mutate(template._id);
+                              }
+                            }}
+                            disabled={!template.isActive || deleteMutation.isPending}
+                          >
+                            {deleteMutation.isPending ? 'Processing…' : 'Deactivate'}
+                          </Button>
+                          <Button
+                            variant="primary"
+                            className="bg-red-600 hover:bg-red-700 text-white border-transparent"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const firstCheck = window.confirm('DANGER: This will PERMANENTLY remove the template. This action cannot be undone. Continue?');
+                              if (firstCheck) {
+                                const secondCheck = window.confirm('Are you absolutely sure? This will remove all associated template data.');
+                                if (secondCheck) {
+                                  hardDeleteMutation.mutate(template._id);
+                                }
+                              }
+                            }}
+                            disabled={hardDeleteMutation.isPending}
+                          >
+                            {hardDeleteMutation.isPending ? 'Deleting…' : 'Delete'}
+                          </Button>
+                        </>
                       )}
                     </td>
                   </tr>
