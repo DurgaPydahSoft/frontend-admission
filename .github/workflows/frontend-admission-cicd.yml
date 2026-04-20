@@ -81,7 +81,10 @@ jobs:
             npm install && \
             rm -rf .next && \
             npm run build && \
+            sudo chown -R ec2-user:ec2-user . && \
+            sudo chmod -R 755 .next && \
             (pm2 restart $PM2 || (pm2 start npm --name $PM2 -- start)) && \
+            sudo systemctl reload nginx && \
             pm2 save && \
             echo 'Frontend Deploy complete.'"
 
