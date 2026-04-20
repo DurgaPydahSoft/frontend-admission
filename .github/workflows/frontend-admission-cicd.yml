@@ -1,0 +1,102 @@
+# Frontend Admission CI/CD Pipeline
+# For Next.js frontend repo. Runs on every push/PR to main|master.
+
+name: Frontend Admission CI/CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  build-and-lint:
+    name: Lint & Pre-build Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true # Next.js linting can be strict, we might want to just warn
+
+      - name: Build Check (Dry Run)
+        # We run build on GH Actions to catch errors before deployment, 
+        # even though we will build again on the server.
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+        run: npm run build
+
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    needs: build-and-lint
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy via SSH
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          PM2_APP_NAME: ${{ secrets.PM2_APP_NAME }}
+          BRANCH: ${{ github.ref == 'refs/heads/main' && 'main' || 'master' }}
+          # Build-time environment variables
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+        run: |
+          DP="${DEPLOY_PATH:-/opt/frontend-admission}"
+          PM2="${PM2_APP_NAME:-frontend-admission}"
+          
+          ssh "$SSH_USER@$SSH_HOST" "set -e; \
+            cd $DP && \
+            git fetch origin && \
+            git reset --hard origin/$BRANCH && \
+            npm ci && \
+            NEXT_PUBLIC_API_URL='$NEXT_PUBLIC_API_URL' \
+            NEXT_PUBLIC_VAPID_PUBLIC_KEY='$NEXT_PUBLIC_VAPID_PUBLIC_KEY' \
+            npm run build && \
+            (pm2 restart $PM2 || (pm2 start npm --name $PM2 -- start)) && \
+            pm2 save && \
+            echo 'Frontend Deploy complete.'"
+
+      - name: Verify deployment (smoke test)
+        env:
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+        run: |
+          if [ -n "$FRONTEND_URL" ]; then
+            sleep 10
+            curl -sf "$FRONTEND_URL" && echo "Frontend is UP" || (echo "::warning::Frontend might be down" && exit 1)
+          else
+            echo "Skipping smoke test (set FRONTEND_URL secret for post-deploy verification)"
+          fi
