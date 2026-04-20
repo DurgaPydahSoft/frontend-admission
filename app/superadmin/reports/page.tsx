@@ -530,7 +530,7 @@ export default function ReportsPage() {
                 <td>${targetDateText}</td>
                 <td>${formatAssignedStudentGroups(day)}</td>
                 <td>${formatAssignedMandals(day)}</td>
-                <td>${getLeadStatusCount(day, 'Assigned')}</td>
+                <td>${Number(day?.totalAssigned || 0)}</td>
                 <td>${getLeadStatusCount(day, 'Interested')}</td>
                 <td>${getLeadStatusCount(day, 'Not Interested')}</td>
                 <td>${getLeadStatusCount(day, 'Wrong Data')}</td>
@@ -552,7 +552,7 @@ export default function ReportsPage() {
                 <th>Target Date</th>
                 <th>Student Group Assigned</th>
                 <th>Mandal Assigned</th>
-                <th>Assigned</th>
+                <th>Total Allotted</th>
                 <th>Interested</th>
                 <th>Not Interested</th>
                 <th>Wrong Data</th>
@@ -1918,7 +1918,7 @@ export default function ReportsPage() {
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Target Date</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Student Group Assigned</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Mandal Assigned</th>
-                                                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Assigned</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Total Allotted</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Interested</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Not Interested</th>
                                                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-200">Wrong Data</th>
@@ -1942,7 +1942,7 @@ export default function ReportsPage() {
                                                     <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{targetDateText}</td>
                                                     <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{formatAssignedStudentGroups(day)}</td>
                                                     <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{formatAssignedMandals(day)}</td>
-                                                    <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Assigned')}</td>
+                                                    <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{Number(day?.totalAssigned || 0)}</td>
                                                     <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Interested')}</td>
                                                     <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Not Interested')}</td>
                                                     <td className="px-3 py-2 text-slate-900 dark:text-slate-100">{getLeadStatusCount(day, 'Wrong Data')}</td>
