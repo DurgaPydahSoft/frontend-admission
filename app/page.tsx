@@ -82,7 +82,7 @@ export default function Home() {
           {/* Badge */}
           <p className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 backdrop-blur-md px-4 py-1.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-white mb-6 sm:mb-8">
             <span className="h-1.5 w-1.5 rounded-full bg-orange-500 animate-pulse" />
-            Admissions &amp; Enquiry Management
+            Admissions &amp; Enquiry Managementttttt
           </p>
 
           {/* Headline */}
