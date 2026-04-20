@@ -81,8 +81,8 @@ jobs:
             npm install && \
             rm -rf .next && \
             npm run build && \
-            sudo chown -R ec2-user:ec2-user . && \
-            sudo chmod -R 755 .next && \
+            sudo chown -R ec2-user:ec2-user /opt/frontend-admission && \
+            sudo chmod -R 755 /opt/frontend-admission && \
             sudo fuser -k 3000/tcp || true && \
             (pm2 restart ecosystem.config.cjs --update-env || pm2 start ecosystem.config.cjs) && \
             sudo systemctl reload nginx && \
