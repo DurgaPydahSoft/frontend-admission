@@ -38,11 +38,6 @@ jobs:
         continue-on-error: true # Next.js linting can be strict, we might want to just warn
 
       - name: Build Check (Dry Run)
-        # We run build on GH Actions to catch errors before deployment, 
-        # even though we will build again on the server.
-        env:
-          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
-          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
         run: npm run build
 
   deploy:
@@ -84,8 +79,6 @@ jobs:
             git fetch origin && \
             git reset --hard origin/$BRANCH && \
             npm install && \
-            NEXT_PUBLIC_API_URL='$NEXT_PUBLIC_API_URL' \
-            NEXT_PUBLIC_VAPID_PUBLIC_KEY='$NEXT_PUBLIC_VAPID_PUBLIC_KEY' \
             npm run build && \
             (pm2 restart $PM2 || (pm2 start npm --name $PM2 -- start)) && \
             pm2 save && \
