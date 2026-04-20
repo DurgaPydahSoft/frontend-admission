@@ -79,6 +79,7 @@ jobs:
             git fetch origin && \
             git reset --hard origin/$BRANCH && \
             npm install && \
+            rm -rf .next && \
             npm run build && \
             (pm2 restart $PM2 || (pm2 start npm --name $PM2 -- start)) && \
             pm2 save && \
